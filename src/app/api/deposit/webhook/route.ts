@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { sweepToTreasury } from '@/lib/solana'
 
 const LAMPORTS_PER_SOL = 1_000_000_000
 
@@ -56,6 +57,7 @@ export async function POST(req: NextRequest) {
       for (const transfer of transfers) {
         const user = await prisma.user.findUnique({
           where: { depositAddress: transfer.toUserAccount },
+          select: { id: true, depositPrivateKey: true },
         })
         if (!user) continue
 
@@ -87,6 +89,13 @@ export async function POST(req: NextRequest) {
         ])
 
         console.log(`[webhook] +${amount} SOL nativo → user ${user.id} (tx: ${signature})`)
+
+        // Varre o SOL para a treasury automaticamente
+        if (user.depositPrivateKey) {
+          sweepToTreasury(transfer.toUserAccount, user.depositPrivateKey).catch((err) =>
+            console.error(`[sweep] Erro ao varrer ${transfer.toUserAccount}:`, err)
+          )
+        }
       }
     } else {
       // ── Modo mainnet: detecta transferências do SPL token $CRATE ──
@@ -102,6 +111,7 @@ export async function POST(req: NextRequest) {
       for (const transfer of transfers) {
         const user = await prisma.user.findUnique({
           where: { depositAddress: transfer.toUserAccount },
+          select: { id: true, depositPrivateKey: true },
         })
         if (!user) continue
 
@@ -132,6 +142,13 @@ export async function POST(req: NextRequest) {
         ])
 
         console.log(`[webhook] +${amount} CRATE → user ${user.id} (tx: ${signature})`)
+
+        // Varre os tokens para a treasury automaticamente
+        if (user.depositPrivateKey) {
+          sweepToTreasury(transfer.toUserAccount, user.depositPrivateKey).catch((err) =>
+            console.error(`[sweep] Erro ao varrer ${transfer.toUserAccount}:`, err)
+          )
+        }
       }
     }
   }
