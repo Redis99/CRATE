@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Keypair } from '@solana/web3.js'
 import { prisma } from '@/lib/prisma'
 import { encryptPrivateKey } from '@/lib/encrypt'
+import { registerDepositAddress } from '@/lib/helius'
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,6 +39,11 @@ export async function POST(req: NextRequest) {
         depositPrivateKey,
       },
     })
+
+    // Registra o endereço no webhook do Helius (sem await — não bloqueia o cadastro)
+    registerDepositAddress(depositAddress).catch((err) =>
+      console.error('[register] Falha ao registrar endereço no Helius:', err)
+    )
 
     return NextResponse.json({
       success: true,
