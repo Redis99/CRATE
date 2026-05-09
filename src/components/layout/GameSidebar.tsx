@@ -25,7 +25,7 @@ const navItems = [
     ),
   },
   {
-    label: 'Inventário',
+    label: 'Inventory',
     href: '/inventory',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -43,7 +43,7 @@ const navItems = [
     ),
   },
   {
-    label: 'Loja',
+    label: 'Shop',
     href: '/shop',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -61,7 +61,7 @@ const navItems = [
     ),
   },
   {
-    label: 'Mercado',
+    label: 'Market',
     href: '/market',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -88,7 +88,7 @@ const navItems = [
     ),
   },
   {
-    label: 'Missões',
+    label: 'Missions',
     href: '/missions',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -106,7 +106,7 @@ const navItems = [
     ),
   },
   {
-    label: 'Carteira',
+    label: 'Wallet',
     href: '/wallet',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -115,7 +115,7 @@ const navItems = [
     ),
   },
   {
-    label: 'Perfil',
+    label: 'Profile',
     href: '/profile',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -169,7 +169,7 @@ export function GameSidebar() {
         </ul>
       </nav>
 
-      {/* Logout */}
+      {/* Sign Out */}
       <div className="px-2 py-3 border-t border-gray-800/60">
         <button
           onClick={handleLogout}
@@ -178,7 +178,7 @@ export function GameSidebar() {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
           </svg>
-          Sair
+          Sign Out
         </button>
       </div>
     </aside>

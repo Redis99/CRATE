@@ -5,6 +5,10 @@ import { DepositAddress } from '@/components/game/DepositAddress'
 import { WalletAutoRefresh } from '@/components/game/WalletAutoRefresh'
 import type { Metadata } from 'next'
 
+export const metadata: Metadata = {
+  title: 'Wallet — Inside the Crate',
+}
+
 const SOLANA_CLUSTER = process.env.CRATE_TOKEN_MINT === 'native' ? 'devnet' : 'mainnet-beta'
 
 function explorerUrl(txHash: string) {
@@ -15,35 +19,31 @@ function shortHash(hash: string) {
   return `${hash.slice(0, 6)}...${hash.slice(-6)}`
 }
 
-export const metadata: Metadata = {
-  title: 'Carteira — Inside the Crate',
-}
-
 const TX_TYPE_LABEL: Record<string, string> = {
-  DEPOSIT: 'Depósito',
-  WITHDRAW: 'Saque',
-  LOOTBOX_PURCHASE: 'Compra Lootbox',
-  SHOP_PURCHASE: 'Compra Loja',
-  MARKET_SALE: 'Venda Mercado',
-  MARKET_PURCHASE: 'Compra Mercado',
-  MINING_REWARD: 'Recompensa Mineração',
-  CONVERSION: 'Conversão',
+  DEPOSIT: 'Deposit',
+  WITHDRAW: 'Withdrawal',
+  LOOTBOX_PURCHASE: 'Lootbox Purchase',
+  SHOP_PURCHASE: 'Shop Purchase',
+  MARKET_SALE: 'Market Sale',
+  MARKET_PURCHASE: 'Market Purchase',
+  MINING_REWARD: 'Mining Reward',
+  CONVERSION: 'Conversion',
   WEEKLY_DROP: 'Weekly Drop',
-  MISSION_REWARD: 'Recompensa Missão',
-  RANKING_REWARD: 'Recompensa Ranking',
+  MISSION_REWARD: 'Mission Reward',
+  RANKING_REWARD: 'Ranking Reward',
 }
 
 const TX_STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  PENDING: { label: 'Pendente', color: 'text-yellow-400' },
-  CONFIRMED: { label: 'Confirmado', color: 'text-green-400' },
-  FAILED: { label: 'Falhou', color: 'text-red-400' },
+  PENDING: { label: 'Pending', color: 'text-yellow-400' },
+  CONFIRMED: { label: 'Confirmed', color: 'text-green-400' },
+  FAILED: { label: 'Failed', color: 'text-red-400' },
 }
 
 const WITHDRAW_STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  PENDING: { label: 'Aguardando', color: 'text-yellow-400' },
-  PROCESSING: { label: 'Processando', color: 'text-blue-400' },
-  COMPLETED: { label: 'Concluído', color: 'text-green-400' },
-  FAILED: { label: 'Falhou', color: 'text-red-400' },
+  PENDING: { label: 'Pending', color: 'text-yellow-400' },
+  PROCESSING: { label: 'Processing', color: 'text-blue-400' },
+  COMPLETED: { label: 'Completed', color: 'text-green-400' },
+  FAILED: { label: 'Failed', color: 'text-red-400' },
 }
 
 async function getWalletData() {
@@ -92,7 +92,7 @@ async function getWalletData() {
 }
 
 function formatDate(date: Date) {
-  return new Intl.DateTimeFormat('pt-BR', {
+  return new Intl.DateTimeFormat('en-US', {
     day: '2-digit',
     month: '2-digit',
     year: '2-digit',
@@ -105,7 +105,7 @@ export default async function WalletPage() {
   const data = await getWalletData()
 
   if (!data?.profile) {
-    return <div className="p-8 text-gray-400">Carregando carteira...</div>
+    return <div className="p-8 text-gray-400">Loading wallet...</div>
   }
 
   const { profile, transactions, withdrawRequests } = data
@@ -113,49 +113,50 @@ export default async function WalletPage() {
   return (
     <div className="p-8 max-w-4xl">
       <WalletAutoRefresh />
+
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-white">Carteira</h2>
-        <p className="text-gray-500 text-sm mt-1">Depósito, saldo e histórico de transações</p>
+        <h2 className="text-2xl font-bold text-white">Wallet</h2>
+        <p className="text-gray-500 text-sm mt-1">Deposit, balance and transaction history</p>
       </div>
 
-      {/* Saldos */}
+      {/* Balances */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-4">
           <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">CRATE</p>
           <p className="text-white text-xl font-bold font-mono">
-            {Number(profile.balanceCrate).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            {Number(profile.balanceCrate).toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </p>
-          <p className="text-gray-600 text-xs mt-1">Moeda principal</p>
+          <p className="text-gray-600 text-xs mt-1">Main currency</p>
         </div>
         <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-4">
           <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">SOL</p>
           <p className="text-white text-xl font-bold font-mono">
-            {Number(profile.balanceSol).toLocaleString('pt-BR', { minimumFractionDigits: 4 })}
+            {Number(profile.balanceSol).toLocaleString('en-US', { minimumFractionDigits: 4 })}
           </p>
-          <p className="text-gray-600 text-xs mt-1">Minerável</p>
+          <p className="text-gray-600 text-xs mt-1">Minable</p>
         </div>
         <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-4">
           <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">LC Shib</p>
           <p className="text-white text-xl font-bold font-mono">
-            {Number(profile.balanceLc).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            {Number(profile.balanceLc).toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </p>
-          <p className="text-gray-600 text-xs mt-1">Minerável</p>
+          <p className="text-gray-600 text-xs mt-1">Minable</p>
         </div>
       </div>
 
       <div className="grid grid-cols-5 gap-4 mb-6">
-        {/* Depósito */}
+        {/* Deposit */}
         <div className="col-span-3 bg-[#111118] border border-gray-800/60 rounded-xl p-5">
-          <h3 className="text-white font-semibold text-sm mb-1">Endereço de Depósito</h3>
+          <h3 className="text-white font-semibold text-sm mb-1">Deposit Address</h3>
           <p className="text-gray-500 text-xs mb-4">
-            Envie $CRATE para este endereço. Crédito automático após confirmação na blockchain.
+            Send $CRATE to this address. Credit is automatic after blockchain confirmation.
           </p>
           <DepositAddress address={profile.depositAddress} />
         </div>
 
-        {/* Aviso de saque */}
+        {/* Withdrawals info */}
         <div className="col-span-2 bg-[#111118] border border-gray-800/60 rounded-xl p-5">
-          <h3 className="text-white font-semibold text-sm mb-3">Saques</h3>
+          <h3 className="text-white font-semibold text-sm mb-3">Withdrawals</h3>
           <div className="space-y-3 text-sm">
             <div className="flex items-start gap-2">
               <span className="text-yellow-400 mt-0.5">
@@ -164,7 +165,7 @@ export default async function WalletPage() {
                 </svg>
               </span>
               <p className="text-gray-400 text-xs leading-relaxed">
-                Saques são processados manualmente pelo admin <strong className="text-gray-300">1x por dia</strong>.
+                Withdrawals are manually processed by the admin <strong className="text-gray-300">once per day</strong>.
               </p>
             </div>
             <div className="flex items-start gap-2">
@@ -174,17 +175,17 @@ export default async function WalletPage() {
                 </svg>
               </span>
               <p className="text-gray-400 text-xs leading-relaxed">
-                Em breve disponível no painel. Por enquanto, entre em contato com o suporte.
+                Coming soon to the panel. For now, contact support.
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Pedidos de saque pendentes */}
+      {/* Pending withdrawals */}
       {withdrawRequests.length > 0 && (
         <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-5 mb-6">
-          <h3 className="text-white font-semibold text-sm mb-4">Pedidos de Saque</h3>
+          <h3 className="text-white font-semibold text-sm mb-4">Withdrawal Requests</h3>
           <div className="space-y-2">
             {withdrawRequests.map((req) => {
               const status = WITHDRAW_STATUS_LABEL[req.status] ?? { label: req.status, color: 'text-gray-400' }
@@ -192,7 +193,7 @@ export default async function WalletPage() {
                 <div key={req.id} className="flex items-center justify-between bg-[#0d0d15] rounded-lg px-4 py-3">
                   <div>
                     <p className="text-gray-300 text-sm font-medium">
-                      {Number(req.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} {req.token}
+                      {Number(req.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} {req.token}
                     </p>
                     <p className="text-gray-600 text-xs mt-0.5">{formatDate(req.createdAt)}</p>
                   </div>
@@ -204,12 +205,12 @@ export default async function WalletPage() {
         </div>
       )}
 
-      {/* Histórico de transações */}
+      {/* Transaction history */}
       <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-5">
-        <h3 className="text-white font-semibold text-sm mb-4">Histórico de Transações</h3>
+        <h3 className="text-white font-semibold text-sm mb-4">Transaction History</h3>
 
         {transactions.length === 0 ? (
-          <p className="text-gray-600 text-sm text-center py-6">Nenhuma transação ainda.</p>
+          <p className="text-gray-600 text-sm text-center py-6">No transactions yet.</p>
         ) : (
           <div className="space-y-1">
             {transactions.map((tx) => {
@@ -247,7 +248,7 @@ export default async function WalletPage() {
                   <div className="text-right">
                     <p className={`text-sm font-mono font-medium ${isIncoming ? 'text-green-400' : 'text-red-400'}`}>
                       {isIncoming ? '+' : '-'}
-                      {Number(tx.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} {tx.token}
+                      {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} {tx.token}
                     </p>
                     <p className={`text-xs ${status.color}`}>{status.label}</p>
                   </div>
