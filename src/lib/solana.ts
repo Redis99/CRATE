@@ -10,7 +10,6 @@ import {
 import { decryptPrivateKey } from '@/lib/encrypt'
 
 const LAMPORTS_PER_SOL = 1_000_000_000
-const TX_FEE_BUFFER = 10_000 // reserva ~0.00001 SOL para cobrir a taxa da transação
 
 function getConnection(): Connection {
   return new Connection(process.env.HELIUS_RPC_URL!, 'confirmed')
@@ -18,7 +17,7 @@ function getConnection(): Connection {
 
 /**
  * Varre o SOL do depositAddress do usuário para a treasury do admin.
- * Chamado automaticamente após cada depósito detectado pelo webhook.
+ * Drena o endereço para exatamente zero, pagando a taxa exata da transação.
  *
  * @param depositAddress  - endereço público do usuário (on-chain)
  * @param encryptedKey    - chave privada criptografada (do banco)
@@ -44,15 +43,35 @@ export async function sweepToTreasury(
 
   // Consulta o saldo on-chain
   const balance = await connection.getBalance(keypair.publicKey)
-  const sweepAmount = balance - TX_FEE_BUFFER
-
-  if (sweepAmount <= 0) {
-    console.log(`[sweep] Saldo insuficiente em ${depositAddress} (${balance} lamports) — nada a varrer`)
+  if (balance === 0) {
+    console.log(`[sweep] Saldo zero em ${depositAddress} — nada a varrer`)
     return null
   }
 
-  // Cria e assina a transação de transferência para a treasury
-  const tx = new Transaction().add(
+  // Calcula a taxa exata da transação para drenar o endereço para zero
+  const { blockhash } = await connection.getLatestBlockhash()
+  const tx = new Transaction({
+    recentBlockhash: blockhash,
+    feePayer: keypair.publicKey,
+  }).add(
+    SystemProgram.transfer({
+      fromPubkey: keypair.publicKey,
+      toPubkey: treasury,
+      lamports: balance, // placeholder — será ajustado abaixo
+    })
+  )
+
+  const feeResult = await connection.getFeeForMessage(tx.compileMessage())
+  const fee = feeResult.value ?? 5000
+  const sweepAmount = balance - fee
+
+  if (sweepAmount <= 0) {
+    console.log(`[sweep] Saldo insuficiente para cobrir a taxa em ${depositAddress} — nada a varrer`)
+    return null
+  }
+
+  // Reconstrói a transação com o valor correto (saldo - taxa exata)
+  const finalTx = new Transaction({ recentBlockhash: blockhash, feePayer: keypair.publicKey }).add(
     SystemProgram.transfer({
       fromPubkey: keypair.publicKey,
       toPubkey: treasury,
@@ -60,7 +79,7 @@ export async function sweepToTreasury(
     })
   )
 
-  const txHash = await sendAndConfirmTransaction(connection, tx, [keypair])
+  const txHash = await sendAndConfirmTransaction(connection, finalTx, [keypair])
 
   console.log(
     `[sweep] ${sweepAmount / LAMPORTS_PER_SOL} SOL varridos de ${depositAddress} → treasury (tx: ${txHash})`
