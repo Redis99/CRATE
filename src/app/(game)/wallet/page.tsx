@@ -2,7 +2,18 @@ import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 import { prisma } from '@/lib/prisma'
 import { DepositAddress } from '@/components/game/DepositAddress'
+import { WalletAutoRefresh } from '@/components/game/WalletAutoRefresh'
 import type { Metadata } from 'next'
+
+const SOLANA_CLUSTER = process.env.CRATE_TOKEN_MINT === 'native' ? 'devnet' : 'mainnet-beta'
+
+function explorerUrl(txHash: string) {
+  return `https://solscan.io/tx/${txHash}?cluster=${SOLANA_CLUSTER}`
+}
+
+function shortHash(hash: string) {
+  return `${hash.slice(0, 6)}...${hash.slice(-6)}`
+}
 
 export const metadata: Metadata = {
   title: 'Carteira — Inside the Crate',
@@ -101,6 +112,7 @@ export default async function WalletPage() {
 
   return (
     <div className="p-8 max-w-4xl">
+      <WalletAutoRefresh />
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-white">Carteira</h2>
         <p className="text-gray-500 text-sm mt-1">Depósito, saldo e histórico de transações</p>
@@ -220,6 +232,16 @@ export default async function WalletPage() {
                     <div>
                       <p className="text-gray-300 text-sm">{TX_TYPE_LABEL[tx.type] ?? tx.type}</p>
                       <p className="text-gray-600 text-xs">{formatDate(tx.createdAt)}</p>
+                      {tx.txHash && (
+                        <a
+                          href={explorerUrl(tx.txHash)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-500/70 hover:text-blue-400 text-xs font-mono transition-colors"
+                        >
+                          {shortHash(tx.txHash)} ↗
+                        </a>
+                      )}
                     </div>
                   </div>
                   <div className="text-right">
