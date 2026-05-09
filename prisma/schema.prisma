@@ -1,0 +1,551 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────────────────────
+// USUÁRIOS
+// ─────────────────────────────────────────────
+
+model User {
+  id                String   @id @default(uuid())
+  email             String   @unique
+  username          String   @unique
+  depositAddress    String   @unique
+  depositPrivateKey String?  // chave privada AES-256-GCM criptografada (formato "iv:tag:encrypted")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Saldos internos
+  balanceCrate      Float    @default(0)
+  balanceSol        Float    @default(0)
+  balanceLc         Float    @default(0)
+
+  // Expansões de inventário
+  slotsRobots       Int      @default(10)
+  slotsEquipments   Int      @default(20)
+  slotsBaseUpgrades Int      @default(10)
+  slotsParts        Int      @default(50)
+  slotsConsumables  Int      @default(20)
+  slotsLootboxes    Int      @default(10)
+
+  // Outpost
+  outpostSlots      Int      @default(3)
+
+  // Relações
+  robots            Robot[]
+  equipments        Equipment[]
+  baseUpgrades      BaseUpgrade[]
+  parts             InventoryPart[]
+  consumables       Consumable[]
+  lootboxes         InventoryLootbox[]
+  transactions      Transaction[]
+  withdrawRequests  WithdrawRequest[]
+  marketListings    MarketListing[]
+  marketPurchases   MarketPurchase[]
+  miningRewards     MiningReward[]
+  codexEntries      CodexEntry[]
+  missions          UserMission[]
+  minigameSessions  MinigameSession[]
+  weeklyDrops       WeeklyDrop[]
+  notifications     Notification[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// ROBÔS
+// ─────────────────────────────────────────────
+
+model Robot {
+  id            String      @id @default(uuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+
+  name          String
+  collection    String      // ex: "Sentinel - Serie Artica"
+  rarity        Rarity
+  hashPower     Float       // HP base
+  durability    Float       @default(100) // 0-100%
+  isActive      Boolean     @default(false) // ativo no Outpost
+  outpostSlot   Int?        // slot ocupado (1-6)
+  createdAt     DateTime    @default(now())
+
+  equipments    RobotEquipment[]
+  codexEntry    CodexEntry?
+  listing       MarketListing?
+
+  @@map("robots")
+}
+
+model RobotEquipment {
+  id          String    @id @default(uuid())
+  robotId     String
+  robot       Robot     @relation(fields: [robotId], references: [id])
+  equipmentId String    @unique
+  equipment   Equipment @relation(fields: [equipmentId], references: [id])
+  installedAt DateTime  @default(now())
+
+  @@map("robot_equipments")
+}
+
+// ─────────────────────────────────────────────
+// EQUIPAMENTOS
+// ─────────────────────────────────────────────
+
+model Equipment {
+  id          String         @id @default(uuid())
+  userId      String
+  user        User           @relation(fields: [userId], references: [id])
+
+  name        String
+  rarity      Rarity
+  effectType  EffectType
+  effectValue Float
+  isPermanent Boolean        @default(false)
+  expiresAt   DateTime?
+  createdAt   DateTime       @default(now())
+
+  robot       RobotEquipment?
+  codexEntry  CodexEntry?
+  listing     MarketListing?
+
+  @@map("equipments")
+}
+
+// ─────────────────────────────────────────────
+// MELHORIAS DE BASE
+// ─────────────────────────────────────────────
+
+model BaseUpgrade {
+  id          String        @id @default(uuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+
+  name        String
+  rarity      Rarity
+  effectType  EffectType
+  effectValue Float
+  isApplied   Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+
+  codexEntry  CodexEntry?
+  listing     MarketListing?
+
+  @@map("base_upgrades")
+}
+
+// ─────────────────────────────────────────────
+// PEÇAS DE CRAFTING
+// ─────────────────────────────────────────────
+
+model InventoryPart {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+
+  partType  String   // ex: "Broca de titanio"
+  category  PartCategory
+  rarity    Rarity
+  quantity  Int      @default(1) // stack até 99
+
+  @@unique([userId, partType])
+  @@map("inventory_parts")
+}
+
+// ─────────────────────────────────────────────
+// CONSUMÍVEIS (Kits de reparo, boosts)
+// ─────────────────────────────────────────────
+
+model Consumable {
+  id           String          @id @default(uuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [id])
+
+  consumableType ConsumableType
+  value        Float           // ex: 25 para Kit 25%
+  quantity     Int             @default(1)
+
+  @@unique([userId, consumableType, value])
+  @@map("consumables")
+}
+
+// ─────────────────────────────────────────────
+// LOOTBOXES NO INVENTÁRIO
+// ─────────────────────────────────────────────
+
+model InventoryLootbox {
+  id          String      @id @default(uuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+
+  lootboxType LootboxType
+  quantity    Int         @default(1)
+  source      String      // "purchased", "ranking", "mission", "weekly_drop"
+
+  @@unique([userId, lootboxType])
+  @@map("inventory_lootboxes")
+}
+
+// ─────────────────────────────────────────────
+// MINERAÇÃO
+// ─────────────────────────────────────────────
+
+model MiningReward {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+
+  token       Token
+  amount      Float
+  blockNumber Int
+  createdAt   DateTime @default(now())
+
+  @@map("mining_rewards")
+}
+
+model MiningBlock {
+  id              Int      @id @default(autoincrement())
+  processedAt     DateTime @default(now())
+  totalHashPower  Float
+  rewardCrate     Float
+  rewardSol       Float
+  rewardLc        Float
+
+  @@map("mining_blocks")
+}
+
+// ─────────────────────────────────────────────
+// TRANSAÇÕES FINANCEIRAS
+// ─────────────────────────────────────────────
+
+model Transaction {
+  id        String          @id @default(uuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id])
+
+  type      TransactionType
+  token     Token
+  amount    Float
+  txHash    String?
+  status    TxStatus        @default(PENDING)
+  createdAt DateTime        @default(now())
+
+  @@map("transactions")
+}
+
+model WithdrawRequest {
+  id            String        @id @default(uuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+
+  token         Token
+  amount        Float
+  toAddress     String
+  status        WithdrawStatus @default(PENDING)
+  txHash        String?
+  processedAt   DateTime?
+  createdAt     DateTime      @default(now())
+
+  @@map("withdraw_requests")
+}
+
+// ─────────────────────────────────────────────
+// MERCADO INTERNO P2P
+// ─────────────────────────────────────────────
+
+model MarketListing {
+  id            String        @id @default(uuid())
+  sellerId      String
+  seller        User          @relation(fields: [sellerId], references: [id])
+
+  itemType      MarketItemType
+  price         Float         // em CRATE
+  status        ListingStatus @default(ACTIVE)
+  expiresAt     DateTime
+  createdAt     DateTime      @default(now())
+
+  // Apenas um dos itens abaixo será preenchido
+  robotId       String?       @unique
+  equipmentId   String?       @unique
+  baseUpgradeId String?       @unique
+
+  robot         Robot?        @relation(fields: [robotId], references: [id])
+  equipment     Equipment?    @relation(fields: [equipmentId], references: [id])
+  baseUpgrade   BaseUpgrade?  @relation(fields: [baseUpgradeId], references: [id])
+
+  purchase      MarketPurchase?
+
+  @@map("market_listings")
+}
+
+model MarketPurchase {
+  id          String        @id @default(uuid())
+  listingId   String        @unique
+  listing     MarketListing @relation(fields: [listingId], references: [id])
+  buyerId     String
+  buyer       User          @relation(fields: [buyerId], references: [id])
+
+  pricePaid   Float
+  fee         Float         // 5% da transação
+  createdAt   DateTime      @default(now())
+
+  @@map("market_purchases")
+}
+
+// ─────────────────────────────────────────────
+// CODEX
+// ─────────────────────────────────────────────
+
+model CodexEntry {
+  id            String      @id @default(uuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+
+  itemType      CodexItemType
+  collection    String
+  rarity        Rarity
+  registeredAt  DateTime    @default(now())
+
+  // Apenas um preenchido
+  robotId       String?     @unique
+  equipmentId   String?     @unique
+  baseUpgradeId String?     @unique
+
+  robot         Robot?      @relation(fields: [robotId], references: [id])
+  equipment     Equipment?  @relation(fields: [equipmentId], references: [id])
+  baseUpgrade   BaseUpgrade? @relation(fields: [baseUpgradeId], references: [id])
+
+  @@map("codex_entries")
+}
+
+// ─────────────────────────────────────────────
+// MISSÕES
+// ─────────────────────────────────────────────
+
+model Mission {
+  id          String          @id @default(uuid())
+  title       String
+  description String
+  category    MissionCategory
+  target      Int             // valor alvo (ex: 10 para "abrir 10 lootboxes")
+  isSeasonal  Boolean         @default(false)
+  expiresAt   DateTime?
+  rewardType  RewardType
+  rewardData  Json            // dados da recompensa
+
+  userMissions UserMission[]
+
+  @@map("missions")
+}
+
+model UserMission {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  missionId   String
+  mission     Mission   @relation(fields: [missionId], references: [id])
+
+  progress    Int       @default(0)
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  claimedAt   DateTime?
+
+  @@unique([userId, missionId])
+  @@map("user_missions")
+}
+
+// ─────────────────────────────────────────────
+// MINIGAMES
+// ─────────────────────────────────────────────
+
+model MinigameSession {
+  id            String       @id @default(uuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id])
+
+  gameType      GameType
+  won           Boolean
+  score         Int
+  difficulty    Int          @default(1)
+  boostGranted  Float?       // horas de boost concedidas
+  itemDropped   String?      // tipo de item dropado (se houver)
+  playedAt      DateTime     @default(now())
+
+  @@map("minigame_sessions")
+}
+
+model MinigameBoost {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  boostPct    Float    @default(0)
+  expiresAt   DateTime
+  updatedAt   DateTime @updatedAt
+
+  @@map("minigame_boosts")
+}
+
+// ─────────────────────────────────────────────
+// WEEKLY DROP
+// ─────────────────────────────────────────────
+
+model WeeklyDrop {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+
+  weekStart   DateTime
+  dropped     Boolean  @default(false)
+  droppedAt   DateTime?
+  reward      Json?
+
+  @@unique([userId, weekStart])
+  @@map("weekly_drops")
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICAÇÕES
+// ─────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum Rarity {
+  COMMON
+  UNCOMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+enum EffectType {
+  HASH_POWER_FLAT
+  HASH_POWER_PCT
+  DURABILITY_LOSS_PCT
+  GLOBAL_EFFICIENCY_PCT
+  UPTIME_HOURS
+}
+
+enum PartCategory {
+  ENERGY
+  MINING
+  MAINTENANCE
+  TERRAIN
+  AI_SOFTWARE
+  SPECIAL
+}
+
+enum ConsumableType {
+  REPAIR_KIT
+  BOOST_TEMP
+}
+
+enum LootboxType {
+  PARTS_CRATE
+  SUPPLY_CRATE
+}
+
+enum Token {
+  CRATE
+  SOL
+  LC
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAW
+  LOOTBOX_PURCHASE
+  SHOP_PURCHASE
+  MARKET_SALE
+  MARKET_PURCHASE
+  MINING_REWARD
+  CONVERSION
+  WEEKLY_DROP
+  MISSION_REWARD
+  RANKING_REWARD
+}
+
+enum TxStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+enum WithdrawStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum MarketItemType {
+  ROBOT
+  EQUIPMENT
+  BASE_UPGRADE
+  PARTS_CRATE
+  SUPPLY_CRATE
+  CONSUMABLE
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  EXPIRED
+  CANCELLED
+}
+
+enum CodexItemType {
+  ROBOT
+  EQUIPMENT
+  BASE_UPGRADE
+}
+
+enum MissionCategory {
+  FIRST_STEPS
+  MINING
+  LOOTBOX
+  CRAFTING
+  MARKET
+  MINIGAMES
+  CODEX
+  RANKING
+  SEASONAL
+}
+
+enum RewardType {
+  LOOTBOX
+  ROBOT
+  EQUIPMENT
+  REPAIR_KIT
+  INVENTORY_EXPANSION
+  COSMETIC
+  TITLE
+  OUTPOST_SLOT
+}
+
+enum GameType {
+  SPACE_DRIFT
+  BLOCK_FALL
+  SERPENTINE
+  ORBITAL_JUMP
+  SPACE_FROG
+}

@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(New-Item -ItemType Directory -Force -Path \"D:\\\\projetosol\\\\inside-the-crate\\\\src\\\\app\\\\api\\\\deposit\\\\webhook\")",
+      "Bash(Out-Null)",
+      "Bash(New-Item -ItemType Directory -Force -Path \"D:\\\\projetosol\\\\inside-the-crate\\\\src\\\\app\\\\api\\\\wallet\")",
+      "Bash(New-Item -ItemType Directory -Force -Path \"D:\\\\projetosol\\\\inside-the-crate\\\\src\\\\components\\\\game\")",
+      "Bash(New-Item -ItemType Directory -Force -Path \"D:\\\\projetosol\\\\inside-the-crate\\\\src\\\\app\\\\\\(game\\)\\\\wallet\")",
+      "Bash(Write-Output \"OK\")",
+      "Bash(Get-ChildItem -Path \"D:\\\\projetosol\\\\inside-the-crate\" -Recurse -Directory)",
+      "Bash(Select-Object -First 20)",
+      "Bash(Format-Table FullName)",
+      "Bash(xargs cat)",
+      "Bash(npm install *)",
+      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(32\\).toString\\('hex'\\)\\)\")",
+      "Bash(npx prisma *)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git rm *)",
+      "Bash(git commit -m 'feat: initial commit — Inside the Crate Idle Mining *)",
+      "Bash(git config *)"
+    ]
+  }
+}
