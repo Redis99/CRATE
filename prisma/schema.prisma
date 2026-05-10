@@ -75,7 +75,8 @@ model Robot {
   name          String
   collection    String      // ex: "Sentinel - Serie Artica"
   rarity        Rarity
-  hashPower     Float       // HP base
+  hashPower     Float       // Extraction Rate (ER) base
+  energyRate    Float       @default(1)   // Power Draw (PD) — consumo de energia por hora
   durability    Float       @default(100) // 0-100%
   isActive      Boolean     @default(false) // ativo no Outpost
   outpostSlot   Int?        // slot ocupado (1-6)
@@ -108,15 +109,17 @@ model Equipment {
   userId      String
   user        User           @relation(fields: [userId], references: [id])
 
-  name        String
-  rarity      Rarity
-  effectType  EffectType
-  effectValue Float
-  isPermanent Boolean        @default(false)
-  expiresAt   DateTime?
-  createdAt   DateTime       @default(now())
+  name         String
+  rarity       Rarity
+  effectType   EffectType
+  effectValue  Float
+  effectType2  EffectType?   // efeito secundário (ex: equipamento ER + PD)
+  effectValue2 Float?
+  isPermanent  Boolean        @default(false)
+  expiresAt    DateTime?
+  createdAt    DateTime       @default(now())
 
-  robot       RobotEquipment?
+  robot        RobotEquipment?
   codexEntry  CodexEntry?
   listing     MarketListing?
 
@@ -132,11 +135,14 @@ model BaseUpgrade {
   userId      String
   user        User          @relation(fields: [userId], references: [id])
 
-  name        String
-  rarity      Rarity
-  effectType  EffectType
-  effectValue Float
-  isApplied   Boolean       @default(false)
+  name         String
+  rarity       Rarity
+  effectType   EffectType
+  effectValue  Float
+  effectType2  EffectType?  // efeito secundário
+  effectValue2 Float?
+  isApplied    Boolean       @default(false)
+  appliedSlot  Int?          // 1 = Mining Power, 2 = Energy Reduction
   createdAt   DateTime      @default(now())
 
   codexEntry  CodexEntry?
@@ -448,6 +454,8 @@ enum EffectType {
   DURABILITY_LOSS_PCT
   GLOBAL_EFFICIENCY_PCT
   UPTIME_HOURS
+  POWER_DRAW_FLAT        // reduz PD em valor absoluto
+  POWER_DRAW_PCT         // reduz PD em percentual
 }
 
 enum PartCategory {

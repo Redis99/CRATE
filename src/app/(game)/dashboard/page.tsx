@@ -1,41 +1,20 @@
-import { cookies } from 'next/headers'
-import { createServerClient } from '@supabase/ssr'
+import { getServerUser } from '@/lib/auth'
+import { effectiveER } from '@/lib/mining'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { ERIcon } from '@/components/ui/ERIcon'
 import { BalanceDropdown } from '@/components/game/BalanceDropdown'
 import { MiningRewardsCard } from '@/components/game/MiningRewardsCard'
+import { RobotCard } from '@/components/game/RobotCard'
+import { RechargeAllButton } from '@/components/game/RechargeAllButton'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Dashboard — Inside the Crate',
 }
 
-function effectiveER(hashPower: number, durability: number): number {
-  if (durability === 0) return 0
-  if (durability <= 20) return hashPower * 0.4
-  if (durability <= 50) return hashPower * 0.8
-  return hashPower
-}
-
 async function getDashboardData() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getServerUser()
   if (!user) return null
 
   const [profile, allActiveRobots, lastBlock, totalMined] = await Promise.all([
@@ -53,12 +32,21 @@ async function getDashboardData() {
         robots: {
           where: { isActive: true },
           select: {
-            id: true,
-            hashPower: true,
-            durability: true,
-            rarity: true,
-            name: true,
-            outpostSlot: true,
+            id: true, name: true, collection: true,
+            hashPower: true, energyRate: true, durability: true,
+            rarity: true, outpostSlot: true, isActive: true,
+            equipments: {
+              select: {
+                equipmentId: true,
+                equipment: {
+                  select: {
+                    id: true, name: true, rarity: true,
+                    effectType: true, effectValue: true,
+                    effectType2: true, effectValue2: true,
+                  },
+                },
+              },
+            },
           },
         },
         _count: {
@@ -86,33 +74,6 @@ async function getDashboardData() {
   ])
 
   return { profile, allActiveRobots, lastBlock, totalMined }
-}
-
-function RarityBadge({ rarity }: { rarity: string }) {
-  const colors: Record<string, string> = {
-    COMMON: 'text-gray-400 bg-gray-400/10',
-    UNCOMMON: 'text-green-400 bg-green-400/10',
-    RARE: 'text-blue-400 bg-blue-400/10',
-    EPIC: 'text-purple-400 bg-purple-400/10',
-    LEGENDARY: 'text-yellow-400 bg-yellow-400/10',
-  }
-  const labels: Record<string, string> = {
-    COMMON: 'Common', UNCOMMON: 'Uncommon', RARE: 'Rare', EPIC: 'Epic', LEGENDARY: 'Legendary',
-  }
-  return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[rarity] ?? colors.COMMON}`}>
-      {labels[rarity] ?? rarity}
-    </span>
-  )
-}
-
-function DurabilityBar({ value }: { value: number }) {
-  const color = value > 50 ? 'bg-green-500' : value > 20 ? 'bg-yellow-500' : 'bg-red-500'
-  return (
-    <div className="w-full bg-gray-800 rounded-full h-1.5 mt-1">
-      <div className={`${color} h-1.5 rounded-full transition-all`} style={{ width: `${value}%` }} />
-    </div>
-  )
 }
 
 export default async function DashboardPage() {
@@ -215,38 +176,26 @@ export default async function DashboardPage() {
         <div className="col-span-3 bg-[#111118] border border-gray-800/60 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-white font-semibold text-sm">Robots at Outpost</h3>
-            <Link href="/outpost" className="text-blue-400 hover:text-blue-300 text-xs transition-colors">
-              Manage →
-            </Link>
+            <div className="flex items-center gap-3">
+              <RechargeAllButton />
+              <Link href="/outpost" className="text-blue-400 hover:text-blue-300 text-xs transition-colors">
+                Manage →
+              </Link>
+            </div>
           </div>
 
           {activeRobots.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-600 text-sm mb-3">No active robots at the Outpost</p>
-              <Link
-                href="/outpost"
-                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg transition-colors"
-              >
+              <Link href="/outpost"
+                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg transition-colors">
                 Deploy Robots
               </Link>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {activeRobots.map((robot) => (
-                <div key={robot.id} className="flex items-center justify-between bg-[#0d0d15] rounded-lg p-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-white text-sm font-medium truncate">{robot.name}</span>
-                      <RarityBadge rarity={robot.rarity} />
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-gray-500">
-                      <span>{robot.hashPower} ER base</span>
-                      <span>Slot {robot.outpostSlot}</span>
-                    </div>
-                    <DurabilityBar value={robot.durability} />
-                    <p className="text-xs text-gray-600 mt-0.5">{robot.durability}% durability</p>
-                  </div>
-                </div>
+                <RobotCard key={robot.id} robot={robot} variant="mini" slotNumber={robot.outpostSlot ?? undefined} />
               ))}
             </div>
           )}

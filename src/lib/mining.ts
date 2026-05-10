@@ -1,16 +1,10 @@
 import 'server-only'
 import { prisma } from '@/lib/prisma'
+import { effectiveER, durabilityDecayPerBlock } from '@/lib/game-math'
 
-// 4 blocos por hora → -1% de durabilidade por hora = -0.25% por bloco
-const DURABILITY_DECAY_PER_BLOCK = 0.25
+export { effectiveER }
+
 const MIN_BLOCK_REWARD_CRATE = 10
-
-function effectiveER(hashPower: number, durability: number): number {
-  if (durability === 0) return 0
-  if (durability <= 20) return hashPower * 0.4
-  if (durability <= 50) return hashPower * 0.8
-  return hashPower
-}
 
 /**
  * Processa um bloco de mineração com alocação por moeda.
@@ -35,6 +29,7 @@ export async function processBlock() {
       userId: true,
       hashPower: true,
       durability: true,
+      energyRate: true,
     },
   })
 
@@ -122,7 +117,8 @@ export async function processBlock() {
   const robotsToDeactivate: string[] = []
 
   for (const robot of activeRobots) {
-    const newDurability = Math.max(0, robot.durability - DURABILITY_DECAY_PER_BLOCK)
+    const decay = durabilityDecayPerBlock(robot.energyRate)
+    const newDurability = Math.max(0, robot.durability - decay)
     if (newDurability === 0) {
       robotsToDeactivate.push(robot.id)
       decayOps.push(prisma.robot.update({
