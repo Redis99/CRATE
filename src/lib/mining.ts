@@ -1,6 +1,5 @@
 import 'server-only'
 import { prisma } from '@/lib/prisma'
-import { Prisma } from '@prisma/client'
 import { effectiveER, effectiveERWithEquipment, durabilityDecayPerBlock } from '@/lib/game-math'
 
 export { effectiveER }
@@ -159,43 +158,26 @@ export async function processBlock() {
   // Atualiza blockNumber nos registros de recompensa
   for (const r of miningRewardsData) r.blockNumber = block.id
 
-  // 8. Executa todas as writes em paralelo (bulk onde possível)
+  // 8. Executa writes em paralelo — Prisma ORM padrão (compatível com PgBouncer)
   await Promise.all([
-    // ── Saldos dos jogadores — 1 única query SQL independente do nº de usuários ──
-    userBalanceUpdates.length > 0 && prisma.$executeRaw`
-      UPDATE users u
-      SET
-        balance_crate = u.balance_crate + updates.crate,
-        balance_sol   = u.balance_sol   + updates.sol,
-        balance_lc    = u.balance_lc    + updates.lc
-      FROM (VALUES ${Prisma.join(
-        userBalanceUpdates.map(({ userId, crate, sol, lc }) =>
-          Prisma.sql`(${userId}::uuid, ${crate}::float8, ${sol}::float8, ${lc}::float8)`
-        )
-      )}) AS updates(id, crate, sol, lc)
-      WHERE u.id = updates.id
-    `,
-
-    // Registros de recompensa — createMany (bulk insert)
+    // Saldos dos jogadores
+    ...userBalanceUpdates.map(({ userId, crate, sol, lc }) =>
+      prisma.user.update({
+        where: { id: userId },
+        data: {
+          ...(crate > 0 && { balanceCrate: { increment: crate } }),
+          ...(sol   > 0 && { balanceSol:   { increment: sol   } }),
+          ...(lc    > 0 && { balanceLc:    { increment: lc    } }),
+        },
+      })
+    ),
+    // Recompensas em lote
     miningRewardsData.length > 0 && prisma.miningReward.createMany({ data: miningRewardsData }),
-
-    // ── Durabilidade dos robôs — 1 única query SQL ──
-    (() => {
-      const active = robotUpdates.filter((r) => !r.deactivate)
-      if (active.length === 0) return Promise.resolve()
-      return prisma.$executeRaw`
-        UPDATE robots r
-        SET durability = updates.dur
-        FROM (VALUES ${Prisma.join(
-          active.map(({ id, durability }) =>
-            Prisma.sql`(${id}::uuid, ${durability}::float8)`
-          )
-        )}) AS updates(id, dur)
-        WHERE r.id = updates.id
-      `
-    })(),
-
-    // Robôs desativados
+    // Durabilidade dos robôs ativos
+    ...robotUpdates
+      .filter((r) => !r.deactivate)
+      .map((r) => prisma.robot.update({ where: { id: r.id }, data: { durability: r.durability } })),
+    // Robôs desativados em lote
     robotsToDeactivate.length > 0 && prisma.robot.updateMany({
       where: { id: { in: robotsToDeactivate.map((r) => r.id) } },
       data: { durability: 0, isActive: false, outpostSlot: null },
