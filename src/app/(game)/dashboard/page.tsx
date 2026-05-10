@@ -1,9 +1,9 @@
 import { getServerUser } from '@/lib/auth'
-import { effectiveER } from '@/lib/mining'
+import { calculateFleetER, calculateFleetPD, effectiveER, effectiveERWithEquipment } from '@/lib/game-math'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
-import { ERIcon } from '@/components/ui/ERIcon'
 import { BalanceDropdown } from '@/components/game/BalanceDropdown'
+import { ERWidget, PDWidget } from '@/components/game/FleetStatsWidget'
 import { MiningRewardsCard } from '@/components/game/MiningRewardsCard'
 import { RobotCard } from '@/components/game/RobotCard'
 import { RechargeAllButton } from '@/components/game/RechargeAllButton'
@@ -19,7 +19,7 @@ async function getDashboardData() {
   const user = await getServerUser()
   if (!user) return null
 
-  const [profile, allActiveRobots, lastBlock, totalMined, baseUpgrades] = await Promise.all([
+  const [profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades] = await Promise.all([
     prisma.user.findUnique({
       where: { id: user.id },
       select: {
@@ -59,10 +59,24 @@ async function getDashboardData() {
         },
       },
     }),
-    // ER total da rede (todos os robôs ativos de todos os jogadores)
+    // ER total da rede — inclui equipamentos e base upgrades de todos os jogadores
     prisma.robot.findMany({
       where: { isActive: true },
-      select: { hashPower: true, durability: true },
+      select: {
+        userId: true,
+        hashPower: true,
+        durability: true,
+        equipments: {
+          select: {
+            equipment: {
+              select: {
+                effectType: true, effectValue: true,
+                effectType2: true, effectValue2: true,
+              },
+            },
+          },
+        },
+      },
     }),
     // Último bloco processado
     prisma.miningBlock.findFirst({
@@ -73,7 +87,16 @@ async function getDashboardData() {
       where: { userId: user.id, token: 'CRATE' },
       _sum: { amount: true },
     }),
-    // Base upgrades aplicados
+    // Base upgrades de TODOS os jogadores com robôs ativos (para cálculo de networkER)
+    prisma.baseUpgrade.findMany({
+      where: { isApplied: true, user: { robots: { some: { isActive: true } } } },
+      select: {
+        userId: true,
+        effectType: true, effectValue: true,
+        effectType2: true, effectValue2: true,
+      },
+    }),
+    // Base upgrades do próprio jogador (para ERWidget e userShareER)
     prisma.baseUpgrade.findMany({
       where: { userId: user.id, isApplied: true },
       select: {
@@ -85,7 +108,7 @@ async function getDashboardData() {
     }),
   ])
 
-  return { profile, allActiveRobots, lastBlock, totalMined, baseUpgrades }
+  return { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades }
 }
 
 export default async function DashboardPage() {
@@ -95,11 +118,45 @@ export default async function DashboardPage() {
     return <div className="p-8 text-gray-400">Loading profile...</div>
   }
 
-  const { profile, allActiveRobots, lastBlock, totalMined, baseUpgrades } = data
+  const { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades } = data
   const activeRobots = profile.robots
 
-  const userER = activeRobots.reduce((sum, r) => sum + effectiveER(r.hashPower, r.durability), 0)
-  const networkER = allActiveRobots.reduce((sum, r) => sum + effectiveER(r.hashPower, r.durability), 0)
+  const robotsForCalc = activeRobots.map((r) => ({
+    hashPower:  r.hashPower,
+    energyRate: (r as typeof r & { energyRate?: number }).energyRate ?? 1,
+    durability: r.durability,
+    equipments: r.equipments?.map((e) => e.equipment) ?? [],
+  }))
+
+  const erBreakdown = calculateFleetER(robotsForCalc, baseUpgrades)
+  const pdBreakdown = calculateFleetPD(robotsForCalc)
+
+  // userShareER = ER total do jogador com equipamentos + base upgrades próprios
+  // Reutiliza erBreakdown.total que já inclui tudo
+  const userShareER = erBreakdown.total
+
+  // networkER = ER de TODOS os jogadores com equipamentos + base upgrades de cada um
+  // Agrupa base upgrades por userId para aplicar corretamente por jogador
+  const upgradesByUser = new Map<string, typeof allNetworkUpgrades>()
+  for (const upg of allNetworkUpgrades) {
+    if (!upgradesByUser.has(upg.userId)) upgradesByUser.set(upg.userId, [])
+    upgradesByUser.get(upg.userId)!.push(upg)
+  }
+
+  type NetworkRobot = typeof allActiveRobots[0]
+  const networkER = allActiveRobots.reduce((sum, r: NetworkRobot) => {
+    const equips   = (r.equipments ?? []).map((e) => e.equipment)
+    const upgrades = upgradesByUser.get(r.userId) ?? []
+    const boosted  = effectiveERWithEquipment(r.hashPower, equips)
+    // Aplica GLOBAL_EFFICIENCY_PCT das base upgrades do dono do robô
+    let globalPct = 0
+    for (const upg of upgrades) {
+      if (upg.effectType  === 'GLOBAL_EFFICIENCY_PCT') globalPct += upg.effectValue
+      if (upg.effectType2 === 'GLOBAL_EFFICIENCY_PCT') globalPct += (upg.effectValue2 ?? 0)
+    }
+    const withBase = boosted * (1 + globalPct / 100)
+    return sum + effectiveER(withBase, r.durability)
+  }, 0)
 
   const blockRewards = {
     CRATE: Number(process.env.MINING_BLOCK_REWARD_CRATE ?? 100),
@@ -107,7 +164,7 @@ export default async function DashboardPage() {
     LC:    Number(process.env.MINING_BLOCK_REWARD_LC ?? 0),
   }
 
-  const totalER = userER
+  const totalER = erBreakdown.total  // para o ERWidget (com base upgrades)
 
   const quickActions = [
     { label: 'Manage Outpost', href: '/outpost', color: 'border-blue-500/30 hover:border-blue-500/60 hover:bg-blue-500/5' },
@@ -153,18 +210,8 @@ export default async function DashboardPage() {
           <p className="text-gray-600 text-xs mt-1">Outpost slots</p>
         </div>
 
-        <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-gray-400 text-sm">Extraction Rate</p>
-            <span className="text-green-400">
-              <ERIcon size={16} />
-            </span>
-          </div>
-          <p className="text-2xl font-bold text-white">
-            {totalER.toFixed(1)} <span className="text-gray-600 text-sm font-normal">ER</span>
-          </p>
-          <p className="text-gray-600 text-xs mt-1">mining power</p>
-        </div>
+        <ERWidget er={erBreakdown} />
+        <PDWidget pd={pdBreakdown} />
 
         <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-4">
           <div className="flex items-center justify-between mb-2">
@@ -200,7 +247,7 @@ export default async function DashboardPage() {
             <div className="text-center py-8">
               <p className="text-gray-600 text-sm mb-3">No active robots at the Outpost</p>
               <Link href="/outpost"
-                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg transition-colors">
+                className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm px-4 py-2 rounded-lg transition-colors">
                 Deploy Robots
               </Link>
             </div>
@@ -257,7 +304,7 @@ export default async function DashboardPage() {
           </div>
 
           <MiningRewardsCard
-            userER={userER}
+            userER={userShareER}
             networkER={networkER}
             blockRewards={blockRewards}
             lastBlockAt={lastBlock?.processedAt.toISOString() ?? null}

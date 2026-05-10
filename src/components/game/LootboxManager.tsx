@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import type { DropResultType } from '@/lib/lootbox'
 import { LootboxDropModal } from '@/components/game/LootboxDropModal'
 import { QuantityStepper } from '@/components/ui/QuantityStepper'
+import { ActionButton } from '@/components/ui/ActionButton'
 
 interface LootboxData {
   balance: number
@@ -114,13 +115,15 @@ function CrateCard({
           <span className="text-gray-500 text-xs">Buy quantity</span>
           <QuantityStepper value={buyQty} min={1} max={maxBuy} onChange={onBuyQtyChange} />
         </div>
-        <button
+        <ActionButton
+          variant="outline"
+          fullWidth
           onClick={onBuy}
           disabled={!canBuy || loading}
-          className="w-full py-2 rounded-lg border border-blue-600/40 text-blue-400 hover:bg-blue-500/10 disabled:opacity-40 disabled:cursor-not-allowed text-sm transition-colors"
+          loading={loading}
         >
-          {loading ? '...' : `Buy ${buyQty}× — ${totalBuyCost.toFixed(2)} CRATE`}
-        </button>
+          {`Buy ${buyQty}× — ${totalBuyCost.toFixed(2)} CRATE`}
+        </ActionButton>
       </div>
 
       {/* Open section */}

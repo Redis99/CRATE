@@ -51,7 +51,7 @@ export default function LandingPage() {
         <div className="flex items-center justify-center gap-4">
           <Link
             href="/register"
-            className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-8 py-3 rounded-lg transition-colors"
+            className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-8 py-3 rounded-lg transition-colors"
           >
             Create Account
           </Link>

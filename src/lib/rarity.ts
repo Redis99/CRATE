@@ -1,5 +1,21 @@
 export type Rarity = 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY'
 
+/** Peso para ordenação — maior = mais raro = aparece primeiro */
+export const RARITY_ORDER: Record<string, number> = {
+  COMMON:    0,
+  UNCOMMON:  1,
+  RARE:      2,
+  EPIC:      3,
+  LEGENDARY: 4,
+}
+
+/** Ordena qualquer array de itens com campo `rarity` do mais raro para o mais comum */
+export function sortByRarity<T extends { rarity?: string }>(items: T[]): T[] {
+  return [...items].sort(
+    (a, b) => (RARITY_ORDER[b.rarity ?? 'COMMON'] ?? 0) - (RARITY_ORDER[a.rarity ?? 'COMMON'] ?? 0)
+  )
+}
+
 export const RARITY_LABEL: Record<Rarity, string> = {
   COMMON:    'Common',
   UNCOMMON:  'Uncommon',

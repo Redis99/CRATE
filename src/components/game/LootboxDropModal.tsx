@@ -1,6 +1,7 @@
 'use client'
 
 import type { DropResultType } from '@/lib/lootbox'
+import { ActionButton } from '@/components/ui/ActionButton'
 
 // ─── Helpers (exportados para uso em outros componentes se necessário) ─────────
 
@@ -95,12 +96,15 @@ export function LootboxDropModal({ drops, stoppedEarly, onClose }: LootboxDropMo
           })}
         </div>
 
-        <button
+        <ActionButton
+          variant="primary"
+          size="lg"
+          fullWidth
           onClick={onClose}
-          className="mt-4 w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors"
+          className="mt-4"
         >
-          Collect
-        </button>
+          {drops.length === 1 ? 'Collect' : 'Collect All'}
+        </ActionButton>
       </div>
     </div>
   )

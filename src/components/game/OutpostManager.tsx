@@ -3,13 +3,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ERIcon } from '@/components/ui/ERIcon'
 import { RarityBadge } from '@/components/ui/RarityBadge'
-import { RARITY_CARD_COLOR } from '@/lib/rarity'
-import { effectiveER, effectiveERWithEquipment, effectivePDWithEquipment } from '@/lib/game-math'
+import { RARITY_CARD_COLOR, sortByRarity } from '@/lib/rarity'
+import { calculateFleetER, calculateFleetPD } from '@/lib/game-math'
+import { ERWidget, PDWidget } from '@/components/game/FleetStatsWidget'
 import { RobotCard } from '@/components/game/RobotCard'
 import { EquipmentCard, EmptyEquipmentSlot } from '@/components/game/EquipmentCard'
 import type { RobotCardData } from '@/components/game/RobotCard'
 import type { EquipmentCardData } from '@/components/game/EquipmentCard'
 import { BASE_SLOT_LABELS } from '@/lib/game-constants'
+import { ActionButton } from '@/components/ui/ActionButton'
 
 interface BaseUpgradeSlot extends EquipmentCardData {
   appliedSlot: number | null
@@ -63,19 +65,18 @@ export function OutpostManager() {
   if (loading) return <div className="p-8 text-gray-500 text-sm">Loading outpost...</div>
   if (!data)   return <div className="p-8 text-red-400 text-sm">Failed to load outpost data.</div>
 
-  const deployedRobots  = data.robots.filter((r) => r.isActive)
-  const inventoryRobots = data.robots.filter((r) => !r.isActive)
+  const deployedRobots  = sortByRarity(data.robots.filter((r) => r.isActive))
+  const inventoryRobots = sortByRarity(data.robots.filter((r) => !r.isActive))
 
-  const totalER = deployedRobots.reduce((sum, r) => {
-    const equips   = r.equipments?.map((e) => e.equipment) ?? []
-    const boosted  = effectiveERWithEquipment(r.hashPower, equips)
-    return sum + effectiveER(boosted, r.durability)
-  }, 0)
+  const robotsForCalc = deployedRobots.map((r) => ({
+    hashPower:  r.hashPower,
+    energyRate: r.energyRate ?? 1,
+    durability: r.durability,
+    equipments: r.equipments?.map((e) => e.equipment) ?? [],
+  }))
 
-  const totalPD = deployedRobots.reduce((sum, r) => {
-    const equips = r.equipments?.map((e) => e.equipment) ?? []
-    return sum + effectivePDWithEquipment(r.energyRate ?? 1, equips)
-  }, 0)
+  const erBreakdown = calculateFleetER(robotsForCalc, data.baseUpgrades)
+  const pdBreakdown = calculateFleetPD(robotsForCalc)
 
   const slots = Array.from({ length: data.outpostSlots }, (_, i) => i + 1)
 
@@ -88,8 +89,8 @@ export function OutpostManager() {
       )}
 
       {selectedRobot && (
-        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg px-4 py-3 flex items-center justify-between">
-          <p className="text-blue-300 text-sm">
+        <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-lg px-4 py-3 flex items-center justify-between">
+          <p className="text-indigo-300 text-sm">
             Select an empty slot to deploy <span className="font-semibold text-white">{selectedRobot.name}</span>
           </p>
           <button onClick={() => setSelectedRobot(null)} className="text-gray-500 hover:text-gray-300 text-xs">Cancel</button>
@@ -103,20 +104,10 @@ export function OutpostManager() {
           <p className="text-white text-xl font-bold">
             {deployedRobots.length} <span className="text-gray-600 text-sm font-normal">/ {data.outpostSlots}</span>
           </p>
+          <p className="text-gray-600 text-xs mt-1">Outpost slots</p>
         </div>
-        <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-4">
-          <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Extraction Rate</p>
-          <div className="flex items-center gap-2">
-            <p className="text-white text-xl font-bold font-mono">{totalER.toFixed(1)} <span className="text-gray-600 text-sm font-normal">ER</span></p>
-            <ERIcon size={16} className="text-orange-400" />
-          </div>
-        </div>
-        <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-4">
-          <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Fleet Power Draw</p>
-          <p className="text-white text-xl font-bold font-mono">
-            {totalPD.toFixed(1)} <span className="text-gray-600 text-sm font-normal">PD/hr</span>
-          </p>
-        </div>
+        <ERWidget er={erBreakdown} />
+        <PDWidget pd={pdBreakdown} />
       </div>
 
       {/* Base Upgrades */}
@@ -173,13 +164,17 @@ export function OutpostManager() {
                     variant="outpost"
                     slotNumber={slot}
                     actions={
-                      <button
+                      <ActionButton
+                        variant="danger"
+                        size="sm"
+                        fullWidth
                         onClick={(e) => { e.stopPropagation(); handleRecall(robot) }}
                         disabled={actionLoading === robot.id}
-                        className="w-full text-xs px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                        loading={actionLoading === robot.id}
+                        loadingText="Recalling..."
                       >
-                        {actionLoading === robot.id ? 'Recalling...' : 'Recall'}
-                      </button>
+                        Recall
+                      </ActionButton>
                     }
                   />
                 ) : (
@@ -240,8 +235,8 @@ export function OutpostManager() {
                     disabled={isEmpty || outpostFull || actionLoading === robot.id}
                     className={`mt-2 w-full text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                       isSelected
-                        ? 'border-blue-500/60 text-blue-300 bg-blue-500/10'
-                        : 'border-gray-700 text-gray-300 hover:border-blue-500/50 hover:text-blue-400 hover:bg-blue-500/5'
+                        ? 'border-indigo-500/60 text-indigo-300 bg-indigo-500/10'
+                        : 'border-gray-700 text-gray-300 hover:border-indigo-500/50 hover:text-indigo-400 hover:bg-indigo-500/5'
                     }`}
                   >
                     {isEmpty ? 'No Energy' : outpostFull && !isSelected ? 'Outpost Full' : isSelected ? '✓ Selected' : 'Deploy'}

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { ActionButton } from '@/components/ui/ActionButton'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -69,13 +70,16 @@ export default function LoginPage() {
           </div>
         )}
 
-        <button
+        <ActionButton
           type="submit"
-          disabled={loading}
-          className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 disabled:cursor-not-allowed text-white font-medium py-2.5 rounded-lg transition-colors"
+          variant="primary"
+          size="lg"
+          fullWidth
+          loading={loading}
+          loadingText="Signing in..."
         >
-          {loading ? 'Signing in...' : 'Sign In'}
-        </button>
+          Sign In
+        </ActionButton>
       </form>
 
       <p className="text-center text-gray-500 text-sm mt-6">

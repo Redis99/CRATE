@@ -6,7 +6,8 @@ import { LootboxDropModal } from '@/components/game/LootboxDropModal'
 import { RarityBadge } from '@/components/ui/RarityBadge'
 import { DurabilityBar } from '@/components/ui/DurabilityBar'
 import { QuantityStepper } from '@/components/ui/QuantityStepper'
-import { RARITY_BORDER_COLOR, RARITY_LABEL, type Rarity } from '@/lib/rarity'
+import { RARITY_BORDER_COLOR, RARITY_LABEL, sortByRarity, type Rarity } from '@/lib/rarity'
+import { ActionButton } from '@/components/ui/ActionButton'
 import { BASE_SLOT_LABELS, BASE_SLOT_EFFECTS } from '@/lib/game-constants'
 import { CategoryTag } from '@/components/game/CategoryTag'
 import { RobotCard } from '@/components/game/RobotCard'
@@ -212,12 +213,8 @@ function RobotActionModal({ mode, title, description, consumableValue, newItemNa
         </div>
         {error && <p className="text-red-400 text-xs mb-3">{error}</p>}
         <div className="flex gap-2">
-          <button onClick={() => setReplaceTarget(null)}
-            className="flex-1 py-2 rounded-lg border border-gray-700 text-gray-400 hover:text-gray-200 text-sm transition-colors">Back</button>
-          <button onClick={handleReplace} disabled={!!busy}
-            className="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium transition-colors">
-            {busy ? 'Replacing...' : 'Confirm'}
-          </button>
+          <ActionButton variant="ghost" onClick={() => setReplaceTarget(null)} className="flex-1">Back</ActionButton>
+          <ActionButton variant="primary" onClick={handleReplace} disabled={!!busy} loading={!!busy} loadingText="Replacing..." className="flex-1">Confirm</ActionButton>
         </div>
       </div>
     </div>
@@ -292,7 +289,7 @@ function RobotActionModal({ mode, title, description, consumableValue, newItemNa
                   </div>
                   {mode === 'repair' && <DurabilityBar value={r.durability} height="sm" />}
                 </div>
-                <span className={`text-xs shrink-0 ${isFull ? 'text-yellow-400' : 'text-blue-400'}`}>
+                <span className={`text-xs shrink-0 ${isFull ? 'text-yellow-400' : 'text-indigo-400'}`}>
                   {busy === r.id ? '...' : isFull ? 'Replace →' : 'Select →'}
                 </span>
               </button>
@@ -345,12 +342,8 @@ function BaseUpgradeSlotModal({ upgrade, appliedUpgrades, onClose, onApply }: {
         </div>
         {error && <p className="text-red-400 text-xs mb-3">{error}</p>}
         <div className="flex gap-2">
-          <button onClick={() => setConfirmReplace(null)}
-            className="flex-1 py-2 rounded-lg border border-gray-700 text-gray-400 hover:text-gray-200 text-sm transition-colors">Back</button>
-          <button onClick={() => handleApply(confirmReplace.slot, confirmReplace.occupied.id)} disabled={!!busy}
-            className="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium transition-colors">
-            {busy ? 'Applying...' : 'Confirm'}
-          </button>
+          <ActionButton variant="ghost" onClick={() => setConfirmReplace(null)} className="flex-1">Back</ActionButton>
+          <ActionButton variant="primary" onClick={() => handleApply(confirmReplace.slot, confirmReplace.occupied.id)} disabled={!!busy} loading={!!busy} loadingText="Applying..." className="flex-1">Confirm</ActionButton>
         </div>
       </div>
     </div>
@@ -404,7 +397,7 @@ function BaseUpgradeSlotModal({ upgrade, appliedUpgrades, onClose, onApply }: {
                     }
                   </div>
                   {compatible && (
-                    <span className={`text-xs ${occupied ? 'text-yellow-400' : 'text-blue-400'}`}>
+                    <span className={`text-xs ${occupied ? 'text-yellow-400' : 'text-indigo-400'}`}>
                       {busy === slot ? '...' : occupied ? 'Replace →' : 'Apply →'}
                     </span>
                   )}
@@ -509,10 +502,9 @@ function EquipmentsTab({ items, onDestroy, onEquip, selectMode, selected, onTogg
               )}
             </div>
             {!equippedOn && (
-              <button onClick={() => onEquip(e)}
-                className="w-full py-1.5 rounded-lg border border-blue-600/40 text-blue-400 hover:bg-blue-500/10 text-xs transition-colors">
+              <ActionButton variant="outline" size="sm" fullWidth onClick={() => onEquip(e)}>
                 Equip to Robot
-              </button>
+              </ActionButton>
             )}
           </div>
         )
@@ -639,10 +631,9 @@ function ConsumablesTab({ items, onDestroy, onUse, selectMode, selected, onToggl
           </div>
           <p className="text-white text-xs font-medium mb-3">{typeLabel(c.consumableType, c.value)}</p>
           {c.consumableType === 'REPAIR_KIT' && (
-            <button onClick={() => onUse(c)}
-              className="w-full py-1.5 rounded-lg border border-blue-600/40 text-blue-400 hover:bg-blue-500/10 text-xs transition-colors mb-1.5">
+            <ActionButton variant="outline" size="sm" fullWidth onClick={() => onUse(c)} className="mb-1.5">
               Use
-            </button>
+            </ActionButton>
           )}
           <div className="flex justify-end">
             <DestroyButton itemId={c.id} itemType="consumable" isLegendary={false} onDestroy={onDestroy} />
@@ -686,10 +677,9 @@ function LootboxesTab({ items, onDestroy, onOpen, opening, selectMode, selected,
               <QuantityStepper value={qty} min={1} max={Math.min(10, lb.quantity)}
                 onChange={(v) => setQuantities((prev) => ({ ...prev, [lb.id]: v }))} />
             </div>
-            <button onClick={() => onOpen(lb.lootboxType, qty)} disabled={opening}
-              className="w-full py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-xs font-medium transition-colors mb-1.5">
-              {opening ? 'Opening...' : `Open ${qty}×`}
-            </button>
+            <ActionButton variant="purple" size="sm" fullWidth onClick={() => onOpen(lb.lootboxType, qty)} loading={opening} loadingText="Opening..." className="mb-1.5">
+              {`Open ${qty}×`}
+            </ActionButton>
             <div className="flex justify-end">
               <DestroyButton itemId={lb.id} itemType="lootbox" isLegendary={false} onDestroy={onDestroy} />
             </div>
@@ -994,17 +984,16 @@ export function InventoryManager() {
             <>
               <p className="text-red-400 text-sm">Destroy {selected.size} item(s)? This cannot be undone.</p>
               <div className="flex gap-2">
-                <button onClick={handleBulkDestroy} className="text-xs px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white transition-colors">Confirm</button>
-                <button onClick={() => setBulkConfirm(false)} className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-gray-200 transition-colors">Cancel</button>
+                <ActionButton variant="danger-filled" size="sm" onClick={handleBulkDestroy}>Confirm</ActionButton>
+                <ActionButton variant="ghost" size="sm" onClick={() => setBulkConfirm(false)}>Cancel</ActionButton>
               </div>
             </>
           ) : (
             <>
               <p className="text-gray-400 text-sm">{selected.size} item(s) selected</p>
-              <button onClick={() => setBulkConfirm(true)}
-                className="text-xs px-3 py-1.5 rounded-lg border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors">
+              <ActionButton variant="danger" size="sm" onClick={() => setBulkConfirm(true)}>
                 Destroy Selected
-              </button>
+              </ActionButton>
             </>
           )}
         </div>
@@ -1017,12 +1006,12 @@ export function InventoryManager() {
         const filterRarity = <T extends { rarity?: Rarity }>(items: T[]) =>
           rf ? items.filter((i) => i.rarity === rf) : items
 
-        const robots       = filterRarity(data.robots.filter((r) => !q || r.name.toLowerCase().includes(q) || r.collection.toLowerCase().includes(q)))
-        const equipments   = filterRarity(data.equipments.filter((e) => !q || e.name.toLowerCase().includes(q)))
-        const baseUpgrades = filterRarity(data.baseUpgrades.filter((b) => !q || b.name.toLowerCase().includes(q)))
-        const parts        = filterRarity(data.parts.filter((p) => !q || p.partType.toLowerCase().includes(q) || p.category.toLowerCase().includes(q)))
-        const consumables  = data.consumables.filter((c) => !q || c.consumableType.toLowerCase().includes(q)) // consumables sem raridade
-        const lootboxes    = data.lootboxes.filter((l) => !q || l.lootboxType.toLowerCase().includes(q))      // lootboxes sem raridade
+        const robots       = sortByRarity(filterRarity(data.robots.filter((r) => !q || r.name.toLowerCase().includes(q) || r.collection.toLowerCase().includes(q))))
+        const equipments   = sortByRarity(filterRarity(data.equipments.filter((e) => !q || e.name.toLowerCase().includes(q))))
+        const baseUpgrades = sortByRarity(filterRarity(data.baseUpgrades.filter((b) => !q || b.name.toLowerCase().includes(q))))
+        const parts        = sortByRarity(filterRarity(data.parts.filter((p) => !q || p.partType.toLowerCase().includes(q) || p.category.toLowerCase().includes(q))))
+        const consumables  = data.consumables.filter((c) => !q || c.consumableType.toLowerCase().includes(q))
+        const lootboxes    = data.lootboxes.filter((l) => !q || l.lootboxType.toLowerCase().includes(q))
 
         const selProps = { selectMode, selected, onToggleSelect: toggleSelect }
 

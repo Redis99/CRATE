@@ -34,6 +34,91 @@ export function estimatedHoursRemaining(durability: number, energyRate: number):
   return durability / energyRate
 }
 
+// ─── Cálculos de frota ───────────────────────────────────────────────────────
+
+export interface FleetERBreakdown {
+  total:            number  // ER efetivo total (com durabilidade + upgrades)
+  base:             number  // soma dos hashPower base de todos os robôs
+  equipBonus:       number  // bônus dos equipamentos instalados
+  baseUpgradePct:   number  // % de eficiência global da melhoria de base
+  baseUpgradeBonus: number  // bônus absoluto vindo do upgrade (para exibição)
+}
+
+export interface FleetPDBreakdown {
+  total:       number  // PD total da frota por hora
+  base:        number  // PD base (sem equipamentos)
+  equipSaving: number  // redução pelos equipamentos instalados
+}
+
+/**
+ * Calcula o ER total da frota com todos os bônus aplicados.
+ * Inclui: equipamentos individuais + GLOBAL_EFFICIENCY_PCT da melhoria de base.
+ */
+export function calculateFleetER(
+  robots: Array<{ hashPower: number; durability: number; equipments?: EquipmentEffect[] }>,
+  baseUpgrades: Array<EquipmentEffect>
+): FleetERBreakdown {
+  // Coleta o % de eficiência global das melhorias de base aplicadas
+  let globalPct = 0
+  for (const upg of baseUpgrades) {
+    const effects = [
+      { type: upg.effectType,  value: upg.effectValue },
+      { type: upg.effectType2, value: upg.effectValue2 },
+    ]
+    for (const { type, value } of effects) {
+      if (!type || value == null) continue
+      if (type === 'GLOBAL_EFFICIENCY_PCT' || type === 'HASH_POWER_PCT') globalPct += value
+    }
+  }
+
+  let base        = 0
+  let withEquip   = 0
+  let totalEffect = 0
+
+  for (const robot of robots) {
+    const equips   = robot.equipments ?? []
+    const boosted  = effectiveERWithEquipment(robot.hashPower, equips)
+    const boostedWithBase = boosted * (1 + globalPct / 100)
+    base        += robot.hashPower
+    withEquip   += boosted
+    totalEffect += effectiveER(boostedWithBase, robot.durability)
+  }
+
+  const equipBonus       = withEquip - base
+  const baseUpgradeBonus = Math.round((withEquip * globalPct / 100) * 10) / 10
+
+  return {
+    total:            Math.round(totalEffect * 10) / 10,
+    base:             Math.round(base        * 10) / 10,
+    equipBonus:       Math.round(equipBonus  * 10) / 10,
+    baseUpgradePct:   globalPct,
+    baseUpgradeBonus,
+  }
+}
+
+/**
+ * Calcula o PD total da frota com reduções dos equipamentos.
+ */
+export function calculateFleetPD(
+  robots: Array<{ energyRate: number; equipments?: EquipmentEffect[] }>
+): FleetPDBreakdown {
+  let base  = 0
+  let total = 0
+
+  for (const robot of robots) {
+    const equips = robot.equipments ?? []
+    const pd     = effectivePDWithEquipment(robot.energyRate, equips)
+    base  += robot.energyRate
+    total += pd
+  }
+
+  return {
+    total:       Math.round(total        * 10) / 10,
+    base:        Math.round(base         * 10) / 10,
+    equipSaving: Math.round((base-total) * 10) / 10,
+  }
+}
+
 // ─── Tipos compartilhados ─────────────────────────────────────────────────────
 
 export interface EquipmentEffect {
