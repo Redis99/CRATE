@@ -48,5 +48,10 @@ next-env.d.ts
 
 /src/generated/prisma
 
-# Planejamento do jogo (sensível ao negócio)
+# Planejamento do jogo e documentação local
 CONTEXT.md
+CONTEXT_PUBLIC.md
+
+# Instruções do Claude Code (uso local apenas)
+CLAUDE.md
+AGENTS.md
