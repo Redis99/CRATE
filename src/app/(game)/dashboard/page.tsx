@@ -87,9 +87,9 @@ async function getDashboardData() {
       where: { userId: user.id, token: 'CRATE' },
       _sum: { amount: true },
     }),
-    // Base upgrades de TODOS os jogadores com robôs ativos (para cálculo de networkER)
+    // Base upgrades aplicados de todos os jogadores (filtramos por usuário ativo no cálculo)
     prisma.baseUpgrade.findMany({
-      where: { isApplied: true, user: { robots: { some: { isActive: true } } } },
+      where: { isApplied: true },
       select: {
         userId: true,
         effectType: true, effectValue: true,
@@ -132,31 +132,38 @@ export default async function DashboardPage() {
   const pdBreakdown = calculateFleetPD(robotsForCalc)
 
   // userShareER = ER total do jogador com equipamentos + base upgrades próprios
-  // Reutiliza erBreakdown.total que já inclui tudo
   const userShareER = erBreakdown.total
 
-  // networkER = ER de TODOS os jogadores com equipamentos + base upgrades de cada um
-  // Agrupa base upgrades por userId para aplicar corretamente por jogador
+  // networkER = Σ do ER de cada jogador calculado com calculateFleetER
+  // Garante fórmula idêntica ao userShareER → share sempre entre 0-100%
   const upgradesByUser = new Map<string, typeof allNetworkUpgrades>()
   for (const upg of allNetworkUpgrades) {
     if (!upgradesByUser.has(upg.userId)) upgradesByUser.set(upg.userId, [])
     upgradesByUser.get(upg.userId)!.push(upg)
   }
 
+  // Agrupa robôs por usuário
   type NetworkRobot = typeof allActiveRobots[0]
-  const networkER = allActiveRobots.reduce((sum, r: NetworkRobot) => {
-    const equips   = (r.equipments ?? []).map((e) => e.equipment)
-    const upgrades = upgradesByUser.get(r.userId) ?? []
-    const boosted  = effectiveERWithEquipment(r.hashPower, equips)
-    // Aplica GLOBAL_EFFICIENCY_PCT das base upgrades do dono do robô
-    let globalPct = 0
-    for (const upg of upgrades) {
-      if (upg.effectType  === 'GLOBAL_EFFICIENCY_PCT') globalPct += upg.effectValue
-      if (upg.effectType2 === 'GLOBAL_EFFICIENCY_PCT') globalPct += (upg.effectValue2 ?? 0)
-    }
-    const withBase = boosted * (1 + globalPct / 100)
-    return sum + effectiveER(withBase, r.durability)
-  }, 0)
+  const robotsByUser = new Map<string, NetworkRobot[]>()
+  for (const robot of allActiveRobots) {
+    if (!robotsByUser.has(robot.userId)) robotsByUser.set(robot.userId, [])
+    robotsByUser.get(robot.userId)!.push(robot)
+  }
+
+  // Calcula ER de cada jogador com a mesma fórmula e soma
+  let networkER = 0
+  for (const [userId, robots] of robotsByUser.entries()) {
+    const upgrades = upgradesByUser.get(userId) ?? []
+    const { total } = calculateFleetER(
+      robots.map((r) => ({
+        hashPower:  r.hashPower,
+        durability: r.durability,
+        equipments: (r.equipments ?? []).map((e) => e.equipment),
+      })),
+      upgrades
+    )
+    networkER += total
+  }
 
   const blockRewards = {
     CRATE: Number(process.env.MINING_BLOCK_REWARD_CRATE ?? 100),
