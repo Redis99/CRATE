@@ -2,10 +2,20 @@ import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
+import { ERIcon } from '@/components/ui/ERIcon'
+import { BalanceDropdown } from '@/components/game/BalanceDropdown'
+import { MiningRewardsCard } from '@/components/game/MiningRewardsCard'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Dashboard — Inside the Crate',
+}
+
+function effectiveER(hashPower: number, durability: number): number {
+  if (durability === 0) return 0
+  if (durability <= 20) return hashPower * 0.4
+  if (durability <= 50) return hashPower * 0.8
+  return hashPower
 }
 
 async function getDashboardData() {
@@ -28,35 +38,54 @@ async function getDashboardData() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const profile = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: {
-      username: true,
-      balanceCrate: true,
-      balanceSol: true,
-      balanceLc: true,
-      outpostSlots: true,
-      robots: {
-        where: { isActive: true },
-        select: {
-          id: true,
-          hashPower: true,
-          durability: true,
-          rarity: true,
-          name: true,
-          outpostSlot: true,
+  const [profile, allActiveRobots, lastBlock, totalMined] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        username: true,
+        balanceCrate: true,
+        balanceSol: true,
+        balanceLc: true,
+        outpostSlots: true,
+        allocationCrate: true,
+        allocationSol: true,
+        allocationLc: true,
+        robots: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            hashPower: true,
+            durability: true,
+            rarity: true,
+            name: true,
+            outpostSlot: true,
+          },
+        },
+        _count: {
+          select: {
+            robots: true,
+            miningRewards: true,
+          },
         },
       },
-      _count: {
-        select: {
-          robots: true,
-          miningRewards: true,
-        },
-      },
-    },
-  })
+    }),
+    // ER total da rede (todos os robôs ativos de todos os jogadores)
+    prisma.robot.findMany({
+      where: { isActive: true },
+      select: { hashPower: true, durability: true },
+    }),
+    // Último bloco processado
+    prisma.miningBlock.findFirst({
+      orderBy: { processedAt: 'desc' },
+    }),
+    // Total de CRATE minerado pelo jogador
+    prisma.miningReward.aggregate({
+      where: { userId: user.id, token: 'CRATE' },
+      _sum: { amount: true },
+    }),
+  ])
 
-  return { profile, user }
+  return { profile, allActiveRobots, lastBlock, totalMined }
 }
 
 function RarityBadge({ rarity }: { rarity: string }) {
@@ -93,14 +122,19 @@ export default async function DashboardPage() {
     return <div className="p-8 text-gray-400">Loading profile...</div>
   }
 
-  const { profile } = data
+  const { profile, allActiveRobots, lastBlock, totalMined } = data
   const activeRobots = profile.robots
-  const totalHashPower = activeRobots.reduce((sum, r) => {
-    let hp = r.hashPower
-    if (r.durability <= 20) hp *= 0.4
-    else if (r.durability <= 50) hp *= 0.8
-    return sum + hp
-  }, 0)
+
+  const userER = activeRobots.reduce((sum, r) => sum + effectiveER(r.hashPower, r.durability), 0)
+  const networkER = allActiveRobots.reduce((sum, r) => sum + effectiveER(r.hashPower, r.durability), 0)
+
+  const blockRewards = {
+    CRATE: Number(process.env.MINING_BLOCK_REWARD_CRATE ?? 100),
+    SOL:   Number(process.env.MINING_BLOCK_REWARD_SOL ?? 0),
+    LC:    Number(process.env.MINING_BLOCK_REWARD_LC ?? 0),
+  }
+
+  const totalER = userER
 
   const quickActions = [
     { label: 'Manage Outpost', href: '/outpost', color: 'border-blue-500/30 hover:border-blue-500/60 hover:bg-blue-500/5' },
@@ -121,30 +155,12 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* Token Balances */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-4">
-          <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">CRATE</p>
-          <p className="text-white text-xl font-bold font-mono">
-            {Number(profile.balanceCrate).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </p>
-          <p className="text-gray-600 text-xs mt-1">≈ $0.00 USD</p>
-        </div>
-        <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-4">
-          <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">SOL</p>
-          <p className="text-white text-xl font-bold font-mono">
-            {Number(profile.balanceSol).toLocaleString('en-US', { minimumFractionDigits: 4 })}
-          </p>
-          <p className="text-gray-600 text-xs mt-1">Minable</p>
-        </div>
-        <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-4">
-          <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">LC Shib</p>
-          <p className="text-white text-xl font-bold font-mono">
-            {Number(profile.balanceLc).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </p>
-          <p className="text-gray-600 text-xs mt-1">Minable</p>
-        </div>
-      </div>
+      {/* Token Balances — dropdown */}
+      <BalanceDropdown
+        crate={Number(profile.balanceCrate)}
+        sol={Number(profile.balanceSol)}
+        lc={Number(profile.balanceLc)}
+      />
 
       {/* Stats Row */}
       <div className="grid grid-cols-3 gap-4 mb-6">
@@ -166,15 +182,13 @@ export default async function DashboardPage() {
 
         <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-4">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-gray-400 text-sm">Hash Power</p>
+            <p className="text-gray-400 text-sm">Extraction Rate</p>
             <span className="text-green-400">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-              </svg>
+              <ERIcon size={16} />
             </span>
           </div>
           <p className="text-2xl font-bold text-white">
-            {totalHashPower.toFixed(1)} <span className="text-gray-600 text-sm font-normal">HP</span>
+            {totalER.toFixed(1)} <span className="text-gray-600 text-sm font-normal">ER</span>
           </p>
           <p className="text-gray-600 text-xs mt-1">mining power</p>
         </div>
@@ -226,7 +240,7 @@ export default async function DashboardPage() {
                       <RarityBadge rarity={robot.rarity} />
                     </div>
                     <div className="flex items-center gap-3 text-xs text-gray-500">
-                      <span>{robot.hashPower} HP base</span>
+                      <span>{robot.hashPower} ER base</span>
                       <span>Slot {robot.outpostSlot}</span>
                     </div>
                     <DurabilityBar value={robot.durability} />
@@ -255,23 +269,18 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-5">
-            <h3 className="text-white font-semibold text-sm mb-3">Network Status</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Bootstrap Period</span>
-                <span className="text-yellow-400 text-xs">Active</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Reward</span>
-                <span className="text-gray-300">CRATE</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Next block</span>
-                <span className="text-gray-300">—</span>
-              </div>
-            </div>
-          </div>
+          <MiningRewardsCard
+            userER={userER}
+            networkER={networkER}
+            blockRewards={blockRewards}
+            lastBlockAt={lastBlock?.processedAt.toISOString() ?? null}
+            totalMined={totalMined._sum.amount ?? 0}
+            allocation={{
+              CRATE: profile.allocationCrate,
+              SOL:   profile.allocationSol,
+              LC:    profile.allocationLc,
+            }}
+          />
         </div>
       </div>
     </div>

@@ -37,6 +37,11 @@ model User {
   // Outpost
   outpostSlots      Int      @default(3)
 
+  // Alocação de mineração (soma deve ser 100)
+  allocationCrate   Float    @default(100)
+  allocationSol     Float    @default(0)
+  allocationLc      Float    @default(0)
+
   // Relações
   robots            Robot[]
   equipments        Equipment[]
