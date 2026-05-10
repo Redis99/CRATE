@@ -1,7 +1,7 @@
 import 'server-only'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
-import { effectiveER, durabilityDecayPerBlock } from '@/lib/game-math'
+import { effectiveER, effectiveERWithEquipment, durabilityDecayPerBlock } from '@/lib/game-math'
 
 export { effectiveER }
 
@@ -42,11 +42,34 @@ export async function processBlock() {
   const blockRewardSol   = Number(process.env.MINING_BLOCK_REWARD_SOL ?? 0)
   const blockRewardLc    = Number(process.env.MINING_BLOCK_REWARD_LC ?? 0)
 
-  // 1. Busca todos os robôs ativos com seus donos
+  // 1. Busca todos os robôs ativos com equipamentos instalados
   const activeRobots = await prisma.robot.findMany({
     where: { isActive: true },
-    select: { id: true, userId: true, hashPower: true, durability: true, energyRate: true },
+    select: {
+      id: true, userId: true, hashPower: true, durability: true, energyRate: true,
+      equipments: {
+        select: {
+          equipment: {
+            select: { effectType: true, effectValue: true, effectType2: true, effectValue2: true },
+          },
+        },
+      },
+    },
   })
+
+  // 1b. Base upgrades aplicados de todos os jogadores ativos
+  const allActiveUserIds = [...new Set(activeRobots.map((r) => r.userId))]
+  const allBaseUpgrades = await prisma.baseUpgrade.findMany({
+    where: { userId: { in: allActiveUserIds }, isApplied: true },
+    select: { userId: true, effectType: true, effectValue: true, effectType2: true, effectValue2: true },
+  })
+
+  // Agrupa base upgrades por userId
+  const baseUpgradesByUser = new Map<string, typeof allBaseUpgrades>()
+  for (const upg of allBaseUpgrades) {
+    if (!baseUpgradesByUser.has(upg.userId)) baseUpgradesByUser.set(upg.userId, [])
+    baseUpgradesByUser.get(upg.userId)!.push(upg)
+  }
 
   if (activeRobots.length === 0) {
     const block = await prisma.miningBlock.create({
@@ -55,10 +78,23 @@ export async function processBlock() {
     return { blockNumber: block.id, totalHashPower: 0, playersRewarded: 0, skipped: false }
   }
 
-  // 2. Agrupa ER efetivo por usuário
+  // 2. Agrupa ER efetivo por usuário — inclui equipamentos + base upgrades
+  // Mesma fórmula do display (calculateFleetER), garantindo consistência
   const userERMap = new Map<string, number>()
   for (const robot of activeRobots) {
-    const er = effectiveER(robot.hashPower, robot.durability)
+    const equips     = robot.equipments.map((e) => e.equipment)
+    const upgrades   = baseUpgradesByUser.get(robot.userId) ?? []
+    const boosted    = effectiveERWithEquipment(robot.hashPower, equips)
+
+    // Aplica GLOBAL_EFFICIENCY_PCT e HASH_POWER_PCT das base upgrades
+    let globalPct = 0
+    for (const upg of upgrades) {
+      if (upg.effectType  === 'GLOBAL_EFFICIENCY_PCT' || upg.effectType  === 'HASH_POWER_PCT') globalPct += upg.effectValue
+      if (upg.effectType2 === 'GLOBAL_EFFICIENCY_PCT' || upg.effectType2 === 'HASH_POWER_PCT') globalPct += (upg.effectValue2 ?? 0)
+    }
+
+    const withBase = boosted * (1 + globalPct / 100)
+    const er = effectiveER(withBase, robot.durability)
     userERMap.set(robot.userId, (userERMap.get(robot.userId) ?? 0) + er)
   }
 

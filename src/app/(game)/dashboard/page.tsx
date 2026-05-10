@@ -1,5 +1,5 @@
 import { getServerUser } from '@/lib/auth'
-import { calculateFleetER, calculateFleetPD, effectiveER, effectiveERWithEquipment } from '@/lib/game-math'
+import { calculateFleetER, calculateFleetPD } from '@/lib/game-math'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { BalanceDropdown } from '@/components/game/BalanceDropdown'
