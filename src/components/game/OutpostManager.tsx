@@ -6,11 +6,19 @@ import { RarityBadge } from '@/components/ui/RarityBadge'
 import { RARITY_CARD_COLOR } from '@/lib/rarity'
 import { effectiveER, effectiveERWithEquipment, effectivePDWithEquipment } from '@/lib/game-math'
 import { RobotCard } from '@/components/game/RobotCard'
+import { EquipmentCard, EmptyEquipmentSlot } from '@/components/game/EquipmentCard'
 import type { RobotCardData } from '@/components/game/RobotCard'
+import type { EquipmentCardData } from '@/components/game/EquipmentCard'
+import { BASE_SLOT_LABELS } from '@/lib/game-constants'
+
+interface BaseUpgradeSlot extends EquipmentCardData {
+  appliedSlot: number | null
+}
 
 interface OutpostData {
   outpostSlots: number
   robots: RobotCardData[]
+  baseUpgrades: BaseUpgradeSlot[]
 }
 
 export function OutpostManager() {
@@ -108,6 +116,32 @@ export function OutpostManager() {
           <p className="text-white text-xl font-bold font-mono">
             {totalPD.toFixed(1)} <span className="text-gray-600 text-sm font-normal">PD/hr</span>
           </p>
+        </div>
+      </div>
+
+      {/* Base Upgrades */}
+      <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-5">
+        <h3 className="text-white font-semibold text-sm mb-3">Base Configuration</h3>
+        <div className="grid grid-cols-2 gap-3">
+          {([1, 2] as const).map((slot) => {
+            const upgrade = data.baseUpgrades.find((u) => u.appliedSlot === slot)
+            return upgrade ? (
+              <EquipmentCard
+                key={slot}
+                item={upgrade}
+                variant="base"
+                slot={slot}
+                slotLabel={BASE_SLOT_LABELS[slot]}
+              />
+            ) : (
+              <EmptyEquipmentSlot
+                key={slot}
+                slot={slot}
+                slotLabel={BASE_SLOT_LABELS[slot]}
+                variant="base"
+              />
+            )
+          })}
         </div>
       </div>
 

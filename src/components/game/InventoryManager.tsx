@@ -126,30 +126,40 @@ function DestroyButton({ itemId, itemType, isLegendary, onDestroy }: {
   )
 }
 
-// ─── Robot Action Modal (Repair / Equip) ──────────────────────────────────────
+// ─── Robot Action Modal (Repair / Equip / Replace) ───────────────────────────
 
-function RobotActionModal({ mode, title, description, consumableValue, onClose, onSelect }: {
+interface EquippedForReplace {
+  id: string; name: string
+  effectType: string; effectValue: number
+  effectType2?: string | null; effectValue2?: number | null
+}
+type RobotWithEquips = RobotForAction & { equipmentsList?: EquippedForReplace[] }
+
+const CloseIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+)
+
+function RobotActionModal({ mode, title, description, consumableValue, newItemName, onClose, onSelect, onReplace }: {
   mode: 'repair' | 'equip'
   title: string; description: string
   consumableValue?: number
+  newItemName?: string
   onClose: () => void
   onSelect: (robotId: string) => Promise<void>
+  onReplace?: (robotId: string, oldEquipmentId: string) => Promise<void>
 }) {
-  const [robots, setRobots]   = useState<RobotForAction[]>([])
-  const [loading, setLoading] = useState(true)
-  const [busy, setBusy]       = useState<string | null>(null)
-  const [error, setError]     = useState('')
+  const [robots, setRobots]           = useState<RobotWithEquips[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [busy, setBusy]               = useState<string | null>(null)
+  const [error, setError]             = useState('')
+  const [replaceRobot, setReplaceRobot]   = useState<RobotWithEquips | null>(null)
+  const [replaceTarget, setReplaceTarget] = useState<EquippedForReplace | null>(null)
 
   useEffect(() => {
     fetch('/api/game/robots').then((r) => r.json()).then((d) => { setRobots(d); setLoading(false) })
   }, [])
-
-  // Filtra robôs elegíveis
-  const eligible = robots.filter((r) => {
-    if (mode === 'repair') return r.durability < 100
-    if (mode === 'equip')  return !r.isActive && r._count.equipments < 3
-    return true
-  })
 
   async function handleSelect(robotId: string) {
     setBusy(robotId); setError('')
@@ -158,33 +168,117 @@ function RobotActionModal({ mode, title, description, consumableValue, onClose, 
     finally { setBusy(null) }
   }
 
+  async function handleReplace() {
+    if (!replaceRobot || !replaceTarget || !onReplace) return
+    setBusy(replaceTarget.id); setError('')
+    try { await onReplace(replaceRobot.id, replaceTarget.id); onClose() }
+    catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error') }
+    finally { setBusy(null) }
+  }
+
+  async function openReplaceStep(r: RobotWithEquips) {
+    if (r.equipmentsList) { setReplaceRobot(r); return }
+    const res   = await fetch(`/api/game/robots/${r.id}/equipment`)
+    const equips = await res.json()
+    r.equipmentsList = equips
+    setReplaceRobot({ ...r })
+  }
+
+  const eligible = robots.filter((r) => {
+    if (mode === 'repair') return r.durability < 100
+    if (mode === 'equip')  return !r.isActive
+    return true
+  })
+
+  // ── Step 3: Confirm replacement ──
+  if (replaceRobot && replaceTarget) return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-[#111118] border border-gray-700 rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-white font-semibold">Confirm Replacement</h3>
+          <button onClick={onClose}><CloseIcon /></button>
+        </div>
+        <div className="space-y-3 mb-5">
+          <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2.5">
+            <p className="text-gray-500 text-xs mb-0.5">Remove</p>
+            <p className="text-red-300 text-sm font-medium">{replaceTarget.name}</p>
+            <p className="text-gray-600 text-xs">{EFFECT_LABEL[replaceTarget.effectType]}{replaceTarget.effectValue}{replaceTarget.effectType.includes('PCT') ? '%' : ''}</p>
+          </div>
+          <div className="bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2.5">
+            <p className="text-gray-500 text-xs mb-0.5">Install</p>
+            <p className="text-green-300 text-sm font-medium">{newItemName ?? 'New equipment'}</p>
+          </div>
+        </div>
+        {error && <p className="text-red-400 text-xs mb-3">{error}</p>}
+        <div className="flex gap-2">
+          <button onClick={() => setReplaceTarget(null)}
+            className="flex-1 py-2 rounded-lg border border-gray-700 text-gray-400 hover:text-gray-200 text-sm transition-colors">Back</button>
+          <button onClick={handleReplace} disabled={!!busy}
+            className="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium transition-colors">
+            {busy ? 'Replacing...' : 'Confirm'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  // ── Step 2: Choose which equipment to replace ──
+  if (replaceRobot) return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-[#111118] border border-gray-700 rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-white font-semibold">Choose slot to replace</h3>
+          <button onClick={onClose}><CloseIcon /></button>
+        </div>
+        <p className="text-gray-500 text-xs mb-4">on <span className="text-white">{replaceRobot.name}</span></p>
+        {error && <p className="text-red-400 text-xs mb-3">{error}</p>}
+        <div className="space-y-2">
+          {(replaceRobot.equipmentsList ?? []).map((eq) => (
+            <button key={eq.id} onClick={() => setReplaceTarget(eq)}
+              className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-700/50 bg-[#0d0d15] hover:border-red-500/40 hover:bg-red-500/5 transition-all text-left">
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-sm font-medium truncate">{eq.name}</p>
+                <p className="text-gray-500 text-xs">
+                  {EFFECT_LABEL[eq.effectType]}{eq.effectValue}{eq.effectType.includes('PCT') ? '%' : ''}
+                  {eq.effectType2 && eq.effectValue2 ? ` · ${EFFECT_LABEL[eq.effectType2]}${eq.effectValue2}${eq.effectType2.includes('PCT') ? '%' : ''}` : ''}
+                </p>
+              </div>
+              <span className="text-red-400 text-xs shrink-0">Replace →</span>
+            </button>
+          ))}
+        </div>
+        <button onClick={() => setReplaceRobot(null)} className="mt-4 text-gray-600 hover:text-gray-400 text-xs transition-colors">← Back to robots</button>
+      </div>
+    </div>
+  )
+
+  // ── Step 1: Select robot ──
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-[#111118] border border-gray-700 rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-white font-semibold">{title}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
+          <button onClick={onClose}><CloseIcon /></button>
         </div>
         <p className="text-gray-500 text-xs mb-4">{description}</p>
-
         {error && <p className="text-red-400 text-xs mb-3">{error}</p>}
-
         <div className="overflow-y-auto flex-1 space-y-2">
           {loading ? (
             <p className="text-gray-600 text-sm text-center py-4">Loading robots...</p>
           ) : eligible.length === 0 ? (
             <p className="text-gray-600 text-sm text-center py-4">
-              {mode === 'repair' ? 'All robots are at full durability.' : 'No robots available. Recall robots from Outpost first (max 3 equipment each).'}
+              {mode === 'repair' ? 'All robots are at full energy.' : 'No available robots. Recall from Outpost first.'}
             </p>
           ) : eligible.map((r) => {
             const afterRepair = consumableValue ? Math.min(100, r.durability + consumableValue) : null
+            const isFull      = mode === 'equip' && r._count.equipments >= 3
             return (
-              <button key={r.id} onClick={() => handleSelect(r.id)} disabled={busy === r.id}
+              <button key={r.id}
+                onClick={() => isFull ? openReplaceStep(r) : handleSelect(r.id)}
+                disabled={busy === r.id}
                 className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-700/50 bg-[#0d0d15] hover:border-blue-500/50 hover:bg-blue-500/5 transition-all disabled:opacity-50 text-left">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
@@ -193,12 +287,14 @@ function RobotActionModal({ mode, title, description, consumableValue, onClose, 
                   </div>
                   <div className="flex items-center gap-3 text-xs text-gray-500">
                     <span>{r.hashPower} ER</span>
-                    {mode === 'equip' && <span>{r._count.equipments}/3 slots</span>}
+                    {mode === 'equip' && <span className={isFull ? 'text-yellow-400' : ''}>{r._count.equipments}/3 slots</span>}
                     {mode === 'repair' && <span>{r.durability.toFixed(1)} → <span className="text-green-400">{afterRepair?.toFixed(1)}{afterRepair === 100 ? ' (full)' : ''}</span></span>}
                   </div>
                   {mode === 'repair' && <DurabilityBar value={r.durability} height="sm" />}
                 </div>
-                <span className="text-blue-400 text-xs shrink-0">{busy === r.id ? '...' : 'Select →'}</span>
+                <span className={`text-xs shrink-0 ${isFull ? 'text-yellow-400' : 'text-blue-400'}`}>
+                  {busy === r.id ? '...' : isFull ? 'Replace →' : 'Select →'}
+                </span>
               </button>
             )
           })}
@@ -214,19 +310,51 @@ function BaseUpgradeSlotModal({ upgrade, appliedUpgrades, onClose, onApply }: {
   upgrade: BaseUpgrade
   appliedUpgrades: BaseUpgrade[]
   onClose: () => void
-  onApply: (slot: number) => Promise<void>
+  onApply: (slot: number, replaceId?: string) => Promise<void>
 }) {
-  const [busy, setBusy]   = useState<number | null>(null)
-  const [error, setError] = useState('')
+  const [busy, setBusy]               = useState<number | null>(null)
+  const [error, setError]             = useState('')
+  const [confirmReplace, setConfirmReplace] = useState<{ slot: number; occupied: BaseUpgrade } | null>(null)
 
-  async function handleApply(slot: number) {
+  async function handleApply(slot: number, replaceId?: string) {
     setBusy(slot); setError('')
-    try { await onApply(slot); onClose() }
+    try { await onApply(slot, replaceId); onClose() }
     catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error') }
     finally { setBusy(null) }
   }
 
   const compatibleSlots = [1, 2].filter((s) => SLOT_EFFECTS[s].includes(upgrade.effectType))
+
+  // Confirm replace sub-modal
+  if (confirmReplace) return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-[#111118] border border-gray-700 rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl">
+        <h3 className="text-white font-semibold mb-4">Confirm Replacement</h3>
+        <div className="space-y-3 mb-5">
+          <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2.5">
+            <p className="text-gray-500 text-xs mb-0.5">Remove from Slot {confirmReplace.slot}</p>
+            <p className="text-red-300 text-sm font-medium">{confirmReplace.occupied.name}</p>
+            <p className="text-gray-600 text-xs">{EFFECT_LABEL[confirmReplace.occupied.effectType]}{confirmReplace.occupied.effectValue}{confirmReplace.occupied.effectType.includes('PCT') ? '%' : ''}</p>
+          </div>
+          <div className="bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2.5">
+            <p className="text-gray-500 text-xs mb-0.5">Install in Slot {confirmReplace.slot}</p>
+            <p className="text-green-300 text-sm font-medium">{upgrade.name}</p>
+            <p className="text-gray-600 text-xs">{EFFECT_LABEL[upgrade.effectType]}{upgrade.effectValue}{upgrade.effectType.includes('PCT') ? '%' : ''}</p>
+          </div>
+        </div>
+        {error && <p className="text-red-400 text-xs mb-3">{error}</p>}
+        <div className="flex gap-2">
+          <button onClick={() => setConfirmReplace(null)}
+            className="flex-1 py-2 rounded-lg border border-gray-700 text-gray-400 hover:text-gray-200 text-sm transition-colors">Back</button>
+          <button onClick={() => handleApply(confirmReplace.slot, confirmReplace.occupied.id)} disabled={!!busy}
+            className="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium transition-colors">
+            {busy ? 'Applying...' : 'Confirm'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -253,12 +381,17 @@ function BaseUpgradeSlotModal({ upgrade, appliedUpgrades, onClose, onApply }: {
             const occupied  = appliedUpgrades.find((u) => u.appliedSlot === slot)
             const compatible = compatibleSlots.includes(slot)
             return (
-              <button key={slot} onClick={() => handleApply(slot)}
-                disabled={!!occupied || !compatible || busy === slot}
+              <button key={slot}
+                onClick={() => {
+                  if (!compatible) return
+                  if (occupied) setConfirmReplace({ slot, occupied })
+                  else handleApply(slot)
+                }}
+                disabled={!compatible || busy === slot}
                 className={`w-full p-3 rounded-xl border text-left transition-all ${
-                  !compatible ? 'border-gray-800 opacity-40 cursor-not-allowed' :
-                  occupied    ? 'border-yellow-700/30 bg-yellow-500/5 cursor-not-allowed' :
-                                'border-gray-700 hover:border-blue-500/50 hover:bg-blue-500/5'
+                  !compatible ? 'border-gray-800 opacity-40 cursor-not-allowed'
+                  : occupied  ? 'border-yellow-700/30 bg-yellow-500/5 hover:border-yellow-500/50'
+                              : 'border-gray-700 hover:border-blue-500/50 hover:bg-blue-500/5'
                 }`}>
                 <div className="flex items-center justify-between">
                   <div>
@@ -270,8 +403,10 @@ function BaseUpgradeSlotModal({ upgrade, appliedUpgrades, onClose, onApply }: {
                       : <p className="text-gray-700 text-xs mt-0.5">Not compatible with this effect</p>
                     }
                   </div>
-                  {!occupied && compatible && (
-                    <span className="text-blue-400 text-xs">{busy === slot ? '...' : 'Apply →'}</span>
+                  {compatible && (
+                    <span className={`text-xs ${occupied ? 'text-yellow-400' : 'text-blue-400'}`}>
+                      {busy === slot ? '...' : occupied ? 'Replace →' : 'Apply →'}
+                    </span>
                   )}
                 </div>
               </button>
@@ -701,14 +836,27 @@ export function InventoryManager() {
     await fetchData()
   }
 
-  async function handleApply(slot: number) {
+  async function handleEquipReplace(robotId: string, oldEquipmentId: string) {
+    if (!equipTarget) return
+    const res = await fetch('/api/game/equipment/replace', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newEquipmentId: equipTarget.id, oldEquipmentId, robotId }),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error ?? 'Failed to replace.')
+    setSuccess(`"${equipTarget.name}" installed (replaced previous equipment).`)
+    await fetchData()
+  }
+
+  async function handleApply(slot: number, replaceId?: string) {
     if (!applyTarget) return
     const res = await fetch('/api/game/base-upgrade/apply', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ upgradeId: applyTarget.id, slot }),
+      body: JSON.stringify({ upgradeId: applyTarget.id, slot, replaceUpgradeId: replaceId }),
     })
     const json = await res.json()
     if (!res.ok) throw new Error(json.error ?? 'Failed to apply.')
+    setSuccess(replaceId ? `"${applyTarget.name}" replaced the previous upgrade.` : `"${applyTarget.name}" applied successfully.`)
     await fetchData()
   }
 
@@ -750,8 +898,11 @@ export function InventoryManager() {
 
       {equipTarget && (
         <RobotActionModal mode="equip" title="Equip Item"
-          description={`Select a robot to equip "${equipTarget.name}" on. Robot must be recalled from Outpost (max 3 equipment).`}
-          onClose={() => setEquipTarget(null)} onSelect={handleEquip} />
+          description={`Select a robot to equip "${equipTarget.name}" on. Robots with full slots show a Replace option.`}
+          newItemName={equipTarget.name}
+          onClose={() => setEquipTarget(null)}
+          onSelect={handleEquip}
+          onReplace={handleEquipReplace} />
       )}
 
       {applyTarget && data && (

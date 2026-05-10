@@ -7,6 +7,8 @@ import { BalanceDropdown } from '@/components/game/BalanceDropdown'
 import { MiningRewardsCard } from '@/components/game/MiningRewardsCard'
 import { RobotCard } from '@/components/game/RobotCard'
 import { RechargeAllButton } from '@/components/game/RechargeAllButton'
+import { EquipmentCard, EmptyEquipmentSlot } from '@/components/game/EquipmentCard'
+import { BASE_SLOT_LABELS } from '@/lib/game-constants'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -17,7 +19,7 @@ async function getDashboardData() {
   const user = await getServerUser()
   if (!user) return null
 
-  const [profile, allActiveRobots, lastBlock, totalMined] = await Promise.all([
+  const [profile, allActiveRobots, lastBlock, totalMined, baseUpgrades] = await Promise.all([
     prisma.user.findUnique({
       where: { id: user.id },
       select: {
@@ -71,9 +73,19 @@ async function getDashboardData() {
       where: { userId: user.id, token: 'CRATE' },
       _sum: { amount: true },
     }),
+    // Base upgrades aplicados
+    prisma.baseUpgrade.findMany({
+      where: { userId: user.id, isApplied: true },
+      select: {
+        id: true, name: true, rarity: true,
+        effectType: true, effectValue: true,
+        effectType2: true, effectValue2: true,
+        appliedSlot: true,
+      },
+    }),
   ])
 
-  return { profile, allActiveRobots, lastBlock, totalMined }
+  return { profile, allActiveRobots, lastBlock, totalMined, baseUpgrades }
 }
 
 export default async function DashboardPage() {
@@ -83,7 +95,7 @@ export default async function DashboardPage() {
     return <div className="p-8 text-gray-400">Loading profile...</div>
   }
 
-  const { profile, allActiveRobots, lastBlock, totalMined } = data
+  const { profile, allActiveRobots, lastBlock, totalMined, baseUpgrades } = data
   const activeRobots = profile.robots
 
   const userER = activeRobots.reduce((sum, r) => sum + effectiveER(r.hashPower, r.durability), 0)
@@ -203,6 +215,32 @@ export default async function DashboardPage() {
 
         {/* Quick Actions */}
         <div className="col-span-2 space-y-3">
+          {/* Base Upgrades Status */}
+          <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-5">
+            <h3 className="text-white font-semibold text-sm mb-3">Base Status</h3>
+            <div className="space-y-2">
+              {([1, 2] as const).map((slot) => {
+                const upgrade = baseUpgrades.find((u) => u.appliedSlot === slot)
+                return upgrade ? (
+                  <EquipmentCard
+                    key={slot}
+                    item={upgrade}
+                    variant="base"
+                    slot={slot}
+                    slotLabel={BASE_SLOT_LABELS[slot]}
+                  />
+                ) : (
+                  <EmptyEquipmentSlot
+                    key={slot}
+                    slot={slot}
+                    slotLabel={BASE_SLOT_LABELS[slot]}
+                    variant="base"
+                  />
+                )
+              })}
+            </div>
+          </div>
+
           <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-5">
             <h3 className="text-white font-semibold text-sm mb-4">Quick Actions</h3>
             <div className="space-y-2">

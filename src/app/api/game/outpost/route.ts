@@ -10,6 +10,15 @@ export async function GET(_req: NextRequest) {
     where: { id: user.id },
     select: {
       outpostSlots: true,
+      baseUpgrades: {
+        where: { isApplied: true },
+        select: {
+          id: true, name: true, rarity: true,
+          effectType: true, effectValue: true,
+          effectType2: true, effectValue2: true,
+          appliedSlot: true,
+        },
+      },
       robots: {
         select: {
           id: true,

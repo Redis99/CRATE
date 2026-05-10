@@ -10,7 +10,11 @@ export async function POST(req: NextRequest) {
   const user = await getServerUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { upgradeId, slot } = await req.json() as { upgradeId: string; slot: number }
+  const { upgradeId, slot, replaceUpgradeId } = await req.json() as {
+    upgradeId: string
+    slot: number
+    replaceUpgradeId?: string  // se preenchido, substitui o upgrade atual do slot
+  }
 
   if (!upgradeId || ![1, 2].includes(slot)) {
     return NextResponse.json({ error: 'Missing upgradeId or invalid slot (1 or 2).' }, { status: 400 })
@@ -35,16 +39,30 @@ export async function POST(req: NextRequest) {
   const slotOccupied = await prisma.baseUpgrade.findFirst({
     where: { userId: user.id, isApplied: true, appliedSlot: slot },
   })
-  if (slotOccupied) {
+
+  if (slotOccupied && !replaceUpgradeId) {
     return NextResponse.json({
-      error: `Slot ${slot} (${SLOT_LABELS[slot as 1 | 2]}) is already occupied by "${slotOccupied.name}". Remove it first.`,
+      error: `Slot ${slot} (${SLOT_LABELS[slot as 1 | 2]}) is already occupied by "${slotOccupied.name}".`,
     }, { status: 409 })
   }
 
-  await prisma.baseUpgrade.update({
-    where: { id: upgradeId },
-    data: { isApplied: true, appliedSlot: slot },
-  })
+  if (slotOccupied && replaceUpgradeId && slotOccupied.id !== replaceUpgradeId) {
+    return NextResponse.json({ error: 'The upgrade to replace does not match the current slot occupant.' }, { status: 409 })
+  }
+
+  // Substituição ou aplicação simples
+  await prisma.$transaction([
+    ...(replaceUpgradeId
+      ? [prisma.baseUpgrade.update({
+          where: { id: replaceUpgradeId },
+          data: { isApplied: false, appliedSlot: null },
+        })]
+      : []),
+    prisma.baseUpgrade.update({
+      where: { id: upgradeId },
+      data: { isApplied: true, appliedSlot: slot },
+    }),
+  ])
 
   return NextResponse.json({ success: true })
 }
