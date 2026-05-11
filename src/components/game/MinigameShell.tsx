@@ -249,7 +249,8 @@ export function MinigameShell({ gameType, label, children }: MinigameShellProps)
   // Timer chegou a 0 = derrota automática (o jogo deve chamar onResult)
   // O game component é responsável por detectar timeLeft === 0
 
-  async function handleResult(gameResult: GameResult) {
+  // useCallback com deps estáveis para não recriar a referência a cada render
+  const handleResult = useCallback(async (gameResult: GameResult) => {
     if (timerRef.current) clearInterval(timerRef.current)
     setPhase('result')
 
@@ -268,7 +269,7 @@ export function MinigameShell({ gameType, label, children }: MinigameShellProps)
       return
     }
     setResult(json)
-  }
+  }, [gameType])  // gameType é prop estável; setters do useState nunca mudam
 
   async function handleClaim() {
     if (!result?.sessionId) throw new Error('No session to claim.')

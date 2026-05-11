@@ -88,12 +88,17 @@ export function SpaceDriftGame({ difficulty, winTarget, running, timeLimitSec, o
     }
   }, [cfg])
 
+  // Ref para onResult evita que mudanças de referência recriem endGame e
+  // re-disparem o useEffect do game loop (causa do loop infinito de restart)
+  const onResultRef = useRef(onResult)
+  useEffect(() => { onResultRef.current = onResult }, [onResult])
+
   const endGame = useCallback((won: boolean, score: number) => {
     if (resultSent.current) return
     resultSent.current = true
     cancelAnimationFrame(rafRef.current)
-    onResult({ won, score })
-  }, [onResult])
+    onResultRef.current({ won, score })
+  }, [])  // sem deps: usa ref, nunca recriado
 
   useEffect(() => {
     if (!running) return
@@ -266,7 +271,10 @@ export function SpaceDriftGame({ difficulty, winTarget, running, timeLimitSec, o
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [running, cfg, initState, endGame, winTarget, timeLimitSec])
+  // running é a única dep que deve re-disparar o efeito.
+  // cfg/initState/endGame/winTarget são estáveis (refs ou constantes de módulo).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running])
 
   return (
     <canvas
