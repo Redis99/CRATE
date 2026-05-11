@@ -142,19 +142,21 @@ const CloseIcon = () => (
   </svg>
 )
 
-function RobotActionModal({ mode, title, description, consumableValue, newItemName, onClose, onSelect, onReplace }: {
+function RobotActionModal({ mode, title, description, consumableValue, maxQty, newItemName, onClose, onSelect, onReplace }: {
   mode: 'repair' | 'equip'
   title: string; description: string
-  consumableValue?: number
+  consumableValue?: number   // valor por unidade (ex: 20 energia por bateria)
+  maxQty?: number            // estoque disponível (para repair)
   newItemName?: string
   onClose: () => void
-  onSelect: (robotId: string) => Promise<void>
+  onSelect: (robotId: string, qty: number) => Promise<void>
   onReplace?: (robotId: string, oldEquipmentId: string) => Promise<void>
 }) {
   const [robots, setRobots]           = useState<RobotWithEquips[]>([])
   const [loading, setLoading]         = useState(true)
   const [busy, setBusy]               = useState<string | null>(null)
   const [error, setError]             = useState('')
+  const [qty, setQty]                 = useState(1)
   const [replaceRobot, setReplaceRobot]   = useState<RobotWithEquips | null>(null)
   const [replaceTarget, setReplaceTarget] = useState<EquippedForReplace | null>(null)
 
@@ -164,7 +166,7 @@ function RobotActionModal({ mode, title, description, consumableValue, newItemNa
 
   async function handleSelect(robotId: string) {
     setBusy(robotId); setError('')
-    try { await onSelect(robotId); onClose() }
+    try { await onSelect(robotId, qty); onClose() }
     catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error') }
     finally { setBusy(null) }
   }
@@ -252,6 +254,8 @@ function RobotActionModal({ mode, title, description, consumableValue, newItemNa
   )
 
   // ── Step 1: Select robot ──
+  const totalEnergy = consumableValue ? consumableValue * qty : 0
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
@@ -260,7 +264,22 @@ function RobotActionModal({ mode, title, description, consumableValue, newItemNa
           <h3 className="text-white font-semibold">{title}</h3>
           <button onClick={onClose}><CloseIcon /></button>
         </div>
-        <p className="text-gray-500 text-xs mb-4">{description}</p>
+        <p className="text-gray-500 text-xs mb-3">{description}</p>
+
+        {/* Seletor de quantidade — só aparece no modo repair com estoque > 1 */}
+        {mode === 'repair' && maxQty && maxQty > 1 && (
+          <div className="flex items-center justify-between bg-[#0d0d15] border border-gray-800 rounded-xl px-3 py-2.5 mb-3">
+            <div>
+              <p className="text-gray-400 text-xs font-medium">Batteries to use</p>
+              <p className="text-green-400 text-xs mt-0.5">
+                +{totalEnergy.toFixed(0)} energy total
+                <span className="text-gray-600 ml-1">({qty}× {consumableValue} each)</span>
+              </p>
+            </div>
+            <QuantityStepper value={qty} min={1} max={maxQty} onChange={setQty} />
+          </div>
+        )}
+
         {error && <p className="text-red-400 text-xs mb-3">{error}</p>}
         <div className="overflow-y-auto flex-1 space-y-2">
           {loading ? (
@@ -270,7 +289,7 @@ function RobotActionModal({ mode, title, description, consumableValue, newItemNa
               {mode === 'repair' ? 'All robots are at full energy.' : 'No available robots. Recall from Outpost first.'}
             </p>
           ) : eligible.map((r) => {
-            const afterRepair = consumableValue ? Math.min(100, r.durability + consumableValue) : null
+            const afterRepair = consumableValue ? Math.min(100, r.durability + totalEnergy) : null
             const isFull      = mode === 'equip' && r._count.equipments >= 3
             return (
               <button key={r.id}
@@ -285,7 +304,7 @@ function RobotActionModal({ mode, title, description, consumableValue, newItemNa
                   <div className="flex items-center gap-3 text-xs text-gray-500">
                     <span>{r.hashPower} ER</span>
                     {mode === 'equip' && <span className={isFull ? 'text-yellow-400' : ''}>{r._count.equipments}/3 slots</span>}
-                    {mode === 'repair' && <span>{r.durability.toFixed(1)} → <span className="text-green-400">{afterRepair?.toFixed(1)}{afterRepair === 100 ? ' (full)' : ''}</span></span>}
+                    {mode === 'repair' && <span>{r.durability.toFixed(1)} → <span className="text-green-400">{afterRepair?.toFixed(1)}{afterRepair === 100 ? ' ✓' : ''}</span></span>}
                   </div>
                   {mode === 'repair' && <DurabilityBar value={r.durability} height="sm" />}
                 </div>
@@ -610,10 +629,8 @@ function PartsTab({ items, onDestroy, selectMode, selected, onToggleSelect }: { 
 function ConsumablesTab({ items, onDestroy, onUse, selectMode, selected, onToggleSelect }: {
   items: Consumable[]
   onDestroy: (id: string, type: ItemType) => void
-  onUse: (item: Consumable, qty: number) => void
+  onUse: (item: Consumable) => void
 } & SelectProps) {
-  const [quantities, setQuantities] = useState<Record<string, number>>({})
-
   if (!items.length) return <EmptyTab message="No consumables in inventory." />
 
   const typeLabel = (type: string, value: number) => {
@@ -624,42 +641,26 @@ function ConsumablesTab({ items, onDestroy, onUse, selectMode, selected, onToggl
 
   return (
     <div className="grid grid-cols-3 gap-3">
-      {items.map((c) => {
-        const qty = quantities[c.id] ?? 1
-        return (
-          <div key={c.id} className="border border-gray-700/50 rounded-xl p-3 bg-[#0d0d15]">
-            <div className="flex justify-between items-start mb-1">
-              <div className="flex items-center gap-1.5">
-                {selectMode && <SelectCheckbox id={c.id} selected={selected} onToggle={onToggleSelect} />}
-                <span className="text-gray-400 text-xs">{c.consumableType === 'REPAIR_KIT' ? '🔋' : '⚡'}</span>
-              </div>
-              <span className="text-white text-sm font-bold">×{c.quantity}</span>
+      {items.map((c) => (
+        <div key={c.id} className="border border-gray-700/50 rounded-xl p-3 bg-[#0d0d15]">
+          <div className="flex justify-between items-start mb-1">
+            <div className="flex items-center gap-1.5">
+              {selectMode && <SelectCheckbox id={c.id} selected={selected} onToggle={onToggleSelect} />}
+              <span className="text-gray-400 text-xs">{c.consumableType === 'REPAIR_KIT' ? '🔋' : '⚡'}</span>
             </div>
-            <p className="text-white text-xs font-medium mb-2">{typeLabel(c.consumableType, c.value)}</p>
-
-            {c.consumableType === 'REPAIR_KIT' && (
-              <>
-                {/* Seletor de quantidade */}
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-gray-600 text-xs">Qty</span>
-                  <QuantityStepper
-                    value={qty}
-                    min={1}
-                    max={c.quantity}
-                    onChange={(v) => setQuantities((prev) => ({ ...prev, [c.id]: v }))}
-                  />
-                </div>
-                <ActionButton variant="outline" size="sm" fullWidth onClick={() => onUse(c, qty)} className="mb-1.5">
-                  Use {qty > 1 ? `${qty}×` : ''}
-                </ActionButton>
-              </>
-            )}
-            <div className="flex justify-end">
-              <DestroyButton itemId={c.id} itemType="consumable" isLegendary={false} onDestroy={onDestroy} />
-            </div>
+            <span className="text-white text-sm font-bold">×{c.quantity}</span>
           </div>
-        )
-      })}
+          <p className="text-white text-xs font-medium mb-3">{typeLabel(c.consumableType, c.value)}</p>
+          {c.consumableType === 'REPAIR_KIT' && (
+            <ActionButton variant="outline" size="sm" fullWidth onClick={() => onUse(c)} className="mb-1.5">
+              Use
+            </ActionButton>
+          )}
+          <div className="flex justify-end">
+            <DestroyButton itemId={c.id} itemType="consumable" isLegendary={false} onDestroy={onDestroy} />
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -729,7 +730,6 @@ export function InventoryManager() {
 
   // Modais de ação
   const [repairTarget,  setRepairTarget]  = useState<Consumable | null>(null)
-  const [repairQty,     setRepairQty]     = useState(1)
   const [equipTarget,   setEquipTarget]   = useState<Equipment | null>(null)
   const [applyTarget,   setApplyTarget]   = useState<BaseUpgrade | null>(null)
 
@@ -824,18 +824,18 @@ export function InventoryManager() {
     await fetchData()
   }
 
-  async function handleRepair(robotId: string) {
+  async function handleRepair(robotId: string, qty: number) {
     if (!repairTarget) return
     const res = await fetch('/api/game/robot/repair', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ consumableId: repairTarget.id, robotId, quantity: repairQty }),
+      body: JSON.stringify({ consumableId: repairTarget.id, robotId, quantity: qty }),
     })
     const json = await res.json()
     if (!res.ok) throw new Error(json.error ?? 'Failed to repair.')
     await fetchData()
   }
 
-  async function handleEquip(robotId: string) {
+  async function handleEquip(robotId: string, _qty: number) {
     if (!equipTarget) return
     const res = await fetch('/api/game/equipment/equip', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -901,10 +901,12 @@ export function InventoryManager() {
       {drops && <LootboxDropModal drops={drops} stoppedEarly={stoppedEarly} onClose={() => { setDrops(null); setStoppedEarly(false) }} />}
 
       {repairTarget && (
-        <RobotActionModal mode="repair" title={repairQty > 1 ? `Use ${repairQty}× Batteries` : 'Use Battery'}
-          description={`Select which robot to recharge. Will restore up to +${(repairTarget.value * repairQty).toFixed(0)} energy (${repairQty}× battery).`}
-          consumableValue={repairTarget.value * repairQty}
-          onClose={() => { setRepairTarget(null); setRepairQty(1) }} onSelect={handleRepair} />
+        <RobotActionModal mode="repair" title="Use Battery"
+          description="Choose how many batteries to use, then select the robot to repair."
+          consumableValue={repairTarget.value}
+          maxQty={repairTarget.quantity}
+          onClose={() => setRepairTarget(null)}
+          onSelect={handleRepair} />
       )}
 
       {equipTarget && (
@@ -1040,7 +1042,7 @@ export function InventoryManager() {
         if (activeTab === 'equipments')   return <EquipmentsTab   items={equipments}    onDestroy={handleDestroy} onEquip={setEquipTarget}   {...selProps} />
         if (activeTab === 'baseUpgrades') return <BaseUpgradesTab items={baseUpgrades}  onDestroy={handleDestroy} onApply={setApplyTarget} onRemove={handleRemoveUpgrade} {...selProps} />
         if (activeTab === 'parts')        return <PartsTab        items={parts}         onDestroy={handleDestroy} {...selProps} />
-        if (activeTab === 'consumables')  return <ConsumablesTab  items={consumables}   onDestroy={handleDestroy} onUse={(item, qty) => { setRepairTarget(item); setRepairQty(qty) }} {...selProps} />
+        if (activeTab === 'consumables')  return <ConsumablesTab  items={consumables}   onDestroy={handleDestroy} onUse={setRepairTarget} {...selProps} />
         if (activeTab === 'lootboxes')    return <LootboxesTab    items={lootboxes}     onDestroy={handleDestroy} onOpen={handleOpen} opening={opening} {...selProps} />
       })()}
     </div>
