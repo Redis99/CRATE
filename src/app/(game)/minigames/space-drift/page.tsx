@@ -1,5 +1,4 @@
-import { MinigameShell } from '@/components/game/MinigameShell'
-import { SpaceDriftGame } from '@/components/game/games/SpaceDriftGame'
+import { SpaceDriftClient } from '@/components/game/games/SpaceDriftClient'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -9,9 +8,7 @@ export const metadata: Metadata = {
 export default function SpaceDriftPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <MinigameShell gameType="SPACE_DRIFT" label="Space Drift">
-        {(props) => <SpaceDriftGame {...props} />}
-      </MinigameShell>
+      <SpaceDriftClient />
     </div>
   )
 }
