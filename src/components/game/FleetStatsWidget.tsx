@@ -1,28 +1,36 @@
 import { ERIcon } from '@/components/ui/ERIcon'
 import type { FleetERBreakdown, FleetPDBreakdown } from '@/lib/game-math'
 
-// ─── ER Widget ────────────────────────────────────────────────────────────────
-
-interface ERWidgetProps {
-  er: FleetERBreakdown
+// Ícone de Power Draw (raio estilizado)
+function PDIcon({ size = 16, className = '' }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 18 18" fill="none"
+      stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+      className={className}>
+      <path d="M10.5 2L4 10h6l-2.5 6L14 8H8l2.5-6z" />
+    </svg>
+  )
 }
 
-export function ERWidget({ er }: ERWidgetProps) {
+// ─── ER Widget ────────────────────────────────────────────────────────────────
+
+export function ERWidget({ er }: { er: FleetERBreakdown }) {
   const hasEquipBonus       = er.equipBonus > 0
   const hasBaseUpgradeBonus = er.baseUpgradePct > 0
 
   return (
     <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-4">
-      <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Extraction Rate</p>
-
-      {/* Total prominente */}
-      <div className="flex items-center gap-2 mb-2">
-        <p className="text-white text-xl font-bold font-mono">
-          {er.total.toFixed(1)}
-          <span className="text-gray-600 text-sm font-normal ml-1">ER</span>
-        </p>
+      {/* Header com ícone no canto */}
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-gray-500 text-xs uppercase tracking-wider">Extraction Rate</p>
         <ERIcon size={16} className="text-orange-400" />
       </div>
+
+      {/* Total */}
+      <p className="text-white text-xl font-bold font-mono mb-2">
+        {er.total.toFixed(1)}
+        <span className="text-gray-600 text-sm font-normal ml-1">ER</span>
+      </p>
 
       {/* Breakdown */}
       <div className="space-y-0.5 text-xs">
@@ -49,18 +57,18 @@ export function ERWidget({ er }: ERWidgetProps) {
 
 // ─── PD Widget ────────────────────────────────────────────────────────────────
 
-interface PDWidgetProps {
-  pd: FleetPDBreakdown
-}
-
-export function PDWidget({ pd }: PDWidgetProps) {
+export function PDWidget({ pd }: { pd: FleetPDBreakdown }) {
   const hasEquipSaving = pd.equipSaving > 0
 
   return (
     <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-4">
-      <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Fleet Power Draw</p>
+      {/* Header com ícone no canto */}
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-gray-500 text-xs uppercase tracking-wider">Fleet Power Draw</p>
+        <PDIcon size={16} className="text-teal-400" />
+      </div>
 
-      {/* Total prominente */}
+      {/* Total */}
       <p className="text-white text-xl font-bold font-mono mb-2">
         {pd.total.toFixed(1)}
         <span className="text-gray-600 text-sm font-normal ml-1">PD/hr</span>

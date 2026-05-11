@@ -93,14 +93,8 @@ const BASE_UPGRADE_EFFECTS: Record<Rarity, { type: EffectType; min: number; max:
   LEGENDARY: [{ type: 'GLOBAL_EFFICIENCY_PCT', min: 35, max: 50 }, { type: 'HASH_POWER_PCT', min: 35, max: 50 }],
 }
 
-const PARTS_BY_CATEGORY: Record<PartCategory, string[]> = {
-  ENERGY:      ['Plasma Cell', 'Energy Core', 'Power Module', 'Fusion Battery', 'Charge Crystal'],
-  MINING:      ['Drill Bit', 'Excavation Head', 'Mining Core', 'Extraction Tool', 'Rock Breaker'],
-  MAINTENANCE: ['Repair Module', 'Self-Repair Kit', 'Diagnostic Unit', 'Servo Pack', 'Lubricant Core'],
-  TERRAIN:     ['Terrain Scanner', 'Surface Adapter', 'Ground Module', 'Traction Unit', 'Geo Sensor'],
-  AI_SOFTWARE: ['AI Chip', 'Navigation Module', 'Decision Matrix', 'Logic Core', 'Pathfinder Unit'],
-  SPECIAL:     ['Rare Component', 'Void Crystal', 'Genesis Fragment', 'Anomaly Shard', 'Unknown Ore'],
-}
+import { PARTS_BY_CATEGORY } from '@/lib/parts-data'
+export { PARTS_BY_CATEGORY }
 
 // ─── Utilitários ──────────────────────────────────────────────────────────────
 
@@ -220,6 +214,64 @@ export function rollSupplyCrate(): DropResultType {
     { weight:  0.3,result: () => generateBaseUpgradeDrop('LEGENDARY') },
     { weight:  0.2,result: () => generateRobotDrop('LEGENDARY') },
   ])
+}
+
+// ─── Geração guiada (crafting) ────────────────────────────────────────────────
+
+/**
+ * Gera um equipamento priorizando os efeitos preferidos da receita.
+ * Se nenhum efeito preferido coincidir com o pool da raridade, usa geração aleatória normal.
+ */
+export function generateEquipmentWithPreference(
+  rarity: Rarity,
+  preferredEffects: string[]
+): DropResultType {
+  const pool = EQUIPMENT_EFFECTS[rarity]
+  const preferred = pool.filter((e) => preferredEffects.includes(e.type))
+  const effect = preferred.length > 0 ? pick(preferred) : pick(pool)
+  const effectValue = Math.round(randInt(effect.min * 10, effect.max * 10)) / 10
+
+  // Efeito secundário para Epic/Legendary (mesma lógica da lootbox)
+  let effectType2: EffectType | undefined
+  let effectValue2: number | undefined
+  if (rarity === 'LEGENDARY' || (rarity === 'EPIC' && Math.random() < 0.5)) {
+    const secondary = EQUIPMENT_SECONDARY[rarity as 'EPIC' | 'LEGENDARY']
+    const sec = pick(secondary.filter((s) => s.type !== effect.type))
+    if (sec) {
+      effectType2  = sec.type
+      effectValue2 = Math.round(randInt(sec.min * 10, sec.max * 10)) / 10
+    }
+  }
+
+  return {
+    kind: 'equipment',
+    name: pick(EQUIPMENT_NAMES[effect.type]),
+    rarity,
+    effectType: effect.type,
+    effectValue,
+    ...(effectType2 && { effectType2, effectValue2 }),
+  }
+}
+
+/**
+ * Gera uma melhoria de base priorizando os efeitos preferidos da receita.
+ */
+export function generateBaseUpgradeWithPreference(
+  rarity: Rarity,
+  preferredEffects: string[]
+): DropResultType {
+  const pool = BASE_UPGRADE_EFFECTS[rarity]
+  const preferred = pool.filter((e) => preferredEffects.includes(e.type))
+  const effect = preferred.length > 0 ? pick(preferred) : pick(pool)
+  const effectValue = Math.round(randInt(effect.min * 10, effect.max * 10)) / 10
+
+  return {
+    kind: 'baseUpgrade',
+    name: pick(BASE_UPGRADE_NAMES[effect.type]),
+    rarity,
+    effectType: effect.type,
+    effectValue,
+  }
 }
 
 // ─── Salvar item gerado no banco ──────────────────────────────────────────────
