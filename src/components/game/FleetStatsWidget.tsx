@@ -50,6 +50,12 @@ export function ERWidget({ er }: { er: FleetERBreakdown }) {
             <span className="font-mono">+{er.baseUpgradePct}% (+{er.baseUpgradeBonus.toFixed(1)})</span>
           </div>
         )}
+        {(er.minigameBonus ?? 0) > 0 && (
+          <div className="flex justify-between text-yellow-400/70">
+            <span>⚡ Minigame boost</span>
+            <span className="font-mono">+{er.minigameBonus!.toFixed(1)}</span>
+          </div>
+        )}
       </div>
     </div>
   )

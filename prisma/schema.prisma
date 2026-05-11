@@ -57,6 +57,8 @@ model User {
   codexEntries      CodexEntry[]
   missions          UserMission[]
   minigameSessions  MinigameSession[]
+  minigameBoost     MinigameBoost?
+  minigameStatuses  MinigameStatus[]
   weeklyDrops       WeeklyDrop[]
   notifications     Notification[]
 
@@ -376,29 +378,54 @@ model UserMission {
 // ─────────────────────────────────────────────
 
 model MinigameSession {
-  id            String       @id @default(uuid())
+  id            String    @id @default(uuid())
   userId        String
-  user          User         @relation(fields: [userId], references: [id])
+  user          User      @relation(fields: [userId], references: [id])
 
   gameType      GameType
   won           Boolean
   score         Int
-  difficulty    Int          @default(1)
-  boostGranted  Float?       // horas de boost concedidas
-  itemDropped   String?      // tipo de item dropado (se houver)
-  playedAt      DateTime     @default(now())
+  difficulty    Int       @default(1)
+  startedAt     DateTime  // registrado no início — valida tempo mínimo no servidor
+  playedAt      DateTime  @default(now())
+
+  // Recompensa (populada pelo /complete, aplicada pelo /claim)
+  erBoost       Float?    // ER flat concedido por esta vitória
+  pendingDrop   Json?     // { dropType, rarity, value } ou null
+  claimed       Boolean   @default(false)
+  claimedAt     DateTime?
 
   @@map("minigame_sessions")
 }
 
+// Boost ativo de ER (cumulativo, única linha por jogador)
 model MinigameBoost {
   id          String   @id @default(uuid())
   userId      String   @unique
-  boostPct    Float    @default(0)
+  user        User     @relation(fields: [userId], references: [id])
+  erFlat      Float    @default(0)  // ER flat somado ao calculateFleetER
   expiresAt   DateTime
+  totalWins   Int      @default(0)  // vitórias lifetime para cálculo de duração
   updatedAt   DateTime @updatedAt
 
   @@map("minigame_boosts")
+}
+
+// Status por (jogador × jogo) — cooldown e contadores diários
+model MinigameStatus {
+  id               String    @id @default(uuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id])
+  gameType         GameType
+
+  gamesPlayedToday Int       @default(0)  // reseta após 24h
+  totalGamesPlayed Int       @default(0)  // histórico total (para cooldown pós-100)
+  dailyWins        Int       @default(0)  // vitórias hoje (define dificuldade)
+  nextPlayableAt   DateTime? // null = pode jogar agora
+  lastResetAt      DateTime  @default(now()) // quando gamesPlayedToday foi zerado
+
+  @@unique([userId, gameType])
+  @@map("minigame_statuses")
 }
 
 // ─────────────────────────────────────────────

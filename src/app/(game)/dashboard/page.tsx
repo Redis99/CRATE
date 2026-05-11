@@ -19,7 +19,7 @@ async function getDashboardData() {
   const user = await getServerUser()
   if (!user) return null
 
-  const [profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair] = await Promise.all([
+  const [profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair, minigameBoost] = await Promise.all([
     prisma.user.findUnique({
       where: { id: user.id },
       select: {
@@ -112,9 +112,11 @@ async function getDashboardData() {
       select: { id: true, name: true, durability: true, isActive: true },
       orderBy: { durability: 'asc' },
     }),
+    // Boost ativo de minigame
+    prisma.minigameBoost.findUnique({ where: { userId: user.id } }),
   ])
 
-  return { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair }
+  return { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair, minigameBoost }
 }
 
 export default async function DashboardPage() {
@@ -124,7 +126,7 @@ export default async function DashboardPage() {
     return <div className="p-8 text-gray-400">Loading profile...</div>
   }
 
-  const { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair } = data
+  const { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair, minigameBoost } = data
   const activeRobots = profile.robots
 
   const robotsForCalc = activeRobots.map((r) => ({
@@ -134,7 +136,9 @@ export default async function DashboardPage() {
     equipments: r.equipments?.map((e) => e.equipment) ?? [],
   }))
 
-  const erBreakdown = calculateFleetER(robotsForCalc, baseUpgrades)
+  const now = new Date()
+  const activeMinigameBoost = minigameBoost && minigameBoost.expiresAt > now ? minigameBoost.erFlat : 0
+  const erBreakdown = calculateFleetER(robotsForCalc, baseUpgrades, activeMinigameBoost)
   const pdBreakdown = calculateFleetPD(robotsForCalc)
 
   // userShareER = ER total do jogador com equipamentos + base upgrades próprios

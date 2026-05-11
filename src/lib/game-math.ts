@@ -37,11 +37,12 @@ export function estimatedHoursRemaining(durability: number, energyRate: number):
 // ─── Cálculos de frota ───────────────────────────────────────────────────────
 
 export interface FleetERBreakdown {
-  total:            number  // ER efetivo total (com durabilidade + upgrades)
+  total:            number  // ER efetivo total (com durabilidade + upgrades + minigame boost)
   base:             number  // soma dos hashPower base de todos os robôs
   equipBonus:       number  // bônus dos equipamentos instalados
   baseUpgradePct:   number  // % de eficiência global da melhoria de base
   baseUpgradeBonus: number  // bônus absoluto vindo do upgrade (para exibição)
+  minigameBonus:    number  // boost flat temporário de minigame (0 se não ativo)
 }
 
 export interface FleetPDBreakdown {
@@ -56,7 +57,8 @@ export interface FleetPDBreakdown {
  */
 export function calculateFleetER(
   robots: Array<{ hashPower: number; durability: number; equipments?: EquipmentEffect[] }>,
-  baseUpgrades: Array<EquipmentEffect>
+  baseUpgrades: Array<EquipmentEffect>,
+  minigameBoostER = 0   // flat ER bonus de minigame ativo
 ): FleetERBreakdown {
   // Coleta o % de eficiência global das melhorias de base aplicadas
   let globalPct = 0
@@ -87,12 +89,15 @@ export function calculateFleetER(
   const equipBonus       = withEquip - base
   const baseUpgradeBonus = Math.round((withEquip * globalPct / 100) * 10) / 10
 
+  const minigameBonus = Math.round(minigameBoostER * 10) / 10
+
   return {
-    total:            Math.round(totalEffect * 10) / 10,
+    total:            Math.round((totalEffect + minigameBoostER) * 10) / 10,
     base:             Math.round(base        * 10) / 10,
     equipBonus:       Math.round(equipBonus  * 10) / 10,
     baseUpgradePct:   globalPct,
     baseUpgradeBonus,
+    minigameBonus,
   }
 }
 
