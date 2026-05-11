@@ -8,9 +8,12 @@ export async function POST(req: NextRequest) {
   const user = await getServerUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { consumableId, robotId } = await req.json()
+  const { consumableId, robotId, quantity = 1 } = await req.json()
   if (!consumableId || !robotId) {
     return NextResponse.json({ error: 'Missing consumableId or robotId.' }, { status: 400 })
+  }
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    return NextResponse.json({ error: 'Quantity must be a positive integer.' }, { status: 400 })
   }
 
   const [consumable, robot] = await Promise.all([
@@ -26,18 +29,24 @@ export async function POST(req: NextRequest) {
   if (robot.durability >= MAX_DURABILITY) {
     return NextResponse.json({ error: 'Robot is already at full durability.' }, { status: 400 })
   }
+  if (quantity > consumable.quantity) {
+    return NextResponse.json({ error: `Not enough batteries. Have ${consumable.quantity}, requested ${quantity}.` }, { status: 400 })
+  }
 
-  const newDurability = Math.min(MAX_DURABILITY, robot.durability + consumable.value)
+  const qty = Math.min(quantity, consumable.quantity)
+  const newDurability = Math.min(MAX_DURABILITY, robot.durability + consumable.value * qty)
+  const actualUsed = Math.ceil((newDurability - robot.durability) / consumable.value)
+  const consume = Math.min(qty, actualUsed)  // nunca consome mais do que o necessário
 
   await prisma.$transaction([
     prisma.robot.update({
       where: { id: robotId },
       data: { durability: newDurability },
     }),
-    consumable.quantity > 1
-      ? prisma.consumable.update({ where: { id: consumableId }, data: { quantity: { decrement: 1 } } })
+    consumable.quantity > consume
+      ? prisma.consumable.update({ where: { id: consumableId }, data: { quantity: { decrement: consume } } })
       : prisma.consumable.delete({ where: { id: consumableId } }),
   ])
 
-  return NextResponse.json({ success: true, newDurability })
+  return NextResponse.json({ success: true, newDurability, batteriesUsed: consume })
 }

@@ -30,11 +30,12 @@ export async function GET(_req: NextRequest) {
         },
       },
     }),
+    // Filtra por txHash: 'PARTS_CRATE' (mais confiável que comparação float de amount)
     prisma.transaction.count({
       where: {
         userId: user.id,
         type: 'LOOTBOX_PURCHASE',
-        amount: PARTS_CRATE_PRICE,
+        txHash: 'PARTS_CRATE',
         createdAt: { gte: lastMonday },
       },
     }),

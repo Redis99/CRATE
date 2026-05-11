@@ -610,36 +610,56 @@ function PartsTab({ items, onDestroy, selectMode, selected, onToggleSelect }: { 
 function ConsumablesTab({ items, onDestroy, onUse, selectMode, selected, onToggleSelect }: {
   items: Consumable[]
   onDestroy: (id: string, type: ItemType) => void
-  onUse: (item: Consumable) => void
+  onUse: (item: Consumable, qty: number) => void
 } & SelectProps) {
+  const [quantities, setQuantities] = useState<Record<string, number>>({})
+
   if (!items.length) return <EmptyTab message="No consumables in inventory." />
+
   const typeLabel = (type: string, value: number) => {
     if (type === 'REPAIR_KIT') return `Battery +${value} energy`
     if (type === 'BOOST_TEMP') return `Temp Boost +${value}%`
     return type
   }
+
   return (
     <div className="grid grid-cols-3 gap-3">
-      {items.map((c) => (
-        <div key={c.id} className="border border-gray-700/50 rounded-xl p-3 bg-[#0d0d15]">
-          <div className="flex justify-between items-start mb-1">
-            <div className="flex items-center gap-1.5">
-              {selectMode && <SelectCheckbox id={c.id} selected={selected} onToggle={onToggleSelect} />}
-              <span className="text-gray-400 text-xs">{c.consumableType === 'REPAIR_KIT' ? '🔋' : '⚡'}</span>
+      {items.map((c) => {
+        const qty = quantities[c.id] ?? 1
+        return (
+          <div key={c.id} className="border border-gray-700/50 rounded-xl p-3 bg-[#0d0d15]">
+            <div className="flex justify-between items-start mb-1">
+              <div className="flex items-center gap-1.5">
+                {selectMode && <SelectCheckbox id={c.id} selected={selected} onToggle={onToggleSelect} />}
+                <span className="text-gray-400 text-xs">{c.consumableType === 'REPAIR_KIT' ? '🔋' : '⚡'}</span>
+              </div>
+              <span className="text-white text-sm font-bold">×{c.quantity}</span>
             </div>
-            <span className="text-white text-sm font-bold">×{c.quantity}</span>
+            <p className="text-white text-xs font-medium mb-2">{typeLabel(c.consumableType, c.value)}</p>
+
+            {c.consumableType === 'REPAIR_KIT' && (
+              <>
+                {/* Seletor de quantidade */}
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-600 text-xs">Qty</span>
+                  <QuantityStepper
+                    value={qty}
+                    min={1}
+                    max={c.quantity}
+                    onChange={(v) => setQuantities((prev) => ({ ...prev, [c.id]: v }))}
+                  />
+                </div>
+                <ActionButton variant="outline" size="sm" fullWidth onClick={() => onUse(c, qty)} className="mb-1.5">
+                  Use {qty > 1 ? `${qty}×` : ''}
+                </ActionButton>
+              </>
+            )}
+            <div className="flex justify-end">
+              <DestroyButton itemId={c.id} itemType="consumable" isLegendary={false} onDestroy={onDestroy} />
+            </div>
           </div>
-          <p className="text-white text-xs font-medium mb-3">{typeLabel(c.consumableType, c.value)}</p>
-          {c.consumableType === 'REPAIR_KIT' && (
-            <ActionButton variant="outline" size="sm" fullWidth onClick={() => onUse(c)} className="mb-1.5">
-              Use
-            </ActionButton>
-          )}
-          <div className="flex justify-end">
-            <DestroyButton itemId={c.id} itemType="consumable" isLegendary={false} onDestroy={onDestroy} />
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -709,6 +729,7 @@ export function InventoryManager() {
 
   // Modais de ação
   const [repairTarget,  setRepairTarget]  = useState<Consumable | null>(null)
+  const [repairQty,     setRepairQty]     = useState(1)
   const [equipTarget,   setEquipTarget]   = useState<Equipment | null>(null)
   const [applyTarget,   setApplyTarget]   = useState<BaseUpgrade | null>(null)
 
@@ -807,7 +828,7 @@ export function InventoryManager() {
     if (!repairTarget) return
     const res = await fetch('/api/game/robot/repair', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ consumableId: repairTarget.id, robotId }),
+      body: JSON.stringify({ consumableId: repairTarget.id, robotId, quantity: repairQty }),
     })
     const json = await res.json()
     if (!res.ok) throw new Error(json.error ?? 'Failed to repair.')
@@ -880,10 +901,10 @@ export function InventoryManager() {
       {drops && <LootboxDropModal drops={drops} stoppedEarly={stoppedEarly} onClose={() => { setDrops(null); setStoppedEarly(false) }} />}
 
       {repairTarget && (
-        <RobotActionModal mode="repair" title="Use Battery"
-          description={`Select which robot to recharge with this battery (+${repairTarget.value} energy).`}
-          consumableValue={repairTarget.value}
-          onClose={() => setRepairTarget(null)} onSelect={handleRepair} />
+        <RobotActionModal mode="repair" title={repairQty > 1 ? `Use ${repairQty}× Batteries` : 'Use Battery'}
+          description={`Select which robot to recharge. Will restore up to +${(repairTarget.value * repairQty).toFixed(0)} energy (${repairQty}× battery).`}
+          consumableValue={repairTarget.value * repairQty}
+          onClose={() => { setRepairTarget(null); setRepairQty(1) }} onSelect={handleRepair} />
       )}
 
       {equipTarget && (
@@ -1019,7 +1040,7 @@ export function InventoryManager() {
         if (activeTab === 'equipments')   return <EquipmentsTab   items={equipments}    onDestroy={handleDestroy} onEquip={setEquipTarget}   {...selProps} />
         if (activeTab === 'baseUpgrades') return <BaseUpgradesTab items={baseUpgrades}  onDestroy={handleDestroy} onApply={setApplyTarget} onRemove={handleRemoveUpgrade} {...selProps} />
         if (activeTab === 'parts')        return <PartsTab        items={parts}         onDestroy={handleDestroy} {...selProps} />
-        if (activeTab === 'consumables')  return <ConsumablesTab  items={consumables}   onDestroy={handleDestroy} onUse={setRepairTarget} {...selProps} />
+        if (activeTab === 'consumables')  return <ConsumablesTab  items={consumables}   onDestroy={handleDestroy} onUse={(item, qty) => { setRepairTarget(item); setRepairQty(qty) }} {...selProps} />
         if (activeTab === 'lootboxes')    return <LootboxesTab    items={lootboxes}     onDestroy={handleDestroy} onOpen={handleOpen} opening={opening} {...selProps} />
       })()}
     </div>

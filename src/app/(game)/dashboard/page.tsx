@@ -19,7 +19,7 @@ async function getDashboardData() {
   const user = await getServerUser()
   if (!user) return null
 
-  const [profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades] = await Promise.all([
+  const [profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair] = await Promise.all([
     prisma.user.findUnique({
       where: { id: user.id },
       select: {
@@ -106,9 +106,15 @@ async function getDashboardData() {
         appliedSlot: true,
       },
     }),
+    // Robôs com energia baixa (< 50) — qualquer robô do jogador
+    prisma.robot.findMany({
+      where: { userId: user.id, durability: { lt: 50 } },
+      select: { id: true, name: true, durability: true, isActive: true },
+      orderBy: { durability: 'asc' },
+    }),
   ])
 
-  return { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades }
+  return { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair }
 }
 
 export default async function DashboardPage() {
@@ -118,7 +124,7 @@ export default async function DashboardPage() {
     return <div className="p-8 text-gray-400">Loading profile...</div>
   }
 
-  const { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades } = data
+  const { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair } = data
   const activeRobots = profile.robots
 
   const robotsForCalc = activeRobots.map((r) => ({
@@ -191,6 +197,41 @@ export default async function DashboardPage() {
           Your Outpost is {activeRobots.length > 0 ? 'operational' : 'awaiting robots'}
         </p>
       </div>
+
+      {/* ── Repair Alert ────────────────────────────────────── */}
+      {robotsNeedingRepair.length > 0 && (
+        <div className="mb-5 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 flex items-start gap-3">
+          {/* Ícone */}
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+            strokeLinecap="round" strokeLinejoin="round" className="text-amber-400 shrink-0 mt-0.5">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+
+          <div className="flex-1 min-w-0">
+            <p className="text-amber-400 text-sm font-medium">
+              {robotsNeedingRepair.length === 1
+                ? '1 robot needs repair'
+                : `${robotsNeedingRepair.length} robots need repair`}
+            </p>
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+              {robotsNeedingRepair.map((r) => (
+                <span key={r.id} className="text-xs text-amber-300/70">
+                  {r.name}
+                  <span className="text-amber-500/60 ml-1">
+                    ({r.durability.toFixed(0)}% — {r.isActive ? 'at outpost' : 'in inventory'})
+                  </span>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <Link href="/inventory"
+            className="shrink-0 text-xs text-amber-400 border border-amber-500/30 hover:bg-amber-500/10 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap">
+            Use Batteries →
+          </Link>
+        </div>
+      )}
 
       {/* Token Balances — dropdown */}
       <BalanceDropdown

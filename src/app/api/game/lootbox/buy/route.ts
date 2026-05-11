@@ -81,12 +81,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Uma transação por unidade (para rastrear o limite semanal corretamente)
+    // txHash armazena o tipo de lootbox para filtrar de forma confiável (evita comparação float)
     await tx.transaction.createMany({
       data: Array.from({ length: qty }, () => ({
         userId: user.id,
         type: 'LOOTBOX_PURCHASE' as const,
         token: 'CRATE' as const,
         amount: price,
+        txHash: lootboxType,
         status: 'CONFIRMED' as const,
       })),
     })
