@@ -8,7 +8,7 @@ import {
 import type { GameType, DropEntry } from '@/lib/minigame-config'
 
 const VALID_GAMES: GameType[] = ['SPACE_DRIFT', 'BLOCK_FALL', 'SERPENTINE', 'ORBITAL_JUMP', 'SPACE_FROG']
-const MIN_GAME_SECONDS = 10  // tempo mínimo aceitável para completar um jogo (anti-cheat básico)
+const MIN_GAME_SECONDS = 5   // tempo mínimo aceitável para completar um jogo (anti-cheat básico)
 
 function shouldReset(lastResetAt: Date): boolean {
   return Date.now() - lastResetAt.getTime() >= 24 * 60 * 60 * 1000

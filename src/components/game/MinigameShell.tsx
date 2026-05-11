@@ -63,12 +63,10 @@ function TimerBar({ seconds, total }: { seconds: number; total: number }) {
 // ─── Ad Slot (placeholder) ────────────────────────────────────────────────────
 
 function AdSlot({ position }: { position: 'top' | 'bottom' | 'left' | 'right' }) {
-  const isVertical   = position === 'left' || position === 'right'
-  const isHorizontal = position === 'top'  || position === 'bottom'
-
+  const isHorizontal = position === 'top' || position === 'bottom'
   return (
-    <div className={`flex items-center justify-center bg-gray-900/40 border border-gray-800/30 rounded text-gray-700 text-xs font-mono ${
-      isHorizontal ? 'w-full h-16' : 'h-full w-32'
+    <div className={`flex items-center justify-center bg-gray-900/30 border border-gray-800/20 rounded text-gray-800 text-xs font-mono ${
+      isHorizontal ? 'w-full h-14' : 'h-full w-28 shrink-0'
     }`}>
       AD {position.toUpperCase()}
     </div>
@@ -297,7 +295,7 @@ export function MinigameShell({ gameType, label, children }: MinigameShellProps)
   }
 
   return (
-    <div className="flex flex-col gap-3 max-w-2xl mx-auto">
+    <div className="flex flex-col gap-3">
       {/* Anúncio topo */}
       <AdSlot position="top" />
 
