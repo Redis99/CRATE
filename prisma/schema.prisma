@@ -59,7 +59,9 @@ model User {
   minigameSessions      MinigameSession[]
   minigameBoosts        MinigameBoost[]     // N entradas independentes por vitória
   minigameStatuses      MinigameStatus[]
-  totalMinigameWins     Int               @default(0) // lifetime wins (para calcular duração)
+  totalMinigameWins     Int               @default(0) // lifetime wins (stat histórico)
+  minigameStreakWins    Int               @default(0) // vitórias consecutivas sem gap de 24h
+  lastMinigameWinAt     DateTime?                     // última vitória — detecta quebra de streak
   weeklyDrops       WeeklyDrop[]
   notifications     Notification[]
 

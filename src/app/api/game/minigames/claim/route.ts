@@ -22,25 +22,36 @@ export async function POST(req: NextRequest) {
 
   await prisma.$transaction(async (tx) => {
     // ── 1. Cria entrada de boost INDEPENDENTE ─────────────────────────────
-    //   Duração baseada no total de vitórias lifetime ANTES desta vitória
+    //   Duração baseada no streak atual (reseta se ficou 24h sem vencer)
     if (session.erBoost && session.erBoost > 0) {
-      // Lê totalMinigameWins atual e incrementa
-      const profile = await tx.user.update({
-        where: { id: user.id },
-        data:  { totalMinigameWins: { increment: 1 } },
-        select: { totalMinigameWins: true },
+      // Lê streak e data da última vitória
+      const profile = await tx.user.findUnique({
+        where:  { id: user.id },
+        select: { minigameStreakWins: true, lastMinigameWinAt: true },
       })
 
-      // Duração desta entrada = faixa baseada no NOVO total (após incremento)
-      const durationHours = getBoostDurationHours(profile.totalMinigameWins)
+      // Verifica se o streak foi quebrado (24h sem vitória)
+      const lastWin      = profile?.lastMinigameWinAt
+      const streakBroken = !lastWin || (now.getTime() - lastWin.getTime() > 24 * 60 * 60 * 1000)
+      const baseStreak   = streakBroken ? 0 : (profile?.minigameStreakWins ?? 0)
+      const newStreak    = baseStreak + 1
+
+      // Duração = faixa baseada no streak atual (não no total lifetime)
+      const durationHours = getBoostDurationHours(newStreak)
       const expiresAt     = new Date(now.getTime() + durationHours * 60 * 60 * 1000)
 
-      // Cria nova linha (cada vitória = uma entrada com expiração própria)
+      // Cria nova entrada independente
       await tx.minigameBoost.create({
+        data: { userId: user.id, erFlat: session.erBoost, expiresAt },
+      })
+
+      // Atualiza streak e stats
+      await tx.user.update({
+        where: { id: user.id },
         data: {
-          userId:    user.id,
-          erFlat:    session.erBoost,
-          expiresAt,
+          minigameStreakWins: newStreak,
+          lastMinigameWinAt: now,
+          totalMinigameWins: { increment: 1 },
         },
       })
     }
