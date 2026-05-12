@@ -295,7 +295,7 @@ export function MinigameShell({ gameType, label, children }: MinigameShellProps)
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 max-w-4xl mx-auto">
       {/* Anúncio topo */}
       <AdSlot position="top" />
 
@@ -315,20 +315,22 @@ export function MinigameShell({ gameType, label, children }: MinigameShellProps)
       </div>
 
       {/* Layout lateral com anúncios */}
-      <div className="flex gap-3">
-        {/* Anúncio esquerda */}
-        <AdSlot position="left" />
+      <div className="flex gap-3 items-start">
+        {/* Anúncio esquerda — oculto em mobile */}
+        <div className="hidden md:flex">
+          <AdSlot position="left" />
+        </div>
 
         {/* Game area */}
-        <div className="flex-1 flex flex-col gap-2">
+        <div className="flex-1 min-w-0 flex flex-col gap-2">
           {/* Timer */}
           {phase === 'playing' && (
             <TimerBar seconds={timeLeft} total={startData.timeLimitSec} />
           )}
 
-          {/* Canvas area */}
+          {/* Canvas area — max-height para não vazar em telas baixas */}
           <div className="relative bg-[#0a0a12] border border-gray-800/60 rounded-xl overflow-hidden"
-               style={{ aspectRatio: '4/3' }}>
+               style={{ aspectRatio: '4/3', maxHeight: 'calc(100vh - 210px)' }}>
             {/* Overlay de início */}
             {phase === 'ready' && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -367,8 +369,10 @@ export function MinigameShell({ gameType, label, children }: MinigameShellProps)
           </div>
         </div>
 
-        {/* Anúncio direita */}
-        <AdSlot position="right" />
+        {/* Anúncio direita — oculto em mobile */}
+        <div className="hidden md:flex">
+          <AdSlot position="right" />
+        </div>
       </div>
 
       {/* Anúncio rodapé */}

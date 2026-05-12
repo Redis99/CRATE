@@ -27,14 +27,11 @@ export async function POST(req: NextRequest) {
       const existing = await tx.minigameBoost.findUnique({ where: { userId: user.id } })
       const isActive = existing && existing.expiresAt > now
 
-      const newTotalWins = (existing?.totalWins ?? 0) + 1
+      const newTotalWins  = (existing?.totalWins ?? 0) + 1
       const durationHours = getBoostDurationHours(newTotalWins)
-      const newExpiry = new Date(
-        Math.max(
-          isActive ? existing!.expiresAt.getTime() : now.getTime(),
-          now.getTime()
-        ) + durationHours * 60 * 60 * 1000
-      )
+      // Prazo = agora + duração da tabela (não acumula em cima do prazo anterior)
+      // "Cumulativo" refere-se ao ER flat, não à duração
+      const newExpiry = new Date(now.getTime() + durationHours * 60 * 60 * 1000)
 
       await tx.minigameBoost.upsert({
         where:  { userId: user.id },
