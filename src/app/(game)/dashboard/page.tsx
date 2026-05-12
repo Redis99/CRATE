@@ -112,12 +112,16 @@ async function getDashboardData() {
       select: { id: true, name: true, durability: true, isActive: true },
       orderBy: { durability: 'asc' },
     }),
-    // Boost ativo de minigame do próprio jogador
-    prisma.minigameBoost.findUnique({ where: { userId: user.id } }),
-    // Boosts ativos de todos os jogadores (para networkER)
-    prisma.minigameBoost.findMany({
+    // Soma de ER boost ativo do próprio jogador (N entradas independentes)
+    prisma.minigameBoost.aggregate({
+      where: { userId: user.id, expiresAt: { gt: new Date() } },
+      _sum:  { erFlat: true },
+    }),
+    // ER boost ativo por userId (para networkER — groupBy soma entradas ativas)
+    prisma.minigameBoost.groupBy({
+      by:    ['userId'],
       where: { expiresAt: { gt: new Date() } },
-      select: { userId: true, erFlat: true },
+      _sum:  { erFlat: true },
     }),
   ])
 
@@ -142,8 +146,9 @@ export default async function DashboardPage() {
   }))
 
   const now = new Date()
-  const activeMinigameBoost = minigameBoost && minigameBoost.expiresAt > now ? minigameBoost.erFlat : 0
-  const erBreakdown = calculateFleetER(robotsForCalc, baseUpgrades, activeMinigameBoost)
+  // Soma de todas as entradas de boost ativas (cada vitória = entrada independente)
+  const activeMinigameBoostER = minigameBoost._sum.erFlat ?? 0
+  const erBreakdown = calculateFleetER(robotsForCalc, baseUpgrades, activeMinigameBoostER)
   const pdBreakdown = calculateFleetPD(robotsForCalc)
 
   // userShareER = ER total do jogador com equipamentos + base upgrades próprios
@@ -165,8 +170,10 @@ export default async function DashboardPage() {
     robotsByUser.get(robot.userId)!.push(robot)
   }
 
-  // Mapa de boost de minigame por usuário (apenas boosts ativos)
-  const minigameBoostByUser = new Map(allMinigameBoosts.map((b) => [b.userId, b.erFlat]))
+  // groupBy retorna [{ userId, _sum: { erFlat } }] — monta mapa userId → total ER ativo
+  const minigameBoostByUser = new Map(
+    allMinigameBoosts.map((b) => [b.userId, b._sum.erFlat ?? 0])
+  )
 
   // Calcula ER de cada jogador com a mesma fórmula e soma
   // Inclui boost de minigame para garantir fórmula idêntica ao userShareER

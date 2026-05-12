@@ -56,9 +56,10 @@ model User {
   miningRewards     MiningReward[]
   codexEntries      CodexEntry[]
   missions          UserMission[]
-  minigameSessions  MinigameSession[]
-  minigameBoost     MinigameBoost?
-  minigameStatuses  MinigameStatus[]
+  minigameSessions      MinigameSession[]
+  minigameBoosts        MinigameBoost[]     // N entradas independentes por vitória
+  minigameStatuses      MinigameStatus[]
+  totalMinigameWins     Int               @default(0) // lifetime wins (para calcular duração)
   weeklyDrops       WeeklyDrop[]
   notifications     Notification[]
 
@@ -398,16 +399,17 @@ model MinigameSession {
   @@map("minigame_sessions")
 }
 
-// Boost ativo de ER (cumulativo, única linha por jogador)
+// Cada vitória gera uma entrada independente com duração própria
+// Total ativo = soma das entradas com expiresAt > now
 model MinigameBoost {
-  id          String   @id @default(uuid())
-  userId      String   @unique
-  user        User     @relation(fields: [userId], references: [id])
-  erFlat      Float    @default(0)  // ER flat somado ao calculateFleetER
-  expiresAt   DateTime
-  totalWins   Int      @default(0)  // vitórias lifetime para cálculo de duração
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  erFlat    Float    // ER flat desta vitória específica
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 
+  @@index([userId, expiresAt])
   @@map("minigame_boosts")
 }
 

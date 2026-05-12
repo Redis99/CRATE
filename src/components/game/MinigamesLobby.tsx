@@ -23,9 +23,10 @@ interface GameStatus {
 }
 
 interface ActiveBoost {
-  erFlat:     number
-  expiresAt:  string
-  totalWins:  number
+  totalErFlat:    number
+  count:          number
+  earliestExpiry: string  // primeira entrada a expirar
+  latestExpiry:   string  // última entrada a expirar
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -66,12 +67,18 @@ const GAME_ICONS: Record<string, string> = {
 // ─── Boost Banner ─────────────────────────────────────────────────────────────
 
 function BoostBanner({ boost }: { boost: ActiveBoost }) {
-  const [timeLeft, setTimeLeft] = useState(formatTimeLeft(boost.expiresAt))
+  const [earliest, setEarliest] = useState(formatTimeLeft(boost.earliestExpiry))
+  const [latest,   setLatest]   = useState(formatTimeLeft(boost.latestExpiry))
 
   useEffect(() => {
-    const id = setInterval(() => setTimeLeft(formatTimeLeft(boost.expiresAt)), 30_000)
+    const id = setInterval(() => {
+      setEarliest(formatTimeLeft(boost.earliestExpiry))
+      setLatest(formatTimeLeft(boost.latestExpiry))
+    }, 30_000)
     return () => clearInterval(id)
-  }, [boost.expiresAt])
+  }, [boost.earliestExpiry, boost.latestExpiry])
+
+  const sameExpiry = boost.earliestExpiry === boost.latestExpiry
 
   return (
     <div className="mb-6 bg-orange-500/10 border border-orange-500/30 rounded-xl px-4 py-3 flex items-center gap-3">
@@ -81,10 +88,13 @@ function BoostBanner({ boost }: { boost: ActiveBoost }) {
       </svg>
       <div className="flex-1">
         <p className="text-orange-400 text-sm font-medium">
-          Active ER Boost: <span className="font-bold">+{boost.erFlat.toFixed(1)} ER</span>
+          Active ER Boost: <span className="font-bold">+{boost.totalErFlat.toFixed(1)} ER</span>
+          <span className="text-orange-400/50 font-normal ml-1.5">({boost.count} {boost.count === 1 ? 'entry' : 'entries'})</span>
         </p>
         <p className="text-orange-300/60 text-xs mt-0.5">
-          Expires in {timeLeft} · {boost.totalWins} lifetime wins
+          {sameExpiry
+            ? `All expire in ${earliest}`
+            : `First expires in ${earliest} · Last in ${latest}`}
         </p>
       </div>
     </div>

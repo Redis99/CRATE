@@ -19,9 +19,14 @@ export async function GET() {
 
   const now = new Date()
 
-  const [statuses, boost] = await Promise.all([
+  const [statuses, activeBoosts] = await Promise.all([
     prisma.minigameStatus.findMany({ where: { userId: user.id } }),
-    prisma.minigameBoost.findFirst({ where: { userId: user.id } }),
+    // Todas as entradas de boost ainda ativas
+    prisma.minigameBoost.findMany({
+      where:   { userId: user.id, expiresAt: { gt: now } },
+      select:  { erFlat: true, expiresAt: true },
+      orderBy: { expiresAt: 'asc' },
+    }),
   ])
 
   const statusMap = new Map(statuses.map((s) => [s.gameType, s]))
@@ -68,8 +73,14 @@ export async function GET() {
     }
   })
 
-  const activeBoost = boost && boost.expiresAt > now
-    ? { erFlat: boost.erFlat, expiresAt: boost.expiresAt.toISOString(), totalWins: boost.totalWins }
+  // Agrega entradas ativas: soma ER + primeira/última expiração
+  const activeBoost = activeBoosts.length > 0
+    ? {
+        totalErFlat:     activeBoosts.reduce((s, b) => s + b.erFlat, 0),
+        count:           activeBoosts.length,
+        earliestExpiry:  activeBoosts[0].expiresAt.toISOString(),                          // já ordenado asc
+        latestExpiry:    activeBoosts[activeBoosts.length - 1].expiresAt.toISOString(),
+      }
     : null
 
   return NextResponse.json({ games, activeBoost })
