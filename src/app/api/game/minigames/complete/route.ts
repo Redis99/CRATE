@@ -3,6 +3,7 @@ import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import {
   GAME_CONFIGS, getCooldownMs, getDifficultyLevel, getWinTarget,
+  getEffectiveDailyWins,
   ER_BOOST_BASE, DIFFICULTY_BOOST_MULT, PART_NAMES, KIT_LABELS,
 } from '@/lib/minigame-config'
 import type { GameType, DropEntry } from '@/lib/minigame-config'
@@ -70,11 +71,13 @@ export async function POST(req: NextRequest) {
   // Reseta contadores se janela de 24h passou
   const needsReset       = !status || shouldReset(status.lastResetAt)
   const gamesPlayedToday = needsReset ? 0 : status.gamesPlayedToday
-  const dailyWins        = needsReset ? 0 : status.dailyWins
+  const baseDailyWins    = needsReset ? 0 : status.dailyWins
   const totalGamesPlayed = status?.totalGamesPlayed ?? 0
 
-  const difficulty       = getDifficultyLevel(dailyWins)
-  const winTarget        = getWinTarget(cfg.winTarget, difficulty)
+  // Aplica redução por inatividade antes de calcular a dificuldade
+  const dailyWins  = getEffectiveDailyWins(baseDailyWins, status?.lastPlayedAt ?? null, now)
+  const difficulty = getDifficultyLevel(dailyWins)
+  const winTarget  = getWinTarget(cfg.winTarget, difficulty, cfg.winTargetsByDiff)
 
   // Valida vitória: score deve atingir o alvo
   const actualWon = won && score >= winTarget
@@ -130,14 +133,19 @@ export async function POST(req: NextRequest) {
         dailyWins:        newDailyWins,
         nextPlayableAt,
         lastResetAt:      now,
+        lastPlayedAt:     now,
       },
       update: {
         gamesPlayedToday: needsReset ? newGamesPlayed : { increment: 1 },
         totalGamesPlayed: { increment: 1 },
-        dailyWins:        needsReset
+        // Se houve redução por inatividade, aplica o dailyWins reduzido antes de incrementar
+        dailyWins: needsReset
           ? newDailyWins
-          : actualWon ? { increment: 1 } : dailyWins,
+          : actualWon
+            ? (dailyWins < baseDailyWins ? dailyWins + 1 : { increment: 1 })
+            : (dailyWins < baseDailyWins ? dailyWins : dailyWins),
         nextPlayableAt,
+        lastPlayedAt: now,
         ...(needsReset && { lastResetAt: now }),
       },
     })

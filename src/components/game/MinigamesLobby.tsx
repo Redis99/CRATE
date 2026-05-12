@@ -152,7 +152,8 @@ function GameCard({ game, now }: { game: GameStatus; now: number }) {
         <span>Today: <span className="text-gray-400">{game.dailyWins} wins · {game.gamesPlayedToday} played</span></span>
       </div>
 
-      {/* Action */}
+      {/* Action — mt-auto garante botão sempre no fundo do card */}
+      <div className="mt-auto">
       {canPlay ? (
         <Link
           href={`/minigames/${game.slug}`}
@@ -165,6 +166,7 @@ function GameCard({ game, now }: { game: GameStatus; now: number }) {
           Cooldown: {formatCooldown(cooldown)}
         </div>
       )}
+      </div>
     </div>
   )
 }

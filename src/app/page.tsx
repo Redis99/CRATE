@@ -37,10 +37,13 @@ export default function LandingPage() {
               <span className="text-green-400">✓</span> Inventory & lootboxes
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-gray-700">○</span> Shop, crafting & P2P market
+              <span className="text-green-400">✓</span> Shop, crafting & P2P market
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-gray-700">○</span> Minigames, Codex & missions
+              <span className="text-yellow-500">~</span> Minigames, Codex & missions
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-700">○</span> Ranking, weekly drops & admin panel
             </div>
             <div className="flex items-center gap-2">
               <span className="text-gray-700">○</span> Mainnet launch — 2026 (date TBA)
@@ -61,6 +64,21 @@ export default function LandingPage() {
           >
             Sign In
           </Link>
+        </div>
+
+        {/* X / Twitter */}
+        <div className="mt-6">
+          <a
+            href="https://x.com/insidecrate"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-300 text-sm transition-colors"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+            Follow @insidecrate
+          </a>
         </div>
 
         <p className="text-gray-700 text-xs mt-10">

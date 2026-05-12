@@ -423,6 +423,7 @@ model MinigameStatus {
   dailyWins        Int       @default(0)  // vitórias hoje (define dificuldade)
   nextPlayableAt   DateTime? // null = pode jogar agora
   lastResetAt      DateTime  @default(now()) // quando gamesPlayedToday foi zerado
+  lastPlayedAt     DateTime? // última partida — para redução de dificuldade por inatividade
 
   @@unique([userId, gameType])
   @@map("minigame_statuses")

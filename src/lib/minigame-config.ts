@@ -38,8 +38,33 @@ export function getDifficultyLevel(dailyWins: number): number {
   return 1
 }
 
+// dailyWins mínimo para cada nível (threshold de entrada)
+const DIFFICULTY_THRESHOLDS: Record<number, number> = { 1: 0, 2: 3, 3: 6, 4: 9 }
+
+// Redução de dificuldade por inatividade: -1 nível a cada 8h sem jogar
+// Retorna dailyWins efetivo levando em conta a inatividade
+export function getEffectiveDailyWins(
+  dailyWins: number,
+  lastPlayedAt: Date | null,
+  now: Date,
+): number {
+  if (!lastPlayedAt) return dailyWins
+  const hoursInactive   = (now.getTime() - lastPlayedAt.getTime()) / 3_600_000
+  const levelsToReduce  = Math.floor(hoursInactive / 8)
+  if (levelsToReduce <= 0) return dailyWins
+
+  const currentLevel = getDifficultyLevel(dailyWins)
+  const newLevel     = Math.max(1, currentLevel - levelsToReduce)
+  return DIFFICULTY_THRESHOLDS[newLevel]
+}
+
 // Score mínimo por nível de dificuldade (multiplicadores do CONTEXT.md)
-export function getWinTarget(baseTarget: number, difficulty: number): number {
+export function getWinTarget(
+  baseTarget: number,
+  difficulty: number,
+  winTargetsByDiff?: Record<number, number>,
+): number {
+  if (winTargetsByDiff?.[difficulty] != null) return winTargetsByDiff[difficulty]
   const mult: Record<number, number> = { 1: 1.0, 2: 1.3, 3: 1.7, 4: 2.2 }
   return Math.round(baseTarget * (mult[difficulty] ?? 1))
 }
@@ -56,15 +81,17 @@ export function getCooldownMs(gamesPlayedToday: number): number {
 // ─── Configuração por jogo ────────────────────────────────────────────────────
 
 export interface GameConfig {
-  label:        string
-  description:  string
-  reference:    string       // jogo clássico de referência
-  timeLimitSec: number       // tempo limite em segundos
-  dropChance:   number       // probabilidade de drop (0–1)
-  winTarget:    number       // score/objetivo base para vitória no nível 1
-  winLabel:     string       // como o objetivo é descrito na UI
-  dropPool:     DropEntry[]  // pool de itens possíveis
-  slug:         string       // rota: /minigames/[slug]
+  label:           string
+  description:     string
+  reference:       string       // jogo clássico de referência
+  timeLimitSec:    number       // tempo limite em segundos
+  dropChance:      number       // probabilidade de drop (0–1)
+  winTarget:       number       // score/objetivo base para vitória no nível 1
+  winLabel:        string       // como o objetivo é descrito na UI
+  dropPool:        DropEntry[]  // pool de itens possíveis
+  slug:            string       // rota: /minigames/[slug]
+  // Alvos exatos por dificuldade (substitui o cálculo genérico quando presente)
+  winTargetsByDiff?: Record<number, number>
 }
 
 export interface DropEntry {
@@ -82,9 +109,12 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     reference:    'Space Invaders',
     timeLimitSec: 60,
     dropChance:   0.15,
-    winTarget:    10,   // destruir 10 naves (nível 1)
+    winTarget:    10,
     winLabel:     'ships destroyed',
     slug:         'space-drift',
+    // Todas as naves devem ser destruídas — alvos exatos por nível
+    // Lv1: 5×2=10 | Lv2: 7×2=14 | Lv3: 6×3=18 | Lv4: 8×3=24
+    winTargetsByDiff: { 1: 10, 2: 14, 3: 18, 4: 24 },
     dropPool: [
       { dropType: 'part',       rarity: 'COMMON',   weight: 70 },
       { dropType: 'part',       rarity: 'UNCOMMON', weight: 20 },

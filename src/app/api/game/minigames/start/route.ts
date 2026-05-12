@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { GAME_CONFIGS, getCooldownMs, getDifficultyLevel, getWinTarget } from '@/lib/minigame-config'
+import {
+  GAME_CONFIGS, getCooldownMs, getDifficultyLevel, getWinTarget,
+  getEffectiveDailyWins,
+} from '@/lib/minigame-config'
 import type { GameType } from '@/lib/minigame-config'
 
 const VALID_GAMES: GameType[] = ['SPACE_DRIFT', 'BLOCK_FALL', 'SERPENTINE', 'ORBITAL_JUMP', 'SPACE_FROG']
@@ -35,22 +38,27 @@ export async function POST(req: NextRequest) {
     }, { status: 429 })
   }
 
-  // Lê contadores diários (reseta se necessário)
+  // Contadores diários com reset de 24h
   const needsReset       = !status || shouldReset(status.lastResetAt)
   const gamesPlayedToday = needsReset ? 0 : status.gamesPlayedToday
-  const dailyWins        = needsReset ? 0 : status.dailyWins
-  const totalGamesPlayed = status?.totalGamesPlayed ?? 0
 
-  const difficulty = getDifficultyLevel(dailyWins)
-  const winTarget  = getWinTarget(cfg.winTarget, difficulty)
+  // Aplica redução de dificuldade por inatividade antes de calcular o nível
+  const baseDailyWins = needsReset ? 0 : status.dailyWins
+  const effectiveDailyWins = getEffectiveDailyWins(
+    baseDailyWins,
+    status?.lastPlayedAt ?? null,
+    now,
+  )
 
-  // Registra início (sem cooldown ainda — aplicado no /complete)
+  const difficulty = getDifficultyLevel(effectiveDailyWins)
+  const winTarget  = getWinTarget(cfg.winTarget, difficulty, cfg.winTargetsByDiff)
+
   return NextResponse.json({
-    startedAt:  now.toISOString(),
+    startedAt:    now.toISOString(),
     gameType,
     difficulty,
     winTarget,
-    winLabel:    cfg.winLabel,
+    winLabel:     cfg.winLabel,
     timeLimitSec: cfg.timeLimitSec,
     gamesPlayedToday,
   })

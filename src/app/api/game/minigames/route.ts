@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { GAME_CONFIGS, getCooldownMs, getDifficultyLevel, getWinTarget } from '@/lib/minigame-config'
+import {
+  GAME_CONFIGS, getDifficultyLevel, getWinTarget,
+  getEffectiveDailyWins,
+} from '@/lib/minigame-config'
 import type { GameType } from '@/lib/minigame-config'
 
 const ALL_GAMES: GameType[] = ['SPACE_DRIFT', 'BLOCK_FALL', 'SERPENTINE', 'ORBITAL_JUMP', 'SPACE_FROG']
 
-// Verifica se a contagem diária deve ser resetada (janela de 24h)
 function shouldReset(lastResetAt: Date): boolean {
   return Date.now() - lastResetAt.getTime() >= 24 * 60 * 60 * 1000
 }
@@ -28,11 +30,19 @@ export async function GET() {
     const cfg    = GAME_CONFIGS[gameType]
     const status = statusMap.get(gameType)
 
-    // Reset diário se necessário
-    const gamesPlayedToday = status && !shouldReset(status.lastResetAt) ? status.gamesPlayedToday : 0
-    const dailyWins        = status && !shouldReset(status.lastResetAt) ? status.dailyWins : 0
-    const difficulty       = getDifficultyLevel(dailyWins)
-    const winTarget        = getWinTarget(cfg.winTarget, difficulty)
+    // Reset diário se 24h passaram
+    const baseDailyWins        = status && !shouldReset(status.lastResetAt) ? status.dailyWins : 0
+    const baseGamesPlayedToday = status && !shouldReset(status.lastResetAt) ? status.gamesPlayedToday : 0
+
+    // Aplica redução de dificuldade por inatividade (-1 nível a cada 8h sem jogar)
+    const effectiveDailyWins = getEffectiveDailyWins(
+      baseDailyWins,
+      status?.lastPlayedAt ?? null,
+      now,
+    )
+
+    const difficulty = getDifficultyLevel(effectiveDailyWins)
+    const winTarget  = getWinTarget(cfg.winTarget, difficulty, cfg.winTargetsByDiff)
 
     // Cooldown restante
     const nextPlayableAt = status?.nextPlayableAt ?? null
@@ -42,23 +52,22 @@ export async function GET() {
 
     return {
       gameType,
-      label:       cfg.label,
-      description: cfg.description,
-      reference:   cfg.reference,
-      slug:        cfg.slug,
+      label:        cfg.label,
+      description:  cfg.description,
+      reference:    cfg.reference,
+      slug:         cfg.slug,
       timeLimitSec: cfg.timeLimitSec,
-      dropChance:  cfg.dropChance,
+      dropChance:   cfg.dropChance,
       difficulty,
       winTarget,
-      winLabel:    cfg.winLabel,
+      winLabel:     cfg.winLabel,
       cooldownMs,
-      nextPlayableAt: nextPlayableAt?.toISOString() ?? null,
-      gamesPlayedToday,
-      dailyWins,
+      nextPlayableAt:   nextPlayableAt?.toISOString() ?? null,
+      gamesPlayedToday: baseGamesPlayedToday,
+      dailyWins:        effectiveDailyWins,
     }
   })
 
-  // Boost ativo
   const activeBoost = boost && boost.expiresAt > now
     ? { erFlat: boost.erFlat, expiresAt: boost.expiresAt.toISOString(), totalWins: boost.totalWins }
     : null
