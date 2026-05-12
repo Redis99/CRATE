@@ -19,7 +19,7 @@ async function getDashboardData() {
   const user = await getServerUser()
   if (!user) return null
 
-  const [profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair, minigameBoost] = await Promise.all([
+  const [profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair, minigameBoost, allMinigameBoosts] = await Promise.all([
     prisma.user.findUnique({
       where: { id: user.id },
       select: {
@@ -112,11 +112,16 @@ async function getDashboardData() {
       select: { id: true, name: true, durability: true, isActive: true },
       orderBy: { durability: 'asc' },
     }),
-    // Boost ativo de minigame
+    // Boost ativo de minigame do próprio jogador
     prisma.minigameBoost.findUnique({ where: { userId: user.id } }),
+    // Boosts ativos de todos os jogadores (para networkER)
+    prisma.minigameBoost.findMany({
+      where: { expiresAt: { gt: new Date() } },
+      select: { userId: true, erFlat: true },
+    }),
   ])
 
-  return { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair, minigameBoost }
+  return { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair, minigameBoost, allMinigameBoosts }
 }
 
 export default async function DashboardPage() {
@@ -126,7 +131,7 @@ export default async function DashboardPage() {
     return <div className="p-8 text-gray-400">Loading profile...</div>
   }
 
-  const { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair, minigameBoost } = data
+  const { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair, minigameBoost, allMinigameBoosts } = data
   const activeRobots = profile.robots
 
   const robotsForCalc = activeRobots.map((r) => ({
@@ -160,17 +165,23 @@ export default async function DashboardPage() {
     robotsByUser.get(robot.userId)!.push(robot)
   }
 
+  // Mapa de boost de minigame por usuário (apenas boosts ativos)
+  const minigameBoostByUser = new Map(allMinigameBoosts.map((b) => [b.userId, b.erFlat]))
+
   // Calcula ER de cada jogador com a mesma fórmula e soma
+  // Inclui boost de minigame para garantir fórmula idêntica ao userShareER
   let networkER = 0
   for (const [userId, robots] of robotsByUser.entries()) {
-    const upgrades = upgradesByUser.get(userId) ?? []
+    const upgrades     = upgradesByUser.get(userId) ?? []
+    const boostER      = minigameBoostByUser.get(userId) ?? 0
     const { total } = calculateFleetER(
       robots.map((r) => ({
         hashPower:  r.hashPower,
         durability: r.durability,
         equipments: (r.equipments ?? []).map((e) => e.equipment),
       })),
-      upgrades
+      upgrades,
+      boostER
     )
     networkER += total
   }
