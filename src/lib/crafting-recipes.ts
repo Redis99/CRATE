@@ -100,8 +100,8 @@ export const ALL_RECIPES: CraftingRecipe[] = [
       name:       'Prototype Unit Mk.I',
       rarity:     'RARE',
       collection: 'Prototype — Crafted Series',
-      hashPower:  85,
-      energyRate: 8.5,
+      hashPower:  160,   // middle of Rare range (130–200)
+      energyRate: 16,
     },
   },
   {

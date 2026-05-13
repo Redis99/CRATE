@@ -32,22 +32,23 @@ const ROBOT_COLLECTIONS: Record<Rarity, string[]> = {
   LEGENDARY: ['Singularity — Genesis Series'],
 }
 
+// Extraction Rate (ER) por raridade
+// Ratio ER:PD mantido em ~10:1 para consistência
 const ROBOT_ER: Record<Rarity, [number, number]> = {
-  COMMON:    [8,   12],
-  UNCOMMON:  [25,  35],
-  RARE:      [70,  90],
-  EPIC:      [180, 220],
-  LEGENDARY: [480, 550],
+  COMMON:    [30,  60],
+  UNCOMMON:  [70,  120],
+  RARE:      [130, 200],
+  EPIC:      [210, 350],
+  LEGENDARY: [360, 600],
 }
 
 // Power Draw (PD) por raridade — consumo de energia por hora
-// Valores provisórios — serão ajustados no balanceamento final
 const ROBOT_PD: Record<Rarity, [number, number]> = {
-  COMMON:    [0.8,  1.2],
-  UNCOMMON:  [2.5,  3.5],
-  RARE:      [7,    9],
-  EPIC:      [18,   22],
-  LEGENDARY: [45,   55],
+  COMMON:    [3,   6],
+  UNCOMMON:  [7,   12],
+  RARE:      [13,  20],
+  EPIC:      [21,  35],
+  LEGENDARY: [36,  60],
 }
 
 const EQUIPMENT_NAMES: Record<EffectType, string[]> = {
