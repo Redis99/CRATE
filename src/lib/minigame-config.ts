@@ -69,13 +69,33 @@ export function getWinTarget(
   return Math.round(baseTarget * (mult[difficulty] ?? 1))
 }
 
-// ─── Cooldown ─────────────────────────────────────────────────────────────────
+// ─── Cooldown global ──────────────────────────────────────────────────────────
 
-// Retorna cooldown em ms para uma partida dado o total de jogos hoje
-export function getCooldownMs(gamesPlayedToday: number): number {
-  const games = gamesPlayedToday // jogos já jogados (antes desta partida)
-  if (games >= 100) return (1.5 * 100 + 10 * (games - 100)) * 1000
-  return games * 1500 // +1500ms por jogo (0ms na primeira, 1500ms na segunda...)
+// Redução regressiva: -10 jogos por hora de inatividade
+// Incentiva retornos periódicos ao longo do dia (mais sessões = mais exposição a anúncios)
+const COOLDOWN_DECAY_RATE = 10 // jogos/hora
+
+export function getEffectiveGamesPlayed(
+  globalGamesPlayedToday: number,
+  globalLastPlayedAt: Date | null,
+  now: Date,
+): number {
+  if (!globalLastPlayedAt || globalGamesPlayedToday === 0) return globalGamesPlayedToday
+  const hoursInactive = (now.getTime() - globalLastPlayedAt.getTime()) / 3_600_000
+  const reduction     = Math.floor(hoursInactive * COOLDOWN_DECAY_RATE)
+  return Math.max(0, globalGamesPlayedToday - reduction)
+}
+
+// Retorna cooldown em ms baseado nos jogos globais efetivos
+export function getCooldownMs(effectiveGamesPlayed: number): number {
+  if (effectiveGamesPlayed >= 100)
+    return (1.5 * 100 + 10 * (effectiveGamesPlayed - 100)) * 1000
+  return effectiveGamesPlayed * 1500 // +1500ms por jogo (0 na 1ª partida)
+}
+
+// Verifica se o contador global deve resetar (janela de 24h)
+export function shouldResetGlobal(lastResetAt: Date): boolean {
+  return Date.now() - lastResetAt.getTime() >= 24 * 60 * 60 * 1000
 }
 
 // ─── Configuração por jogo ────────────────────────────────────────────────────

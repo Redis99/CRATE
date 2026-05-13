@@ -3,7 +3,7 @@ import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import {
   GAME_CONFIGS, getCooldownMs, getDifficultyLevel, getWinTarget,
-  getEffectiveDailyWins,
+  getEffectiveDailyWins, getEffectiveGamesPlayed, shouldResetGlobal,
   ER_BOOST_BASE, DIFFICULTY_BOOST_MULT, PART_NAMES, KIT_LABELS,
 } from '@/lib/minigame-config'
 import type { GameType, DropEntry } from '@/lib/minigame-config'
@@ -62,34 +62,50 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Game completed too fast.' }, { status: 400 })
   }
 
-  const now    = new Date()
-  const cfg    = GAME_CONFIGS[gameType]
-  const status = await prisma.minigameStatus.findUnique({
-    where: { userId_gameType: { userId: user.id, gameType } },
-  })
+  const now = new Date()
+  const cfg = GAME_CONFIGS[gameType]
 
-  // Reseta contadores se janela de 24h passou
+  // Busca status por jogo (dificuldade) e global do user (cooldown) em paralelo
+  const [status, userGlobal] = await Promise.all([
+    prisma.minigameStatus.findUnique({
+      where: { userId_gameType: { userId: user.id, gameType } },
+    }),
+    prisma.user.findUnique({
+      where:  { id: user.id },
+      select: {
+        globalGamesPlayedToday: true,
+        globalLastPlayedAt:     true,
+        globalLastResetAt:      true,
+      },
+    }),
+  ])
+
+  // ── Dificuldade (per-game) ────────────────────────────────────────────────
   const needsReset       = !status || shouldReset(status.lastResetAt)
   const gamesPlayedToday = needsReset ? 0 : status.gamesPlayedToday
   const baseDailyWins    = needsReset ? 0 : status.dailyWins
   const totalGamesPlayed = status?.totalGamesPlayed ?? 0
 
-  // Aplica redução por inatividade antes de calcular a dificuldade
   const dailyWins  = getEffectiveDailyWins(baseDailyWins, status?.lastPlayedAt ?? null, now)
   const difficulty = getDifficultyLevel(dailyWins)
   const winTarget  = getWinTarget(cfg.winTarget, difficulty, cfg.winTargetsByDiff)
 
-  // Valida vitória: score deve atingir o alvo
-  const actualWon = won && score >= winTarget
-
-  // Calcula cooldown para esta partida (baseado nos jogos JÁ jogados hoje)
-  const cooldownMs      = getCooldownMs(gamesPlayedToday)
-  const nextPlayableAt  = new Date(now.getTime() + cooldownMs)
-
-  // Novos contadores
-  const newGamesPlayed = gamesPlayedToday + 1
+  const actualWon   = won && score >= winTarget
   const newDailyWins   = actualWon ? dailyWins + 1 : dailyWins
   const newTotal       = totalGamesPlayed + 1
+  const newGamesPlayed = gamesPlayedToday + 1
+
+  // ── Cooldown global (todos os jogos compartilham) ─────────────────────────
+  const globalNeedsReset = !userGlobal || shouldResetGlobal(userGlobal.globalLastResetAt)
+  const baseGlobal       = globalNeedsReset ? 0 : (userGlobal?.globalGamesPlayedToday ?? 0)
+
+  // Aplica redução regressiva (-10 jogos/hora de inatividade)
+  const effectiveGlobal  = getEffectiveGamesPlayed(
+    baseGlobal, userGlobal?.globalLastPlayedAt ?? null, now,
+  )
+  const cooldownMs         = getCooldownMs(effectiveGlobal)
+  const nextPlayableAt     = new Date(now.getTime() + cooldownMs)
+  const newGlobalPlayed    = effectiveGlobal + 1  // salva o valor efetivo (não o raw)
 
   // ── Recompensas (apenas na vitória) ──────────────────────────────────────
 
@@ -123,7 +139,18 @@ export async function POST(req: NextRequest) {
   // ── Persiste em transação ─────────────────────────────────────────────────
 
   const session = await prisma.$transaction(async (tx) => {
-    // Upsert MinigameStatus
+    // Cooldown global → grava no User
+    await tx.user.update({
+      where: { id: user.id },
+      data: {
+        globalGamesPlayedToday: newGlobalPlayed,
+        globalLastPlayedAt:     now,
+        globalNextPlayableAt:   nextPlayableAt,
+        ...(globalNeedsReset && { globalLastResetAt: now }),
+      },
+    })
+
+    // MinigameStatus — per-game (dificuldade, dailyWins, decay)
     await tx.minigameStatus.upsert({
       where:  { userId_gameType: { userId: user.id, gameType } },
       create: {
@@ -131,20 +158,17 @@ export async function POST(req: NextRequest) {
         gamesPlayedToday: newGamesPlayed,
         totalGamesPlayed: newTotal,
         dailyWins:        newDailyWins,
-        nextPlayableAt,
         lastResetAt:      now,
         lastPlayedAt:     now,
       },
       update: {
         gamesPlayedToday: needsReset ? newGamesPlayed : { increment: 1 },
         totalGamesPlayed: { increment: 1 },
-        // Se houve redução por inatividade, aplica o dailyWins reduzido antes de incrementar
         dailyWins: needsReset
           ? newDailyWins
           : actualWon
             ? (dailyWins < baseDailyWins ? dailyWins + 1 : { increment: 1 })
             : (dailyWins < baseDailyWins ? dailyWins : dailyWins),
-        nextPlayableAt,
         lastPlayedAt: now,
         ...(needsReset && { lastResetAt: now }),
       },

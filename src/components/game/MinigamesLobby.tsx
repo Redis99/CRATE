@@ -6,20 +6,25 @@ import Link from 'next/link'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface GameStatus {
-  gameType:        string
-  label:           string
-  description:     string
-  reference:       string
-  slug:            string
-  timeLimitSec:    number
-  dropChance:      number
-  difficulty:      number
-  winTarget:       number
-  winLabel:        string
-  cooldownMs:      number
-  nextPlayableAt:  string | null
+  gameType:         string
+  label:            string
+  description:      string
+  reference:        string
+  slug:             string
+  timeLimitSec:     number
+  dropChance:       number
+  difficulty:       number
+  winTarget:        number
+  winLabel:         string
   gamesPlayedToday: number
-  dailyWins:       number
+  dailyWins:        number
+}
+
+interface GlobalCooldown {
+  cooldownMs:         number
+  nextPlayableAt:     string | null
+  nextGameCooldownMs: number
+  globalGamesPlayed:  number
 }
 
 interface ActiveBoost {
@@ -103,16 +108,16 @@ function BoostBanner({ boost }: { boost: ActiveBoost }) {
 
 // ─── Game Card ────────────────────────────────────────────────────────────────
 
-function GameCard({ game, now }: { game: GameStatus; now: number }) {
-  const [cooldown, setCooldown] = useState(
-    game.nextPlayableAt ? Math.max(0, new Date(game.nextPlayableAt).getTime() - now) : 0
-  )
+function GameCard({ game, globalCooldown }: { game: GameStatus; globalCooldown: GlobalCooldown }) {
+  const [cooldown, setCooldown] = useState(globalCooldown.cooldownMs)
+
+  useEffect(() => {
+    setCooldown(globalCooldown.cooldownMs)
+  }, [globalCooldown.cooldownMs])
 
   useEffect(() => {
     if (cooldown <= 0) return
-    const id = setInterval(() => {
-      setCooldown((prev) => Math.max(0, prev - 1000))
-    }, 1000)
+    const id = setInterval(() => setCooldown((prev) => Math.max(0, prev - 1000)), 1000)
     return () => clearInterval(id)
   }, [cooldown])
 
@@ -184,10 +189,12 @@ function GameCard({ game, now }: { game: GameStatus; now: number }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function MinigamesLobby() {
-  const [games, setGames]     = useState<GameStatus[]>([])
-  const [boost, setBoost]     = useState<ActiveBoost | null>(null)
+  const [games, setGames]               = useState<GameStatus[]>([])
+  const [boost, setBoost]               = useState<ActiveBoost | null>(null)
+  const [globalCooldown, setGlobalCooldown] = useState<GlobalCooldown>({
+    cooldownMs: 0, nextPlayableAt: null, nextGameCooldownMs: 0, globalGamesPlayed: 0,
+  })
   const [loading, setLoading] = useState(true)
-  const [now, setNow]         = useState(Date.now())
 
   const fetchData = useCallback(async () => {
     const res = await fetch('/api/game/minigames')
@@ -195,30 +202,44 @@ export function MinigamesLobby() {
       const json = await res.json()
       setGames(json.games)
       setBoost(json.activeBoost)
+      setGlobalCooldown(json.globalCooldown)
     }
     setLoading(false)
-    setNow(Date.now())
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
 
   if (loading) return <div className="text-gray-500 text-sm py-8">Loading minigames...</div>
 
+  const nextCooldownSec = Math.round(globalCooldown.nextGameCooldownMs / 1000)
+
   return (
     <div>
       {boost && <BoostBanner boost={boost} />}
 
+      {/* Barra de cooldown global */}
+      <div className="mb-4 bg-[#111118] border border-gray-800/40 rounded-xl px-4 py-2.5 flex items-center justify-between text-xs">
+        <span className="text-gray-500">
+          Global cooldown · <span className="text-gray-400">{globalCooldown.globalGamesPlayed} games today</span>
+        </span>
+        <span className="text-gray-500">
+          Next game cooldown: <span className={nextCooldownSec > 60 ? 'text-red-400' : nextCooldownSec > 0 ? 'text-yellow-400' : 'text-green-400'}>
+            {nextCooldownSec > 0 ? `${formatCooldown(globalCooldown.nextGameCooldownMs)}` : 'none'}
+          </span>
+        </span>
+      </div>
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {games.map((game) => (
-          <GameCard key={game.gameType} game={game} now={now} />
+          <GameCard key={game.gameType} game={game} globalCooldown={globalCooldown} />
         ))}
       </div>
 
       {/* Info footer */}
       <div className="mt-6 bg-[#111118] border border-gray-800/40 rounded-xl px-4 py-3 text-xs text-gray-600 space-y-1">
-        <p>🏆 <span className="text-gray-500">Win to earn ER boost (+5 flat, level 1) and a chance at item drops.</span></p>
-        <p>⏱️ <span className="text-gray-500">Cooldown increases with each game played (resets every 24h).</span></p>
-        <p>📈 <span className="text-gray-500">Difficulty increases every 3 daily wins — higher difficulty = bigger boost.</span></p>
+        <p>🏆 <span className="text-gray-500">Win to earn ER boost and a chance at item drops.</span></p>
+        <p>⏱️ <span className="text-gray-500">Cooldown is shared across all games and reduces −10 games/hour when inactive.</span></p>
+        <p>📈 <span className="text-gray-500">Difficulty increases every 3 daily wins per game — higher difficulty = bigger boost.</span></p>
       </div>
     </div>
   )
