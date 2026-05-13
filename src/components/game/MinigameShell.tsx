@@ -201,8 +201,8 @@ export function MinigameShell({ gameType, label, children }: MinigameShellProps)
   const [result,     setResult]     = useState<CompleteData | null>(null)
   const [timeLeft,   setTimeLeft]   = useState(0)
   const [error,      setError]      = useState('')
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const startedAtRef = useRef<string>('')
+  const timerRef       = useRef<ReturnType<typeof setInterval> | null>(null)
+  const sessionTokenRef = useRef<string>('')  // token server-side do /start
 
   // Busca dados iniciais do jogo
   const loadGame = useCallback(async () => {
@@ -217,6 +217,7 @@ export function MinigameShell({ gameType, label, children }: MinigameShellProps)
     }
     setStartData(json)
     setTimeLeft(json.timeLimitSec)
+    sessionTokenRef.current = json.sessionToken ?? ''
     setPhase('ready')
   }, [gameType])
 
@@ -238,8 +239,6 @@ export function MinigameShell({ gameType, label, children }: MinigameShellProps)
   }
 
   function handleStartPlaying() {
-    const now = new Date().toISOString()
-    startedAtRef.current = now
     setPhase('playing')
     if (startData) startTimer(startData.timeLimitSec)
   }
@@ -256,9 +255,9 @@ export function MinigameShell({ gameType, label, children }: MinigameShellProps)
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         gameType,
-        won:       gameResult.won,
-        score:     gameResult.score,
-        startedAt: startedAtRef.current,
+        won:          gameResult.won,
+        score:        gameResult.score,
+        sessionToken: sessionTokenRef.current,
       }),
     })
     const json = await res.json()

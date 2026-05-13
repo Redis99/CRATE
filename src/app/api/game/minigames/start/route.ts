@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { randomUUID } from 'crypto'
 import {
   GAME_CONFIGS, getDifficultyLevel, getWinTarget,
   getEffectiveDailyWins, shouldResetGlobal,
@@ -58,16 +59,28 @@ export async function POST(req: NextRequest) {
   const winTarget  = getWinTarget(cfg.winTarget, difficulty, cfg.winTargetsByDiff)
 
   // Informa quantos jogos globais efetivos para UI (transparência)
-  const globalNeedsReset = !userGlobal || shouldResetGlobal(userGlobal.globalLastResetAt)
+  const globalNeedsReset  = !userGlobal || shouldResetGlobal(userGlobal.globalLastResetAt)
   const globalGamesPlayed = globalNeedsReset ? 0 : (userGlobal?.globalGamesPlayedToday ?? 0)
 
+  // Gera token de sessão server-side — o /complete valida este token
+  // e usa o startedAt do servidor (não do cliente) para o anti-cheat
+  const pendingToken = randomUUID()
+  await prisma.minigameStatus.upsert({
+    where:  { userId_gameType: { userId: user.id, gameType } },
+    create: {
+      userId: user.id, gameType,
+      pendingToken, pendingStartedAt: now,
+    },
+    update: { pendingToken, pendingStartedAt: now },
+  })
+
   return NextResponse.json({
-    startedAt:          now.toISOString(),
+    sessionToken:  pendingToken,   // cliente devolve no /complete
     gameType,
     difficulty,
     winTarget,
-    winLabel:           cfg.winLabel,
-    timeLimitSec:       cfg.timeLimitSec,
-    globalGamesPlayed,  // total hoje (para exibição)
+    winLabel:      cfg.winLabel,
+    timeLimitSec:  cfg.timeLimitSec,
+    globalGamesPlayed,
   })
 }

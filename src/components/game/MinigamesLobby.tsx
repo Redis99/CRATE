@@ -133,10 +133,7 @@ function GameCard({ game, globalCooldown }: { game: GameStatus; globalCooldown: 
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <span className="text-2xl">{icon}</span>
-          <div>
-            <p className="text-white font-semibold text-sm">{game.label}</p>
-            <p className="text-gray-500 text-xs">{game.reference}</p>
-          </div>
+          <p className="text-white font-semibold text-sm">{game.label}</p>
         </div>
         <span className={`text-xs px-2 py-0.5 rounded border font-medium ${diffColor}`}>
           Lv {game.difficulty}

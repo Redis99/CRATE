@@ -427,12 +427,14 @@ model MinigameStatus {
   user             User      @relation(fields: [userId], references: [id])
   gameType         GameType
 
-  gamesPlayedToday Int       @default(0)  // reseta após 24h
-  totalGamesPlayed Int       @default(0)  // histórico total (para cooldown pós-100)
-  dailyWins        Int       @default(0)  // vitórias hoje (define dificuldade)
-  nextPlayableAt   DateTime? // null = pode jogar agora
-  lastResetAt      DateTime  @default(now()) // quando gamesPlayedToday foi zerado
-  lastPlayedAt     DateTime? // última partida — para redução de dificuldade por inatividade
+  gamesPlayedToday Int       @default(0)
+  totalGamesPlayed Int       @default(0)
+  dailyWins        Int       @default(0)
+  lastResetAt      DateTime  @default(now())
+  lastPlayedAt     DateTime?
+  // Token de sessão gerado no /start — valida que o /complete corresponde a uma partida real
+  pendingToken     String?
+  pendingStartedAt DateTime?
 
   @@unique([userId, gameType])
   @@map("minigame_statuses")

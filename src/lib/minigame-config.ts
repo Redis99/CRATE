@@ -19,13 +19,13 @@ export const DIFFICULTY_BOOST_MULT: Record<number, number> = {
   4: 2.20,  // +11.0 ER
 }
 
-// Duração do boost baseada em vitórias acumuladas totais (lifetime)
-export function getBoostDurationHours(totalWins: number): number {
-  if (totalWins >= 100) return 168
-  if (totalWins >= 80)  return 140
-  if (totalWins >= 60)  return 112
-  if (totalWins >= 40)  return 84
-  if (totalWins >= 20)  return 56
+// Duração do boost baseada no streak de vitórias (reseta após 24h sem vencer)
+export function getBoostDurationHours(streakWins: number): number {
+  if (streakWins >= 100) return 168
+  if (streakWins >= 80)  return 140
+  if (streakWins >= 60)  return 112
+  if (streakWins >= 40)  return 84
+  if (streakWins >= 20)  return 56
   return 24
 }
 

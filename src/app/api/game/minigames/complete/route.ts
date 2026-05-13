@@ -42,24 +42,18 @@ export async function POST(req: NextRequest) {
   const user = await getServerUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { gameType, won, score, startedAt } = await req.json() as {
-    gameType:  GameType
-    won:       boolean
-    score:     number
-    startedAt: string  // ISO — registrado pelo cliente no início
+  const { gameType, won, score, sessionToken } = await req.json() as {
+    gameType:     GameType
+    won:          boolean
+    score:        number
+    sessionToken: string  // gerado pelo servidor no /start
   }
 
   if (!VALID_GAMES.includes(gameType)) {
     return NextResponse.json({ error: 'Invalid game type.' }, { status: 400 })
   }
-  if (typeof won !== 'boolean' || typeof score !== 'number' || !startedAt) {
+  if (typeof won !== 'boolean' || typeof score !== 'number' || !sessionToken) {
     return NextResponse.json({ error: 'Missing fields.' }, { status: 400 })
-  }
-
-  // Anti-cheat básico: tempo mínimo de partida
-  const elapsed = (Date.now() - new Date(startedAt).getTime()) / 1000
-  if (elapsed < MIN_GAME_SECONDS) {
-    return NextResponse.json({ error: 'Game completed too fast.' }, { status: 400 })
   }
 
   const now = new Date()
@@ -80,8 +74,18 @@ export async function POST(req: NextRequest) {
     }),
   ])
 
+  // ── Valida token server-side e calcula elapsed com o startedAt do servidor ──
+  if (!status?.pendingToken || status.pendingToken !== sessionToken) {
+    return NextResponse.json({ error: 'Invalid or expired session token.' }, { status: 400 })
+  }
+  const serverStartedAt = status.pendingStartedAt ?? now
+  const elapsed         = (now.getTime() - serverStartedAt.getTime()) / 1000
+  if (elapsed < MIN_GAME_SECONDS) {
+    return NextResponse.json({ error: 'Game completed too fast.' }, { status: 400 })
+  }
+
   // ── Dificuldade (per-game) ────────────────────────────────────────────────
-  const needsReset       = !status || shouldReset(status.lastResetAt)
+  const needsReset       = shouldReset(status.lastResetAt)
   const gamesPlayedToday = needsReset ? 0 : status.gamesPlayedToday
   const baseDailyWins    = needsReset ? 0 : status.dailyWins
   const totalGamesPlayed = status?.totalGamesPlayed ?? 0
@@ -168,8 +172,10 @@ export async function POST(req: NextRequest) {
           ? newDailyWins
           : actualWon
             ? (dailyWins < baseDailyWins ? dailyWins + 1 : { increment: 1 })
-            : (dailyWins < baseDailyWins ? dailyWins : dailyWins),
-        lastPlayedAt: now,
+            : dailyWins,  // sem vitória: persiste o valor efetivo (com decay aplicado)
+        lastPlayedAt:     now,
+        pendingToken:     null,   // invalida o token — não pode ser reutilizado
+        pendingStartedAt: null,
         ...(needsReset && { lastResetAt: now }),
       },
     })
@@ -182,7 +188,7 @@ export async function POST(req: NextRequest) {
         won:         actualWon,
         score,
         difficulty,
-        startedAt:   new Date(startedAt),
+        startedAt:   serverStartedAt,
         erBoost,
         pendingDrop: pendingDrop ?? undefined,
         claimed:     false,
