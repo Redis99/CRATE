@@ -148,7 +148,7 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     label:        'Block Fall',
     description:  'Clear lines to score points. Reach 50 to win.',
     reference:    'Tetris',
-    timeLimitSec: 60,
+    timeLimitSec: 120,  // 2min — Tetris precisa de mais tempo de raciocínio que outros jogos
     dropChance:   0.18,
     winTarget:    50,   // 50 pontos (10 por linha) = 5 linhas no nível 1
     winLabel:     'points',
