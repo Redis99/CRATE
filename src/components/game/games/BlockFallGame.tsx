@@ -8,7 +8,7 @@ import type { GameResult } from '@/components/game/MinigameShell'
 const COLS = 10
 const ROWS = 20
 const CELL = 24           // px per cell
-const BOARD_X = 228       // canvas x offset for board (centers in 720px canvas)
+const BOARD_X = 240       // canvas x offset: (720 - COLS*CELL) / 2 = (720-240)/2 = 240
 const BOARD_Y = 28        // canvas y offset
 
 // Fall speed (ms per row) by difficulty
@@ -194,19 +194,22 @@ export function BlockFallGame({ difficulty, winTarget, running, timeLimitSec, on
       lockAndNext()
     }
 
-    function lockAndNext() {
+    function lockAndNext(): boolean {
+      // Retorna true se o jogo terminou (loop deve parar)
       const s = stateRef.current!
       const locked = lockPiece(s.board, s.current)
       const { board: cleared, lines } = clearLines(locked)
       s.board  = cleared
       s.score += lines * 10
-      if (s.score >= winTarget) { endGame(true, s.score); return }
+      if (s.score >= winTarget) { endGame(true, s.score); return true }
       const next = randomPiece()
       s.current  = s.next
       s.next     = next
       s.lastFall = performance.now()
-      if (!isValid(s.board, s.current.shape, s.current.x, s.current.y))
-        endGame(false, s.score)
+      if (!isValid(s.board, s.current.shape, s.current.x, s.current.y)) {
+        endGame(false, s.score); return true
+      }
+      return false
     }
 
     // ── Keyboard ─────────────────────────────────────────────────────────────
@@ -439,14 +442,16 @@ export function BlockFallGame({ difficulty, winTarget, running, timeLimitSec, on
 
       // Auto-fall
       if (ts - s.lastFall >= fallMs) {
-        if (!tryMove(0, 1)) lockAndNext()
-        else s.lastFall = ts
+        if (!tryMove(0, 1)) {
+          if (lockAndNext()) return  // jogo terminou — não agenda próximo frame
+        } else {
+          s.lastFall = ts
+        }
       }
 
       // Render
       c.fillStyle = '#07070e'
       c.fillRect(0, 0, 720, 540)
-
       drawBoard(s)
       drawPanel(s, timeLeft)
 

@@ -206,19 +206,23 @@ export function MinigameShell({ gameType, label, children }: MinigameShellProps)
 
   // Busca dados iniciais do jogo
   const loadGame = useCallback(async () => {
-    const res = await fetch('/api/game/minigames/start', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gameType }),
-    })
-    const json = await res.json()
-    if (!res.ok) {
-      setError(json.error ?? 'Could not start game.')
-      return
+    try {
+      const res  = await fetch('/api/game/minigames/start', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gameType }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setError(json.error ?? 'Could not start game.')
+        return
+      }
+      setStartData(json)
+      setTimeLeft(json.timeLimitSec)
+      sessionTokenRef.current = json.sessionToken ?? ''
+      setPhase('ready')
+    } catch (e) {
+      setError('Failed to connect. Please try again.')
     }
-    setStartData(json)
-    setTimeLeft(json.timeLimitSec)
-    sessionTokenRef.current = json.sessionToken ?? ''
-    setPhase('ready')
   }, [gameType])
 
   useEffect(() => { loadGame() }, [loadGame])
