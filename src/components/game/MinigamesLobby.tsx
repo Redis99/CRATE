@@ -180,10 +180,13 @@ function GameCard({ game }: { game: GameStatus }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+interface GlobalStats { gamesPlayed: number; nextCooldownMs: number }
+
 export function MinigamesLobby() {
-  const [games, setGames]   = useState<GameStatus[]>([])
-  const [boost, setBoost]   = useState<ActiveBoost | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [games, setGames]       = useState<GameStatus[]>([])
+  const [boost, setBoost]       = useState<ActiveBoost | null>(null)
+  const [global, setGlobal]     = useState<GlobalStats>({ gamesPlayed: 0, nextCooldownMs: 0 })
+  const [loading, setLoading]   = useState(true)
 
   const fetchData = useCallback(async () => {
     const res = await fetch('/api/game/minigames')
@@ -191,6 +194,7 @@ export function MinigamesLobby() {
       const json = await res.json()
       setGames(json.games)
       setBoost(json.activeBoost)
+      if (json.globalStats) setGlobal(json.globalStats)
     }
     setLoading(false)
   }, [])
@@ -199,9 +203,23 @@ export function MinigamesLobby() {
 
   if (loading) return <div className="text-gray-500 text-sm py-8">Loading minigames...</div>
 
+  const nextSec = Math.round(global.nextCooldownMs / 1000)
+
   return (
     <div>
       {boost && <BoostBanner boost={boost} />}
+
+      {/* Info: contador global + próximo cooldown */}
+      <div className="mb-4 flex items-center justify-between text-xs text-gray-600 px-1">
+        <span>{global.gamesPlayed} games played today</span>
+        {nextSec > 0 && (
+          <span>
+            Next cooldown: <span className={nextSec > 60 ? 'text-red-400/70' : 'text-yellow-400/70'}>
+              {formatCooldown(global.nextCooldownMs)}
+            </span>
+          </span>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {games.map((game) => (

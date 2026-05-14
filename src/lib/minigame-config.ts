@@ -69,29 +69,44 @@ export function getWinTarget(
   return Math.round(baseTarget * (mult[difficulty] ?? 1))
 }
 
-// ─── Cooldown por jogo ────────────────────────────────────────────────────────
-// Cada jogo tem seu próprio cooldown independente — o jogador pode rodar entre
-// os 5 jogos enquanto os cooldowns individuais contam regressivamente.
+// ─── Cooldown híbrido ─────────────────────────────────────────────────────────
+// Contador GLOBAL cresce com qualquer jogo jogado → valor do cooldown sobe
+// Cooldown aplicado APENAS ao último jogo jogado → outros jogos permanecem livres
+// Resultado: rotação estratégica entre jogos sem bloqueio simultâneo
 
-// Redução regressiva: -10 jogos por hora sem jogar AQUELE jogo específico
-const COOLDOWN_DECAY_RATE = 10 // jogos/hora por jogo
+// Redução regressiva: -10 jogos/hora sem jogar NENHUM jogo (global)
+const COOLDOWN_DECAY_RATE = 10
 
-export function getEffectiveGamesPlayed(
-  gamesPlayedToday: number,
-  lastPlayedAt: Date | null,
-  now: Date,
+export function getEffectiveGlobalGames(
+  globalGamesPlayedToday: number,
+  globalLastPlayedAt:     Date | null,
+  now:                    Date,
 ): number {
-  if (!lastPlayedAt || gamesPlayedToday === 0) return gamesPlayedToday
-  const hoursInactive = (now.getTime() - lastPlayedAt.getTime()) / 3_600_000
+  if (!globalLastPlayedAt || globalGamesPlayedToday === 0) return globalGamesPlayedToday
+  const hoursInactive = (now.getTime() - globalLastPlayedAt.getTime()) / 3_600_000
   const reduction     = Math.floor(hoursInactive * COOLDOWN_DECAY_RATE)
-  return Math.max(0, gamesPlayedToday - reduction)
+  return Math.max(0, globalGamesPlayedToday - reduction)
 }
 
-// Retorna cooldown em ms baseado nos jogos efetivos deste jogo
-export function getCooldownMs(effectiveGamesPlayed: number): number {
-  if (effectiveGamesPlayed >= 100)
-    return (1.5 * 100 + 10 * (effectiveGamesPlayed - 100)) * 1000
-  return effectiveGamesPlayed * 1500 // 0ms no 1º jogo, +1500ms por jogo
+// Alias mantido para compatibilidade (usado na rota GET para dificuldade per-game)
+export function getEffectiveGamesPlayed(
+  gamesPlayedToday: number,
+  lastPlayedAt:     Date | null,
+  now:              Date,
+): number {
+  return getEffectiveGlobalGames(gamesPlayedToday, lastPlayedAt, now)
+}
+
+// Cooldown em ms baseado no contador global efetivo
+export function getCooldownMs(effectiveGlobalGames: number): number {
+  if (effectiveGlobalGames >= 100)
+    return (1.5 * 100 + 10 * (effectiveGlobalGames - 100)) * 1000
+  return effectiveGlobalGames * 1500  // 0ms no 1º jogo total, +1.5s por jogo
+}
+
+// Reset diário do contador global (24h)
+export function shouldResetGlobal(lastResetAt: Date): boolean {
+  return Date.now() - lastResetAt.getTime() >= 24 * 60 * 60 * 1000
 }
 
 // ─── Configuração por jogo ────────────────────────────────────────────────────

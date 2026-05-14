@@ -3,7 +3,7 @@ import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import {
   GAME_CONFIGS, getDifficultyLevel, getWinTarget,
-  getEffectiveDailyWins,
+  getEffectiveDailyWins, getEffectiveGlobalGames, getCooldownMs, shouldResetGlobal,
 } from '@/lib/minigame-config'
 import type { GameType } from '@/lib/minigame-config'
 
@@ -19,14 +19,26 @@ export async function GET() {
 
   const now = new Date()
 
-  const [statuses, activeBoosts] = await Promise.all([
+  const [statuses, activeBoosts, userGlobal] = await Promise.all([
     prisma.minigameStatus.findMany({ where: { userId: user.id } }),
     prisma.minigameBoost.findMany({
       where:   { userId: user.id, expiresAt: { gt: now } },
       select:  { erFlat: true, expiresAt: true },
       orderBy: { expiresAt: 'asc' },
     }),
+    prisma.user.findUnique({
+      where:  { id: user.id },
+      select: { globalGamesPlayedToday: true, globalLastPlayedAt: true, globalLastResetAt: true },
+    }),
   ])
+
+  // Contador global efetivo (para exibição e próximo cooldown)
+  const globalNeedsReset = !userGlobal || shouldResetGlobal(userGlobal.globalLastResetAt)
+  const baseGlobal       = globalNeedsReset ? 0 : (userGlobal?.globalGamesPlayedToday ?? 0)
+  const effectiveGlobal  = getEffectiveGlobalGames(
+    baseGlobal, userGlobal?.globalLastPlayedAt ?? null, now,
+  )
+  const nextCooldownMs = getCooldownMs(effectiveGlobal)  // cooldown do próximo jogo
 
   const statusMap = new Map(statuses.map((s) => [s.gameType, s]))
 
@@ -74,5 +86,13 @@ export async function GET() {
       }
     : null
 
-  return NextResponse.json({ games, activeBoost })
+  return NextResponse.json({
+    games,
+    activeBoost,
+    // Info global para exibição no lobby
+    globalStats: {
+      gamesPlayed:    effectiveGlobal,
+      nextCooldownMs, // cooldown que o PRÓXIMO jogo qualquer vai gerar
+    },
+  })
 }

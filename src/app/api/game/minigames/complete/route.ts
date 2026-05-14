@@ -3,7 +3,7 @@ import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import {
   GAME_CONFIGS, getCooldownMs, getDifficultyLevel, getWinTarget,
-  getEffectiveDailyWins, getEffectiveGamesPlayed,
+  getEffectiveDailyWins, getEffectiveGlobalGames, shouldResetGlobal,
   ER_BOOST_BASE, DIFFICULTY_BOOST_MULT, PART_NAMES, KIT_LABELS,
 } from '@/lib/minigame-config'
 import type { GameType, DropEntry } from '@/lib/minigame-config'
@@ -59,10 +59,14 @@ export async function POST(req: NextRequest) {
   const now = new Date()
   const cfg = GAME_CONFIGS[gameType]
 
-  // Status per-game (dificuldade + cooldown por jogo)
-  const [status] = await Promise.all([
+  // Busca status per-game (dificuldade) e contador global (valor do cooldown)
+  const [status, userGlobal] = await Promise.all([
     prisma.minigameStatus.findUnique({
       where: { userId_gameType: { userId: user.id, gameType } },
+    }),
+    prisma.user.findUnique({
+      where:  { id: user.id },
+      select: { globalGamesPlayedToday: true, globalLastPlayedAt: true, globalLastResetAt: true },
     }),
   ])
 
@@ -91,13 +95,17 @@ export async function POST(req: NextRequest) {
   const newTotal       = totalGamesPlayed + 1
   const newGamesPlayed = gamesPlayedToday + 1
 
-  // ── Cooldown per-game com redução regressiva ──────────────────────────────
-  // Cada jogo tem seu próprio cooldown — jogador pode rodar entre os 5 jogos
-  const effectiveGames = getEffectiveGamesPlayed(
-    gamesPlayedToday, status?.lastPlayedAt ?? null, now,
+  // ── Cooldown híbrido ──────────────────────────────────────────────────────
+  // Valor vem do contador GLOBAL (sobe com qualquer jogo)
+  // Aplicado apenas ao jogo atual (outros permanecem livres para rotação)
+  const globalNeedsReset = !userGlobal || shouldResetGlobal(userGlobal.globalLastResetAt)
+  const baseGlobal       = globalNeedsReset ? 0 : (userGlobal?.globalGamesPlayedToday ?? 0)
+  const effectiveGlobal  = getEffectiveGlobalGames(
+    baseGlobal, userGlobal?.globalLastPlayedAt ?? null, now,
   )
-  const cooldownMs     = getCooldownMs(effectiveGames)
+  const cooldownMs     = getCooldownMs(effectiveGlobal)
   const nextPlayableAt = new Date(now.getTime() + cooldownMs)
+  const newGlobalCount = effectiveGlobal + 1
 
   // ── Recompensas (apenas na vitória) ──────────────────────────────────────
 
@@ -131,7 +139,17 @@ export async function POST(req: NextRequest) {
   // ── Persiste em transação ─────────────────────────────────────────────────
 
   const session = await prisma.$transaction(async (tx) => {
-    // MinigameStatus — cooldown + dificuldade, ambos per-game
+    // Atualiza contador global no User
+    await tx.user.update({
+      where: { id: user.id },
+      data: {
+        globalGamesPlayedToday: newGlobalCount,
+        globalLastPlayedAt:     now,
+        ...(globalNeedsReset && { globalLastResetAt: now }),
+      },
+    })
+
+    // MinigameStatus — dificuldade per-game + nextPlayableAt calculado do global
     await tx.minigameStatus.upsert({
       where:  { userId_gameType: { userId: user.id, gameType } },
       create: {
