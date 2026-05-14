@@ -103,14 +103,13 @@ export function shouldResetGlobal(lastResetAt: Date): boolean {
 export interface GameConfig {
   label:           string
   description:     string
-  reference:       string       // jogo clássico de referência
-  timeLimitSec:    number       // tempo limite em segundos
-  dropChance:      number       // probabilidade de drop (0–1)
-  winTarget:       number       // score/objetivo base para vitória no nível 1
-  winLabel:        string       // como o objetivo é descrito na UI
-  dropPool:        DropEntry[]  // pool de itens possíveis
-  slug:            string       // rota: /minigames/[slug]
-  // Alvos exatos por dificuldade (substitui o cálculo genérico quando presente)
+  timeLimitSec:    number
+  dropChance:      number
+  winTarget:       number
+  winLabel:        string
+  dropPool:        DropEntry[]
+  slug:            string
+  available:       boolean      // false = exibe "Coming Soon" no lobby
   winTargetsByDiff?: Record<number, number>
 }
 
@@ -126,14 +125,12 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
   SPACE_DRIFT: {
     label:        'Space Drift',
     description:  'Destroy all enemy ships before time runs out.',
-    reference:    'Space Invaders',
     timeLimitSec: 60,
     dropChance:   0.15,
     winTarget:    10,
     winLabel:     'ships destroyed',
     slug:         'space-drift',
-    // Todas as naves devem ser destruídas — alvos exatos por nível
-    // Lv1: 5×2=10 | Lv2: 7×2=14 | Lv3: 6×3=18 | Lv4: 8×3=24
+    available:    true,
     winTargetsByDiff: { 1: 10, 2: 14, 3: 18, 4: 24 },
     dropPool: [
       { dropType: 'part',       rarity: 'COMMON',   weight: 70 },
@@ -147,12 +144,12 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
   BLOCK_FALL: {
     label:        'Block Fall',
     description:  'Clear lines to score points. Reach 50 to win.',
-    reference:    'Tetris',
-    timeLimitSec: 120,  // 2min — Tetris precisa de mais tempo de raciocínio que outros jogos
+    timeLimitSec: 120,
     dropChance:   0.18,
-    winTarget:    50,   // 50 pontos (10 por linha) = 5 linhas no nível 1
+    winTarget:    50,
     winLabel:     'points',
     slug:         'block-fall',
+    available:    true,
     dropPool: [
       { dropType: 'part',       rarity: 'COMMON',   weight: 65 },
       { dropType: 'part',       rarity: 'UNCOMMON', weight: 20 },
@@ -165,12 +162,12 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
   SERPENTINE: {
     label:        'Serpentine',
     description:  'Eat 5 fruits without hitting walls or yourself.',
-    reference:    'Snake',
     timeLimitSec: 60,
     dropChance:   0.12,
-    winTarget:    5,    // 5 frutas = 5 pontos no nível 1
+    winTarget:    5,
     winLabel:     'fruits',
     slug:         'serpentine',
+    available:    false,
     dropPool: [
       { dropType: 'part',       rarity: 'COMMON',   weight: 75 },
       { dropType: 'consumable', kitValue: 5,         weight: 10, maxKitValue: 25 },
@@ -182,12 +179,12 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
   ORBITAL_JUMP: {
     label:        'Orbital Jump',
     description:  'Navigate through 5 obstacles without crashing.',
-    reference:    'Flappy Bird',
     timeLimitSec: 60,
     dropChance:   0.10,
-    winTarget:    5,    // 5 obstáculos no nível 1
+    winTarget:    5,
     winLabel:     'obstacles',
     slug:         'orbital-jump',
+    available:    false,
     dropPool: [
       { dropType: 'part',       rarity: 'COMMON',   weight: 60 },
       { dropType: 'part',       rarity: 'UNCOMMON', weight: 25 },
@@ -200,12 +197,12 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
   SPACE_FROG: {
     label:        'Space Frog',
     description:  'Cross the void to the other side. Cross once to win.',
-    reference:    'Frogger',
     timeLimitSec: 60,
     dropChance:   0.20,
-    winTarget:    1,    // 1 travessia no nível 1
+    winTarget:    1,
     winLabel:     'crossings',
     slug:         'space-frog',
+    available:    false,
     dropPool: [
       { dropType: 'part',       rarity: 'COMMON',   weight: 60 },
       { dropType: 'part',       rarity: 'UNCOMMON', weight: 20 },

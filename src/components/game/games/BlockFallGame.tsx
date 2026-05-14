@@ -41,18 +41,17 @@ type Cell  = string | 0
 interface Piece { type: string; shape: number[][]; x: number; y: number }
 
 interface State {
-  board:      Cell[][]
-  current:    Piece
-  next:       Piece
-  score:      number
-  lastFall:   number
-  dasKey:     string | null   // key being held for auto-shift
-  dasStart:   number          // when DAS key was first pressed
-  dasLast:    number          // last DAS repeat
+  board:       Cell[][]
+  current:     Piece
+  next:        Piece
+  score:       number
+  lastFall:    number
+  dasKey:      string | null
+  dasStart:    number
+  dasLast:     number
   touchStartX: number | null
   touchStartY: number | null
-  lastTap:    number
-  keys:       Set<string>
+  keys:        Set<string>
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -124,7 +123,6 @@ export function BlockFallGame({ difficulty, winTarget, running, timeLimitSec, on
   const rafRef      = useRef<number>(0)
   const resultSent  = useRef(false)
   const startMs     = useRef(0)
-  const lastFrameMs = useRef(0)
 
   const onResultRef = useRef(onResult)
   useEffect(() => { onResultRef.current = onResult }, [onResult])
@@ -150,15 +148,14 @@ export function BlockFallGame({ difficulty, winTarget, running, timeLimitSec, on
     const first  = randomPiece()
     const second = randomPiece()
 
-    resultSent.current  = false
-    startMs.current     = Date.now()
-    lastFrameMs.current = 0
+    resultSent.current = false
+    startMs.current    = Date.now()
 
     stateRef.current = {
       board: emptyBoard(), current: first, next: second,
       score: 0, lastFall: performance.now(),
       dasKey: null, dasStart: 0, dasLast: 0,
-      touchStartX: null, touchStartY: null, lastTap: 0,
+      touchStartX: null, touchStartY: null,
       keys: new Set(),
     }
 

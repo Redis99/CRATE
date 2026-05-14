@@ -12,7 +12,6 @@ export interface GameResult {
 }
 
 interface StartData {
-  startedAt:    string
   difficulty:   number
   winTarget:    number
   winLabel:     string
@@ -254,22 +253,25 @@ export function MinigameShell({ gameType, label, children }: MinigameShellProps)
   const handleResult = useCallback(async (gameResult: GameResult) => {
     if (timerRef.current) clearInterval(timerRef.current)
     setPhase('result')
-
-    const res = await fetch('/api/game/minigames/complete', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        gameType,
-        won:          gameResult.won,
-        score:        gameResult.score,
-        sessionToken: sessionTokenRef.current,
-      }),
-    })
-    const json = await res.json()
-    if (!res.ok) {
-      setError(json.error ?? 'Failed to submit result.')
-      return
+    try {
+      const res  = await fetch('/api/game/minigames/complete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gameType,
+          won:          gameResult.won,
+          score:        gameResult.score,
+          sessionToken: sessionTokenRef.current,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setError(json.error ?? 'Failed to submit result.')
+        return
+      }
+      setResult(json)
+    } catch {
+      setError('Failed to connect. Please try again.')
     }
-    setResult(json)
   }, [gameType])  // gameType é prop estável; setters do useState nunca mudam
 
   async function handleClaim() {

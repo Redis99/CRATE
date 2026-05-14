@@ -9,10 +9,10 @@ interface GameStatus {
   gameType:         string
   label:            string
   description:      string
-  reference:        string
   slug:             string
   timeLimitSec:     number
   dropChance:       number
+  available:        boolean
   difficulty:       number
   winTarget:        number
   winLabel:         string
@@ -121,13 +121,15 @@ function GameCard({ game, globalCooldown }: { game: GameStatus; globalCooldown: 
     return () => clearInterval(id)
   }, [cooldown])
 
-  const canPlay  = cooldown <= 0
+  const canPlay   = cooldown <= 0 && game.available
   const diffColor = DIFFICULTY_COLORS[game.difficulty] ?? DIFFICULTY_COLORS[1]
-  const icon     = GAME_ICONS[game.gameType] ?? '🎮'
+  const icon      = GAME_ICONS[game.gameType] ?? '🎮'
 
   return (
     <div className={`bg-[#111118] border rounded-xl p-5 flex flex-col gap-3 transition-all ${
-      canPlay ? 'border-gray-800/60 hover:border-indigo-700/40' : 'border-gray-800/40 opacity-70'
+      game.available
+        ? (canPlay ? 'border-gray-800/60 hover:border-indigo-700/40' : 'border-gray-800/40 opacity-70')
+        : 'border-gray-800/30 opacity-50'
     }`}>
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
@@ -166,18 +168,22 @@ function GameCard({ game, globalCooldown }: { game: GameStatus; globalCooldown: 
 
       {/* Action — mt-auto garante botão sempre no fundo do card */}
       <div className="mt-auto">
-      {canPlay ? (
-        <Link
-          href={`/minigames/${game.slug}`}
-          className="block w-full text-center py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
-        >
-          Play →
-        </Link>
-      ) : (
-        <div className="w-full py-2 rounded-lg bg-gray-800/60 text-gray-500 text-sm text-center">
-          Cooldown: {formatCooldown(cooldown)}
-        </div>
-      )}
+        {!game.available ? (
+          <div className="w-full py-2 rounded-lg border border-gray-800/40 text-gray-600 text-sm text-center">
+            Coming Soon
+          </div>
+        ) : canPlay ? (
+          <Link
+            href={`/minigames/${game.slug}`}
+            className="block w-full text-center py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+          >
+            Play →
+          </Link>
+        ) : (
+          <div className="w-full py-2 rounded-lg bg-gray-800/60 text-gray-500 text-sm text-center">
+            Cooldown: {formatCooldown(cooldown)}
+          </div>
+        )}
       </div>
     </div>
   )
