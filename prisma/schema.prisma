@@ -430,9 +430,9 @@ model MinigameStatus {
   gamesPlayedToday Int       @default(0)
   totalGamesPlayed Int       @default(0)
   dailyWins        Int       @default(0)
+  nextPlayableAt   DateTime? // cooldown per-game (não global)
   lastResetAt      DateTime  @default(now())
   lastPlayedAt     DateTime?
-  // Token de sessão gerado no /start — valida que o /complete corresponde a uma partida real
   pendingToken     String?
   pendingStartedAt DateTime?
 

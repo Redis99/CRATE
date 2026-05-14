@@ -6,25 +6,18 @@ import Link from 'next/link'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface GameStatus {
-  gameType:         string
-  label:            string
-  description:      string
-  slug:             string
-  timeLimitSec:     number
-  dropChance:       number
-  available:        boolean
-  difficulty:       number
-  winTarget:        number
-  winLabel:         string
-  gamesPlayedToday: number
-  dailyWins:        number
-}
-
-interface GlobalCooldown {
-  cooldownMs:         number
-  nextPlayableAt:     string | null
-  nextGameCooldownMs: number
-  globalGamesPlayed:  number
+  gameType:       string
+  label:          string
+  description:    string
+  slug:           string
+  timeLimitSec:   number
+  dropChance:     number
+  available:      boolean
+  difficulty:     number
+  winTarget:      number
+  winLabel:       string
+  cooldownMs:     number
+  nextPlayableAt: string | null
 }
 
 interface ActiveBoost {
@@ -108,12 +101,12 @@ function BoostBanner({ boost }: { boost: ActiveBoost }) {
 
 // ─── Game Card ────────────────────────────────────────────────────────────────
 
-function GameCard({ game, globalCooldown }: { game: GameStatus; globalCooldown: GlobalCooldown }) {
-  const [cooldown, setCooldown] = useState(globalCooldown.cooldownMs)
+function GameCard({ game }: { game: GameStatus }) {
+  const [cooldown, setCooldown] = useState(game.cooldownMs)
 
   useEffect(() => {
-    setCooldown(globalCooldown.cooldownMs)
-  }, [globalCooldown.cooldownMs])
+    setCooldown(game.cooldownMs)
+  }, [game.cooldownMs])
 
   useEffect(() => {
     if (cooldown <= 0) return
@@ -188,11 +181,8 @@ function GameCard({ game, globalCooldown }: { game: GameStatus; globalCooldown: 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function MinigamesLobby() {
-  const [games, setGames]               = useState<GameStatus[]>([])
-  const [boost, setBoost]               = useState<ActiveBoost | null>(null)
-  const [globalCooldown, setGlobalCooldown] = useState<GlobalCooldown>({
-    cooldownMs: 0, nextPlayableAt: null, nextGameCooldownMs: 0, globalGamesPlayed: 0,
-  })
+  const [games, setGames]   = useState<GameStatus[]>([])
+  const [boost, setBoost]   = useState<ActiveBoost | null>(null)
   const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
@@ -201,7 +191,6 @@ export function MinigamesLobby() {
       const json = await res.json()
       setGames(json.games)
       setBoost(json.activeBoost)
-      setGlobalCooldown(json.globalCooldown)
     }
     setLoading(false)
   }, [])
@@ -210,27 +199,13 @@ export function MinigamesLobby() {
 
   if (loading) return <div className="text-gray-500 text-sm py-8">Loading minigames...</div>
 
-  const nextCooldownSec = Math.round(globalCooldown.nextGameCooldownMs / 1000)
-
   return (
     <div>
       {boost && <BoostBanner boost={boost} />}
 
-      {/* Barra de cooldown global */}
-      <div className="mb-4 bg-[#111118] border border-gray-800/40 rounded-xl px-4 py-2.5 flex items-center justify-between text-xs">
-        <span className="text-gray-500">
-          Global cooldown · <span className="text-gray-400">{globalCooldown.globalGamesPlayed} games today</span>
-        </span>
-        <span className="text-gray-500">
-          Next game cooldown: <span className={nextCooldownSec > 60 ? 'text-red-400' : nextCooldownSec > 0 ? 'text-yellow-400' : 'text-green-400'}>
-            {nextCooldownSec > 0 ? `${formatCooldown(globalCooldown.nextGameCooldownMs)}` : 'none'}
-          </span>
-        </span>
-      </div>
-
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {games.map((game) => (
-          <GameCard key={game.gameType} game={game} globalCooldown={globalCooldown} />
+          <GameCard key={game.gameType} game={game} />
         ))}
       </div>
 

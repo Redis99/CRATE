@@ -3,8 +3,7 @@ import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { randomUUID } from 'crypto'
 import {
-  GAME_CONFIGS, getDifficultyLevel, getWinTarget,
-  getEffectiveDailyWins, shouldResetGlobal,
+  GAME_CONFIGS, getDifficultyLevel, getWinTarget, getEffectiveDailyWins,
 } from '@/lib/minigame-config'
 import type { GameType } from '@/lib/minigame-config'
 
@@ -26,25 +25,18 @@ export async function POST(req: NextRequest) {
   const now = new Date()
   const cfg = GAME_CONFIGS[gameType]
 
-  // Busca cooldown global e status por jogo em paralelo
-  const [status, userGlobal] = await Promise.all([
-    prisma.minigameStatus.findUnique({
-      where: { userId_gameType: { userId: user.id, gameType } },
-    }),
-    prisma.user.findUnique({
-      where:  { id: user.id },
-      select: { globalNextPlayableAt: true, globalGamesPlayedToday: true,
-                globalLastPlayedAt: true, globalLastResetAt: true },
-    }),
-  ])
+  // Busca status per-game (cooldown + dificuldade)
+  const status = await prisma.minigameStatus.findUnique({
+    where: { userId_gameType: { userId: user.id, gameType } },
+  })
 
-  // Verifica cooldown GLOBAL
-  if (userGlobal?.globalNextPlayableAt && userGlobal.globalNextPlayableAt > now) {
-    const remainingMs = userGlobal.globalNextPlayableAt.getTime() - now.getTime()
+  // Verifica cooldown PER-GAME
+  if (status?.nextPlayableAt && status.nextPlayableAt > now) {
+    const remainingMs = status.nextPlayableAt.getTime() - now.getTime()
     return NextResponse.json({
       error: 'Cooldown active.',
       cooldownMs: remainingMs,
-      nextPlayableAt: userGlobal.globalNextPlayableAt.toISOString(),
+      nextPlayableAt: status.nextPlayableAt.toISOString(),
     }, { status: 429 })
   }
 
@@ -58,12 +50,7 @@ export async function POST(req: NextRequest) {
   const difficulty = getDifficultyLevel(effectiveDailyWins)
   const winTarget  = getWinTarget(cfg.winTarget, difficulty, cfg.winTargetsByDiff)
 
-  // Informa quantos jogos globais efetivos para UI (transparência)
-  const globalNeedsReset  = !userGlobal || shouldResetGlobal(userGlobal.globalLastResetAt)
-  const globalGamesPlayed = globalNeedsReset ? 0 : (userGlobal?.globalGamesPlayedToday ?? 0)
-
   // Gera token de sessão server-side — o /complete valida este token
-  // e usa o startedAt do servidor (não do cliente) para o anti-cheat
   const pendingToken = randomUUID()
   await prisma.minigameStatus.upsert({
     where:  { userId_gameType: { userId: user.id, gameType } },
@@ -75,13 +62,12 @@ export async function POST(req: NextRequest) {
   })
 
   return NextResponse.json({
-    sessionToken:  pendingToken,
+    sessionToken: pendingToken,
     gameType,
     difficulty,
     winTarget,
-    winLabel:      cfg.winLabel,
-    timeLimitSec:  cfg.timeLimitSec,
-    controls:      cfg.controls,
-    globalGamesPlayed,
+    winLabel:     cfg.winLabel,
+    timeLimitSec: cfg.timeLimitSec,
+    controls:     cfg.controls,
   })
 }

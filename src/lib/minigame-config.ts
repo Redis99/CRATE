@@ -69,33 +69,29 @@ export function getWinTarget(
   return Math.round(baseTarget * (mult[difficulty] ?? 1))
 }
 
-// ─── Cooldown global ──────────────────────────────────────────────────────────
+// ─── Cooldown por jogo ────────────────────────────────────────────────────────
+// Cada jogo tem seu próprio cooldown independente — o jogador pode rodar entre
+// os 5 jogos enquanto os cooldowns individuais contam regressivamente.
 
-// Redução regressiva: -10 jogos por hora de inatividade
-// Incentiva retornos periódicos ao longo do dia (mais sessões = mais exposição a anúncios)
-const COOLDOWN_DECAY_RATE = 10 // jogos/hora
+// Redução regressiva: -10 jogos por hora sem jogar AQUELE jogo específico
+const COOLDOWN_DECAY_RATE = 10 // jogos/hora por jogo
 
 export function getEffectiveGamesPlayed(
-  globalGamesPlayedToday: number,
-  globalLastPlayedAt: Date | null,
+  gamesPlayedToday: number,
+  lastPlayedAt: Date | null,
   now: Date,
 ): number {
-  if (!globalLastPlayedAt || globalGamesPlayedToday === 0) return globalGamesPlayedToday
-  const hoursInactive = (now.getTime() - globalLastPlayedAt.getTime()) / 3_600_000
+  if (!lastPlayedAt || gamesPlayedToday === 0) return gamesPlayedToday
+  const hoursInactive = (now.getTime() - lastPlayedAt.getTime()) / 3_600_000
   const reduction     = Math.floor(hoursInactive * COOLDOWN_DECAY_RATE)
-  return Math.max(0, globalGamesPlayedToday - reduction)
+  return Math.max(0, gamesPlayedToday - reduction)
 }
 
-// Retorna cooldown em ms baseado nos jogos globais efetivos
+// Retorna cooldown em ms baseado nos jogos efetivos deste jogo
 export function getCooldownMs(effectiveGamesPlayed: number): number {
   if (effectiveGamesPlayed >= 100)
     return (1.5 * 100 + 10 * (effectiveGamesPlayed - 100)) * 1000
-  return effectiveGamesPlayed * 1500 // +1500ms por jogo (0 na 1ª partida)
-}
-
-// Verifica se o contador global deve resetar (janela de 24h)
-export function shouldResetGlobal(lastResetAt: Date): boolean {
-  return Date.now() - lastResetAt.getTime() >= 24 * 60 * 60 * 1000
+  return effectiveGamesPlayed * 1500 // 0ms no 1º jogo, +1500ms por jogo
 }
 
 // ─── Configuração por jogo ────────────────────────────────────────────────────

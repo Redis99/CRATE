@@ -3,7 +3,7 @@ import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import {
   GAME_CONFIGS, getDifficultyLevel, getWinTarget,
-  getEffectiveDailyWins, getEffectiveGamesPlayed, getCooldownMs, shouldResetGlobal,
+  getEffectiveDailyWins,
 } from '@/lib/minigame-config'
 import type { GameType } from '@/lib/minigame-config'
 
@@ -19,34 +19,15 @@ export async function GET() {
 
   const now = new Date()
 
-  const [statuses, activeBoosts, userGlobal] = await Promise.all([
+  const [statuses, activeBoosts] = await Promise.all([
     prisma.minigameStatus.findMany({ where: { userId: user.id } }),
     prisma.minigameBoost.findMany({
       where:   { userId: user.id, expiresAt: { gt: now } },
       select:  { erFlat: true, expiresAt: true },
       orderBy: { expiresAt: 'asc' },
     }),
-    prisma.user.findUnique({
-      where:  { id: user.id },
-      select: { globalGamesPlayedToday: true, globalLastPlayedAt: true,
-                globalLastResetAt: true, globalNextPlayableAt: true },
-    }),
   ])
 
-  // ── Cooldown global ───────────────────────────────────────────────────────
-  const globalNeedsReset  = !userGlobal || shouldResetGlobal(userGlobal.globalLastResetAt)
-  const baseGlobal        = globalNeedsReset ? 0 : (userGlobal?.globalGamesPlayedToday ?? 0)
-  const effectiveGlobal   = getEffectiveGamesPlayed(
-    baseGlobal, userGlobal?.globalLastPlayedAt ?? null, now,
-  )
-  const globalNextPlayableAt = userGlobal?.globalNextPlayableAt ?? null
-  const globalCooldownMs     = globalNextPlayableAt && globalNextPlayableAt > now
-    ? globalNextPlayableAt.getTime() - now.getTime()
-    : 0
-  // Cooldown que o próximo jogo vai gerar (para exibição informativa)
-  const nextGameCooldownMs = getCooldownMs(effectiveGlobal)
-
-  // ── Dificuldade por jogo ──────────────────────────────────────────────────
   const statusMap = new Map(statuses.map((s) => [s.gameType, s]))
 
   const games = ALL_GAMES.map((gameType) => {
@@ -54,27 +35,32 @@ export async function GET() {
     const status = statusMap.get(gameType)
 
     const baseDailyWins      = status && !shouldReset(status.lastResetAt) ? status.dailyWins : 0
-    const gamesPlayedToday   = status && !shouldReset(status.lastResetAt) ? status.gamesPlayedToday : 0
     const effectiveDailyWins = getEffectiveDailyWins(
       baseDailyWins, status?.lastPlayedAt ?? null, now,
     )
     const difficulty = getDifficultyLevel(effectiveDailyWins)
     const winTarget  = getWinTarget(cfg.winTarget, difficulty, cfg.winTargetsByDiff)
 
+    // Cooldown per-game
+    const nextPlayableAt = status?.nextPlayableAt ?? null
+    const cooldownMs     = nextPlayableAt && nextPlayableAt > now
+      ? nextPlayableAt.getTime() - now.getTime()
+      : 0
+
     return {
       gameType,
-      label:        cfg.label,
-      description:  cfg.description,
-      slug:         cfg.slug,
-      timeLimitSec: cfg.timeLimitSec,
-      dropChance:   cfg.dropChance,
-      available:    cfg.available,
-      controls:     cfg.controls,
+      label:          cfg.label,
+      description:    cfg.description,
+      slug:           cfg.slug,
+      timeLimitSec:   cfg.timeLimitSec,
+      dropChance:     cfg.dropChance,
+      available:      cfg.available,
+      controls:       cfg.controls,
       difficulty,
       winTarget,
-      winLabel:     cfg.winLabel,
-      gamesPlayedToday,
-      dailyWins:    effectiveDailyWins,
+      winLabel:       cfg.winLabel,
+      cooldownMs,
+      nextPlayableAt: nextPlayableAt?.toISOString() ?? null,
     }
   })
 
@@ -88,15 +74,5 @@ export async function GET() {
       }
     : null
 
-  return NextResponse.json({
-    games,
-    activeBoost,
-    // Cooldown global compartilhado
-    globalCooldown: {
-      cooldownMs:        globalCooldownMs,
-      nextPlayableAt:    globalNextPlayableAt?.toISOString() ?? null,
-      nextGameCooldownMs,           // cooldown que o próximo jogo vai gerar
-      globalGamesPlayed: effectiveGlobal,
-    },
-  })
+  return NextResponse.json({ games, activeBoost })
 }
