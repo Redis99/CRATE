@@ -161,10 +161,6 @@ function GameCard({ game, globalCooldown }: { game: GameStatus; globalCooldown: 
         </div>
       </div>
 
-      {/* Daily progress */}
-      <div className="flex items-center justify-between text-xs text-gray-600">
-        <span>Today: <span className="text-gray-400">{game.dailyWins} wins · {game.gamesPlayedToday} played</span></span>
-      </div>
 
       {/* Action — mt-auto garante botão sempre no fundo do card */}
       <div className="mt-auto">
