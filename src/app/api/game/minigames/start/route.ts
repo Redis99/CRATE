@@ -75,12 +75,13 @@ export async function POST(req: NextRequest) {
   })
 
   return NextResponse.json({
-    sessionToken:  pendingToken,   // cliente devolve no /complete
+    sessionToken:  pendingToken,
     gameType,
     difficulty,
     winTarget,
     winLabel:      cfg.winLabel,
     timeLimitSec:  cfg.timeLimitSec,
+    controls:      cfg.controls,
     globalGamesPlayed,
   })
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
-import type { GameType } from '@/lib/minigame-config'
+import type { GameType, GameControls } from '@/lib/minigame-config'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -16,6 +16,7 @@ interface StartData {
   winTarget:    number
   winLabel:     string
   timeLimitSec: number
+  controls?:    GameControls
 }
 
 interface CompleteData {
@@ -336,17 +337,62 @@ export function MinigameShell({ gameType, label, children }: MinigameShellProps)
           {/* Canvas area — max-height para não vazar em telas baixas */}
           <div className="relative bg-[#0a0a12] border border-gray-800/60 rounded-xl overflow-hidden"
                style={{ aspectRatio: '4/3', maxHeight: 'calc(100vh - 210px)' }}>
-            {/* Overlay de início */}
+            {/* Overlay de instruções / início */}
             {phase === 'ready' && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-                <div className="text-center">
-                  <p className="text-white text-lg font-semibold mb-1">{label}</p>
-                  <p className="text-gray-400 text-sm mb-6">
-                    Reach <span className="text-white font-mono">{startData.winTarget}</span> {startData.winLabel} in <span className="text-white">{startData.timeLimitSec}s</span>
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6">
+                <div className="w-full max-w-sm">
+                  {/* Título e objetivo */}
+                  <h2 className="text-white text-xl font-bold text-center mb-1">{label}</h2>
+                  <p className="text-gray-400 text-sm text-center mb-4">
+                    Reach <span className="text-white font-mono font-bold">{startData.winTarget}</span> {startData.winLabel} in <span className="text-white font-bold">{startData.timeLimitSec}s</span>
                   </p>
+
+                  {/* Controles */}
+                  {startData.controls && (
+                    <div className="grid grid-cols-2 gap-3 mb-5">
+                      {/* Teclado */}
+                      <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-3">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-400">
+                            <rect x="2" y="6" width="20" height="12" rx="2"/>
+                            <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/>
+                          </svg>
+                          <p className="text-gray-400 text-xs font-medium">Keyboard</p>
+                        </div>
+                        <div className="space-y-1.5">
+                          {startData.controls.keyboard.map((c, i) => (
+                            <div key={i} className="flex items-start justify-between gap-2">
+                              <span className="text-indigo-300 text-xs font-mono leading-tight">{c.input}</span>
+                              <span className="text-gray-500 text-xs text-right leading-tight">{c.action}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Mobile */}
+                      <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-3">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <svg width="11" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-400">
+                            <rect x="5" y="2" width="14" height="20" rx="2"/>
+                            <circle cx="12" cy="18" r="1" fill="currentColor"/>
+                          </svg>
+                          <p className="text-gray-400 text-xs font-medium">Mobile</p>
+                        </div>
+                        <div className="space-y-1.5">
+                          {startData.controls.mobile.map((c, i) => (
+                            <div key={i} className="flex items-start justify-between gap-2">
+                              <span className="text-indigo-300 text-xs font-mono leading-tight">{c.input}</span>
+                              <span className="text-gray-500 text-xs text-right leading-tight">{c.action}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <button
                     onClick={handleStartPlaying}
-                    className="px-8 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-colors"
+                    className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-colors"
                   >
                     Start Game
                   </button>

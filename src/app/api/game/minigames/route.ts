@@ -69,6 +69,7 @@ export async function GET() {
       timeLimitSec: cfg.timeLimitSec,
       dropChance:   cfg.dropChance,
       available:    cfg.available,
+      controls:     cfg.controls,
       difficulty,
       winTarget,
       winLabel:     cfg.winLabel,

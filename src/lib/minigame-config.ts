@@ -100,6 +100,16 @@ export function shouldResetGlobal(lastResetAt: Date): boolean {
 
 // ─── Configuração por jogo ────────────────────────────────────────────────────
 
+export interface ControlHint {
+  input:  string   // ex: "← → ↑ ↓" ou "Swipe"
+  action: string   // ex: "Move"
+}
+
+export interface GameControls {
+  keyboard: ControlHint[]
+  mobile:   ControlHint[]
+}
+
 export interface GameConfig {
   label:           string
   description:     string
@@ -109,7 +119,8 @@ export interface GameConfig {
   winLabel:        string
   dropPool:        DropEntry[]
   slug:            string
-  available:       boolean      // false = exibe "Coming Soon" no lobby
+  available:       boolean
+  controls:        GameControls
   winTargetsByDiff?: Record<number, number>
 }
 
@@ -131,6 +142,16 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     winLabel:     'ships destroyed',
     slug:         'space-drift',
     available:    true,
+    controls: {
+      keyboard: [
+        { input: '← / A  →  / D', action: 'Move ship' },
+        { input: 'Space / ↑ / W',  action: 'Shoot' },
+      ],
+      mobile: [
+        { input: 'Hold & drag', action: 'Move ship' },
+        { input: 'Auto-fires',  action: 'While holding' },
+      ],
+    },
     winTargetsByDiff: { 1: 10, 2: 14, 3: 18, 4: 24 },
     dropPool: [
       { dropType: 'part',       rarity: 'COMMON',   weight: 70 },
@@ -150,6 +171,19 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     winLabel:     'points',
     slug:         'block-fall',
     available:    true,
+    controls: {
+      keyboard: [
+        { input: '← / →',   action: 'Move piece' },
+        { input: '↑ / X',   action: 'Rotate' },
+        { input: '↓',       action: 'Soft drop' },
+        { input: 'Space',   action: 'Hard drop' },
+      ],
+      mobile: [
+        { input: 'Tap',        action: 'Rotate' },
+        { input: 'Swipe ← →', action: 'Move piece' },
+        { input: 'Swipe ↓',   action: 'Hard drop' },
+      ],
+    },
     dropPool: [
       { dropType: 'part',       rarity: 'COMMON',   weight: 65 },
       { dropType: 'part',       rarity: 'UNCOMMON', weight: 20 },
@@ -167,7 +201,16 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     winTarget:    5,
     winLabel:     'fruits',
     slug:         'serpentine',
-    available:    false,
+    available:    true,
+    controls: {
+      keyboard: [
+        { input: '← → ↑ ↓', action: 'Change direction' },
+        { input: 'WASD',     action: 'Change direction' },
+      ],
+      mobile: [
+        { input: 'Swipe ← → ↑ ↓', action: 'Change direction' },
+      ],
+    },
     dropPool: [
       { dropType: 'part',       rarity: 'COMMON',   weight: 75 },
       { dropType: 'consumable', kitValue: 5,         weight: 10, maxKitValue: 25 },
@@ -185,6 +228,14 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     winLabel:     'obstacles',
     slug:         'orbital-jump',
     available:    false,
+    controls: {
+      keyboard: [
+        { input: 'Space / ↑', action: 'Jump / Flap' },
+      ],
+      mobile: [
+        { input: 'Tap anywhere', action: 'Jump / Flap' },
+      ],
+    },
     dropPool: [
       { dropType: 'part',       rarity: 'COMMON',   weight: 60 },
       { dropType: 'part',       rarity: 'UNCOMMON', weight: 25 },
@@ -203,6 +254,15 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     winLabel:     'crossings',
     slug:         'space-frog',
     available:    false,
+    controls: {
+      keyboard: [
+        { input: '← → ↑ ↓', action: 'Move' },
+        { input: 'WASD',     action: 'Move' },
+      ],
+      mobile: [
+        { input: 'Swipe ← → ↑ ↓', action: 'Move' },
+      ],
+    },
     dropPool: [
       { dropType: 'part',       rarity: 'COMMON',   weight: 60 },
       { dropType: 'part',       rarity: 'UNCOMMON', weight: 20 },
