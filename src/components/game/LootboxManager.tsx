@@ -152,7 +152,8 @@ export function LootboxManager() {
   const [data, setData]     = useState<LootboxData | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy]     = useState(false)
-  const [error, setError]   = useState('')
+  const [error,   setError]   = useState('')
+  const [success, setSuccess] = useState('')
   const [drops, setDrops]   = useState<DropResultType[] | null>(null)
   const [stoppedEarly, setStoppedEarly] = useState(false)
 
@@ -170,20 +171,25 @@ export function LootboxManager() {
   useEffect(() => { fetchData() }, [fetchData])
 
   async function handleBuy(lootboxType: 'PARTS_CRATE' | 'SUPPLY_CRATE', quantity: number) {
-    setBusy(true); setError('')
+    setBusy(true); setError(''); setSuccess('')
     const res  = await fetch('/api/game/lootbox/buy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lootboxType, quantity }),
     })
     const json = await res.json()
-    if (!res.ok) setError(json.error ?? 'Failed to buy.')
-    else await fetchData()
+    if (!res.ok) {
+      setError(json.error ?? 'Failed to buy.')
+    } else {
+      const name = lootboxType === 'PARTS_CRATE' ? 'Parts Crate' : 'Supply Crate'
+      setSuccess(`${json.purchased}× ${name} added to your inventory!`)
+      await fetchData()
+    }
     setBusy(false)
   }
 
   async function handleOpen(lootboxType: 'PARTS_CRATE' | 'SUPPLY_CRATE', quantity: number) {
-    setBusy(true); setError('')
+    setBusy(true); setError(''); setSuccess('')
     const res  = await fetch('/api/game/lootbox/open', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -191,10 +197,15 @@ export function LootboxManager() {
     })
     const json = await res.json()
     if (!res.ok) { setError(json.error ?? 'Failed to open.'); setBusy(false); return }
+
     if (json.drops?.length > 0) {
       setDrops(json.drops)
       setStoppedEarly(json.stoppedEarly)
+    } else {
+      // Inventário cheio — nenhum item foi obtido
+      setError('Inventory is full. Free up some space before opening lootboxes.')
     }
+
     await fetchData()
     setBusy(false)
   }
@@ -216,9 +227,16 @@ export function LootboxManager() {
         />
       )}
 
+      {success && (
+        <div className="mb-4 bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-3 flex justify-between items-center">
+          <p className="text-green-400 text-sm">{success}</p>
+          <button onClick={() => setSuccess('')} className="text-green-400/60 text-xs ml-3">✕</button>
+        </div>
+      )}
       {error && (
-        <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
+        <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 flex justify-between items-center">
           <p className="text-red-400 text-sm">{error}</p>
+          <button onClick={() => setError('')} className="text-red-400/60 text-xs ml-3">✕</button>
         </div>
       )}
 

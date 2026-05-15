@@ -57,7 +57,9 @@ export async function GET(_req: NextRequest) {
     const current  = slotMap[tab]
     const maxSlots = INVENTORY_MAX[tab]
     const db       = dbMap.get(item.id)
-    const basePrice = db?.price ?? item.inventoryBasePrice!
+    // Usa || em vez de ?? porque o DB pode armazenar 0 para itens de inventário
+    // (cujo preço real é o inventoryBasePrice, não o price do arquivo que é 0)
+    const basePrice = db?.price || item.inventoryBasePrice!
     const price    = expansionPrice(basePrice, current, INVENTORY_DEFAULT[tab], item.inventoryAdd!)
     return { ...item, price, currentSlots: current, maxSlots, isCapped: current >= maxSlots, active: db?.active ?? true }
   }).filter((i) => i.active)

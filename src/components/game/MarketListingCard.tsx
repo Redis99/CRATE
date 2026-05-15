@@ -123,10 +123,10 @@ export function MarketListingCard({
     <div className={`border rounded-xl p-4 bg-[#0d0d15] flex flex-col gap-3 ${
       isOwn ? 'border-blue-700/30' : 'border-gray-700/50'
     }`}>
-      <ItemPreview listing={listing} />
+      <div className="flex-1"><ItemPreview listing={listing} /></div>
 
-      {/* Footer: seller, price, time */}
-      <div className="flex items-end justify-between pt-2 border-t border-gray-800/60">
+      {/* Footer: seller, price, time — mt-auto alinha ao fundo */}
+      <div className="flex items-end justify-between pt-2 border-t border-gray-800/60 mt-auto">
         <div>
           <p className="text-white font-bold font-mono">{listing.price} CRATE</p>
           <p className="text-gray-600 text-xs mt-0.5">

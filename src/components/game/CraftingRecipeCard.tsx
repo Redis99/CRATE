@@ -152,23 +152,29 @@ export function CraftingRecipeCard({ recipe, crafting, onCraft }: CraftingRecipe
       {/* Output exato */}
       <OutputPreview output={recipe.output} />
 
-      {/* Custo e tempo */}
-      {(recipe.costCrate > 0 || recipe.craftingTimeSec > 0) && (
-        <div className="flex gap-2 text-xs">
-          {recipe.costCrate > 0 && (
-            <div className="flex items-center gap-1 bg-yellow-500/10 border border-yellow-500/20 rounded px-2 py-1">
-              <span className="text-yellow-400">💰</span>
-              <span className="text-yellow-300 font-mono">{recipe.costCrate} CRATE</span>
-            </div>
-          )}
-          {recipe.craftingTimeSec > 0 && (
-            <div className="flex items-center gap-1 bg-blue-500/10 border border-blue-500/20 rounded px-2 py-1">
-              <span className="text-blue-400">⏱</span>
-              <span className="text-blue-300 font-mono">{formatTime(recipe.craftingTimeSec)}</span>
-            </div>
-          )}
+      {/* Custo e tempo — sempre visível para o jogador saber o que esperar */}
+      <div className="flex gap-2 text-xs">
+        <div className={`flex items-center gap-1 rounded px-2 py-1 border ${
+          recipe.costCrate > 0
+            ? 'bg-yellow-500/10 border-yellow-500/20'
+            : 'bg-gray-800/40 border-gray-700/30'
+        }`}>
+          <span className={recipe.costCrate > 0 ? 'text-yellow-400' : 'text-gray-600'}>💰</span>
+          <span className={`font-mono ${recipe.costCrate > 0 ? 'text-yellow-300' : 'text-gray-600'}`}>
+            {recipe.costCrate > 0 ? `${recipe.costCrate} CRATE` : 'Free'}
+          </span>
         </div>
-      )}
+        <div className={`flex items-center gap-1 rounded px-2 py-1 border ${
+          recipe.craftingTimeSec > 0
+            ? 'bg-blue-500/10 border-blue-500/20'
+            : 'bg-gray-800/40 border-gray-700/30'
+        }`}>
+          <span className={recipe.craftingTimeSec > 0 ? 'text-blue-400' : 'text-gray-600'}>⏱</span>
+          <span className={`font-mono ${recipe.craftingTimeSec > 0 ? 'text-blue-300' : 'text-gray-600'}`}>
+            {recipe.craftingTimeSec > 0 ? formatTime(recipe.craftingTimeSec) : 'Instant'}
+          </span>
+        </div>
+      </div>
 
       {/* Craft button */}
       <ActionButton

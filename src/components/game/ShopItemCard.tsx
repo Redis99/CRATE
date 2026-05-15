@@ -93,13 +93,13 @@ export function ShopItemCard({ item, outpostSlots, balance, buying, onBuy }: Sho
       </div>
 
       {/* Name + description */}
-      <div>
+      <div className="flex-1">
         <p className="text-white text-sm font-semibold">{item.name}</p>
         <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">{item.description}</p>
         {renderStats()}
       </div>
 
-      {/* Buy button */}
+      {/* Buy button — mt-auto garante alinhamento no fundo do card */}
       <ActionButton
         variant={isOwned || isCapped ? 'ghost' : 'outline'}
         size="sm"
