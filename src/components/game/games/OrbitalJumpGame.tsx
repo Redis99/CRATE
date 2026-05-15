@@ -312,9 +312,8 @@ export function OrbitalJumpGame({ difficulty, winTarget, running, timeLimitSec, 
         if (now > s.invincibleUntil) {
           s.playerHp--
           s.invincibleUntil = now + INVINCIBLE_MS
-          // Empurra para o centro ao bater nas bordas
-          s.playerY  = Math.max(PLAYER_R + 2, Math.min(H - PLAYER_R - 2, s.playerY))
-          s.playerVy = s.playerY < H / 2 ? 80 : -80  // pequeno impulso para o centro
+          s.playerY  = H / 2   // respawn no centro da tela
+          s.playerVy = 0
           if (s.playerHp <= 0) { endGame(false, s.score); return }
         }
       }
@@ -344,9 +343,8 @@ export function OrbitalJumpGame({ difficulty, winTarget, running, timeLimitSec, 
             if (now > s.invincibleUntil) {
               s.playerHp--
               s.invincibleUntil = now + INVINCIBLE_MS
-              // Impulso para o centro do gap ao colidir
-              const centerGap = obs.gapY
-              s.playerVy = s.playerY > centerGap ? cfg.jumpVyPps * 0.7 : Math.abs(cfg.jumpVyPps) * 0.4
+              s.playerY  = H / 2  // respawn no centro da tela
+              s.playerVy = 0
               if (s.playerHp <= 0) { endGame(false, s.score); return }
             }
           }
