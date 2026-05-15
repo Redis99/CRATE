@@ -11,7 +11,9 @@ const PLAYER_X   = 150    // posição horizontal fixa
 const PLAYER_R   = 12     // raio do hitbox (menor que o visual = mais perdão)
 const OBS_W      = 56     // largura da coluna de obstáculo
 const MIN_GAP_Y  = 110    // gap center mínimo desde o topo
-const JUMP_LIMIT = 150    // ms mínimo entre pulos
+const JUMP_LIMIT    = 150    // ms mínimo entre pulos
+const MAX_HP        = 3
+const INVINCIBLE_MS = 1500   // ms de invencibilidade após levar dano
 
 interface DiffConfig {
   gravityPps2: number  // aceleração gravitacional px/s²
@@ -33,13 +35,15 @@ const DIFF: Record<number, DiffConfig> = {
 interface Obstacle { x: number; gapY: number; passed: boolean }
 
 interface State {
-  playerY:       number
-  playerVy:      number   // px/s
-  obstacles:     Obstacle[]
-  score:         number
-  lastSpawnTime: number   // ms timestamp
-  lastJump:      number   // ms timestamp
-  keys:          Set<string>
+  playerY:         number
+  playerVy:        number   // px/s
+  obstacles:       Obstacle[]
+  score:           number
+  lastSpawnTime:   number   // ms timestamp
+  lastJump:        number   // ms timestamp
+  playerHp:        number   // vidas restantes (0 = game over)
+  invincibleUntil: number   // ms timestamp
+  keys:            Set<string>
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -86,13 +90,15 @@ export function OrbitalJumpGame({ difficulty, winTarget, running, timeLimitSec, 
     lastFrameMs.current = 0
 
     stateRef.current = {
-      playerY:       H / 2,
-      playerVy:      0,
-      obstacles:     [],
-      score:         0,
-      lastSpawnTime: Date.now(),
-      lastJump:      0,
-      keys:          new Set(),
+      playerY:         H / 2,
+      playerVy:        0,
+      obstacles:       [],
+      score:           0,
+      lastSpawnTime:   Date.now(),
+      lastJump:        0,
+      playerHp:        MAX_HP,
+      invincibleUntil: 0,
+      keys:            new Set(),
     }
 
     // ── Pulo ──────────────────────────────────────────────────────────────────
@@ -158,9 +164,25 @@ export function OrbitalJumpGame({ difficulty, winTarget, running, timeLimitSec, 
       }
     }
 
+    function drawHeart(cx: number, cy: number, r: number, color: string) {
+      c.fillStyle = color
+      c.beginPath()
+      c.moveTo(cx, cy + r * 0.4)
+      c.bezierCurveTo(cx, cy - r * 0.2, cx - r * 1.1, cy - r * 0.2, cx - r * 1.1, cy + r * 0.5)
+      c.bezierCurveTo(cx - r * 1.1, cy + r * 1.2, cx, cy + r * 1.8, cx, cy + r * 1.8)
+      c.bezierCurveTo(cx, cy + r * 1.8, cx + r * 1.1, cy + r * 1.2, cx + r * 1.1, cy + r * 0.5)
+      c.bezierCurveTo(cx + r * 1.1, cy - r * 0.2, cx, cy - r * 0.2, cx, cy + r * 0.4)
+      c.fill()
+    }
+
     function drawPlayer(s: State) {
-      const px = PLAYER_X
-      const py = s.playerY
+      const px  = PLAYER_X
+      const py  = s.playerY
+      const now = Date.now()
+
+      // Pisca quando invencível
+      const isInvincible = now < s.invincibleUntil
+      if (isInvincible && Math.floor(now / 80) % 2 === 0) return
 
       // Rotação baseada na velocidade (tilt up ao pular, down ao cair)
       const angle = Math.max(-0.5, Math.min(1.2, s.playerVy / Math.abs(cfg.jumpVyPps) * 0.9))
@@ -239,6 +261,15 @@ export function OrbitalJumpGame({ difficulty, winTarget, running, timeLimitSec, 
       c.font      = 'bold 15px monospace'
       c.fillText(`${s.score} / ${winTarget} obstacles`, 14, 26)
 
+      // Corações (vidas) — centralizados no topo
+      const heartR   = 7
+      const heartSpacing = 30
+      const totalW   = (MAX_HP - 1) * heartSpacing
+      const startHX  = W / 2 - totalW / 2
+      for (let i = 0; i < MAX_HP; i++) {
+        drawHeart(startHX + i * heartSpacing, 14, heartR, i < s.playerHp ? '#ef4444' : '#374151')
+      }
+
       // Timer
       const timeColor = timeLeft <= 10 ? '#ef4444' : timeLeft <= 20 ? '#f97316' : 'rgba(255,255,255,0.6)'
       c.fillStyle = timeColor
@@ -278,7 +309,14 @@ export function OrbitalJumpGame({ difficulty, winTarget, running, timeLimitSec, 
 
       // Colisão com teto/chão
       if (s.playerY - PLAYER_R <= 0 || s.playerY + PLAYER_R >= H) {
-        endGame(false, s.score); return
+        if (now > s.invincibleUntil) {
+          s.playerHp--
+          s.invincibleUntil = now + INVINCIBLE_MS
+          // Empurra para o centro ao bater nas bordas
+          s.playerY  = Math.max(PLAYER_R + 2, Math.min(H - PLAYER_R - 2, s.playerY))
+          s.playerVy = s.playerY < H / 2 ? 80 : -80  // pequeno impulso para o centro
+          if (s.playerHp <= 0) { endGame(false, s.score); return }
+        }
       }
 
       // Spawn de obstáculos
@@ -303,7 +341,14 @@ export function OrbitalJumpGame({ difficulty, winTarget, running, timeLimitSec, 
           const topH = obs.gapY - cfg.gapSize / 2
           const botY = obs.gapY + cfg.gapSize / 2
           if (s.playerY - PLAYER_R < topH || s.playerY + PLAYER_R > botY) {
-            endGame(false, s.score); return
+            if (now > s.invincibleUntil) {
+              s.playerHp--
+              s.invincibleUntil = now + INVINCIBLE_MS
+              // Impulso para o centro do gap ao colidir
+              const centerGap = obs.gapY
+              s.playerVy = s.playerY > centerGap ? cfg.jumpVyPps * 0.7 : Math.abs(cfg.jumpVyPps) * 0.4
+              if (s.playerHp <= 0) { endGame(false, s.score); return }
+            }
           }
         }
       }
