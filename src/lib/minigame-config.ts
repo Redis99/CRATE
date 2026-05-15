@@ -258,21 +258,22 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
   },
 
   SPACE_FROG: {
-    label:        'Space Frog',
-    description:  'Cross the void to the other side. Cross once to win.',
-    timeLimitSec: 60,
+    label:        'Space Bot',
+    description:  'Deliver the CRATE across the hazard zone and return to base. If hit, the CRATE stays behind — retrieve it first.',
+    timeLimitSec: 90,
     dropChance:   0.20,
     winTarget:    1,
-    winLabel:     'crossings',
-    slug:         'space-frog',
-    available:    false,
+    winLabel:     'deliveries',
+    slug:         'space-bot',
+    available:    true,
+    winTargetsByDiff: { 1: 1, 2: 2, 3: 3, 4: 4 },
     controls: {
       keyboard: [
-        { input: '← → ↑ ↓', action: 'Move' },
-        { input: 'WASD',     action: 'Move' },
+        { input: '↑ ↓ ← →', action: 'Move robot' },
+        { input: 'WASD',     action: 'Move robot' },
       ],
       mobile: [
-        { input: 'Swipe ← → ↑ ↓', action: 'Move' },
+        { input: 'Swipe ↑ ↓ ← →', action: 'Move robot' },
       ],
     },
     dropPool: [
