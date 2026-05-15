@@ -174,24 +174,24 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
   },
 
   BLOCK_FALL: {
-    label:        'Block Fall',
-    description:  'Clear lines to score points. Reach 50 to win.',
+    label:        'Capsule Drop',
+    description:  'Drop capsules to match 4+ colors and eliminate viruses.',
     timeLimitSec: 120,
     dropChance:   0.18,
-    winTarget:    50,
-    winLabel:     'points',
+    winTarget:    6,      // viroses a eliminar no nível 1
+    winLabel:     'viruses',
     slug:         'block-fall',
     available:    true,
     controls: {
       keyboard: [
-        { input: '← / →',   action: 'Move piece' },
-        { input: '↑ / X',   action: 'Rotate' },
-        { input: '↓',       action: 'Soft drop' },
-        { input: 'Space',   action: 'Hard drop' },
+        { input: '← / →', action: 'Move capsule' },
+        { input: '↑ / X', action: 'Rotate' },
+        { input: '↓',     action: 'Soft drop' },
+        { input: 'Space', action: 'Hard drop' },
       ],
       mobile: [
         { input: 'Tap',        action: 'Rotate' },
-        { input: 'Swipe ← →', action: 'Move piece' },
+        { input: 'Swipe ← →', action: 'Move capsule' },
         { input: 'Swipe ↓',   action: 'Hard drop' },
       ],
     },
