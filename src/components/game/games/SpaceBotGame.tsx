@@ -473,36 +473,46 @@ export function SpaceBotGame({ difficulty, winTarget, running, timeLimitSec, onR
     function drawHUD(s: State, timeLeft: number) {
       const now = Date.now()
 
-      // Vidas (corações)
+      // ── Linha 1 (y≈14): Vidas | Timer ──────────────────────────────────────
+      // Vidas (corações) — linha do topo, sem sobrepor o label de fase
       for (let i = 0; i < MAX_HP; i++) {
-        drawHeart(30 + i*28, 22, 7, i < s.hp ? '#ef4444' : '#374151')
+        drawHeart(14 + i*24, 14, 6, i < s.hp ? '#ef4444' : '#374151')
       }
 
-      // Ciclos
-      c.fillStyle = 'rgba(255,255,255,0.7)'; c.font = 'bold 13px monospace'
-      c.fillText(`${s.cycles}/${winTarget}`, BOARD_X+BOARD_W/2-20, 24)
-      c.fillStyle = 'rgba(255,255,255,0.4)'; c.font = '10px monospace'
-      c.fillText('deliveries', BOARD_X+BOARD_W/2-28, 36)
-
-      // Timer
-      const tc = timeLeft<=10?'#ef4444':timeLeft<=20?'#f97316':'rgba(255,255,255,0.6)'
-      c.fillStyle = tc; c.font = 'bold 13px monospace'
+      // Timer — direita, mesma linha das vidas
+      const tc = timeLeft<=10?'#ef4444':timeLeft<=20?'#f97316':'rgba(255,255,255,0.55)'
+      c.fillStyle = tc; c.font = 'bold 14px monospace'
       const tw = c.measureText(`${timeLeft}s`).width
-      c.fillText(`${timeLeft}s`, 720-tw-14, 24)
+      c.fillText(`${timeLeft}s`, 720-tw-14, 20)
 
-      // Fase atual
+      // ── Contador de entregas — centro, bem grande e visível no mobile ───────
+      const counterText = `${s.cycles} / ${winTarget}`
+      c.fillStyle = 'white'
+      c.font = 'bold 26px monospace'
+      const cw = c.measureText(counterText).width
+      c.fillText(counterText, 720/2 - cw/2, 22)
+
+      c.fillStyle = 'rgba(255,255,255,0.4)'; c.font = '10px monospace'
+      const lw = c.measureText('deliveries').width
+      c.fillText('deliveries', 720/2 - lw/2, 34)
+
+      // ── Linha 2 (y=44): Fase atual — abaixo das vidas, acima do board ──────
+      const phaseColor = s.phase==='going'
+        ? (s.hasPackage ? '#fbbf24' : '#f87171')
+        : '#6ee7b7'
       const phaseLabel = s.phase==='going'
-        ? (s.hasPackage ? '📦 → DELIVER' : '🔍 → RETRIEVE')
-        : '🏠 → RETURN'
-      c.fillStyle = 'rgba(255,255,255,0.5)'; c.font = '11px monospace'
-      c.fillText(phaseLabel, 14, BOARD_Y-10)
+        ? (s.hasPackage ? '📦 DELIVERING' : '🔍 RETRIEVE CRATE')
+        : '🏠 RETURNING'
+      c.fillStyle = phaseColor; c.font = 'bold 12px monospace'
+      c.fillText(phaseLabel, 14, 44)
 
-      // CRATE dropped warning
+      // CRATE dropped warning — dentro do board, no topo (não sobrepõe HUD)
       if (s.droppedCrate && !s.hasPackage && s.phase==='going') {
-        const alpha = 0.6+Math.sin(now/200)*0.4
+        const alpha = 0.7+Math.sin(now/180)*0.3
         c.fillStyle = `rgba(251,191,36,${alpha})`
-        c.font = 'bold 11px monospace'
-        c.fillText('⚠ Pick up CRATE first!', 14, BOARD_Y+ROWS*CELL+20)
+        c.font = 'bold 12px monospace'
+        const warnW = c.measureText('⚠ Retrieve CRATE first!').width
+        c.fillText('⚠ Retrieve CRATE first!', 720/2 - warnW/2, BOARD_Y + ROWS*CELL + 22)
       }
     }
 
