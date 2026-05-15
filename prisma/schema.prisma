@@ -69,6 +69,7 @@ model User {
   globalNextPlayableAt  DateTime?                     // quando pode jogar novamente
   weeklyDrops       WeeklyDrop[]
   notifications     Notification[]
+  pendingCrafts     PendingCraft[]
 
   @@map("users")
 }
@@ -441,6 +442,69 @@ model MinigameStatus {
 }
 
 // ─────────────────────────────────────────────
+// CRAFTING (banco de dados — gerenciado pelo admin)
+// ─────────────────────────────────────────────
+
+model CraftingRecipe {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  active      Boolean  @default(true)
+
+  // Custo e tempo — ajustáveis pelo admin sem deploy
+  costCrate       Float @default(0)   // CRATE necessário para iniciar
+  craftingTimeSec Int   @default(0)   // 0 = instantâneo
+
+  // Output
+  outputType        CraftOutputType
+  outputName        String
+  outputRarity      Rarity
+  outputCollection  String?
+  outputHashPower   Float?
+  outputEnergyRate  Float?
+  outputEffectType  EffectType?
+  outputEffectValue Float?
+  outputEffectType2 EffectType?
+  outputEffectValue2 Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ingredients   CraftingIngredient[]
+  pendingCrafts PendingCraft[]
+
+  @@map("crafting_recipes")
+}
+
+model CraftingIngredient {
+  id       String         @id @default(uuid())
+  recipeId String
+  recipe   CraftingRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  partType String
+  rarity   Rarity
+  quantity Int
+
+  @@map("crafting_ingredients")
+}
+
+// Craft em andamento — criado ao iniciar, coletado quando completo
+model PendingCraft {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  recipeId   String
+  recipe     CraftingRecipe @relation(fields: [recipeId], references: [id])
+
+  startedAt   DateTime @default(now())
+  completesAt DateTime
+  claimed     Boolean  @default(false)
+  claimedAt   DateTime?
+
+  @@map("pending_crafts")
+}
+
+// ─────────────────────────────────────────────
 // WEEKLY DROP
 // ─────────────────────────────────────────────
 
@@ -600,4 +664,10 @@ enum GameType {
   SERPENTINE
   ORBITAL_JUMP
   SPACE_FROG
+}
+
+enum CraftOutputType {
+  ROBOT
+  EQUIPMENT
+  BASE_UPGRADE
 }

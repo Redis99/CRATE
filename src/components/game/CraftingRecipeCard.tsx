@@ -74,7 +74,7 @@ function OutputPreview({ output }: { output: CraftingOutput }) {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface EnrichedIngredient {
+export interface EnrichedIngredient {
   partType: string
   rarity:   string
   quantity: number
@@ -82,7 +82,13 @@ interface EnrichedIngredient {
   canCraft: boolean
 }
 
-interface EnrichedRecipeForCard extends Omit<CraftingRecipe, 'ingredients'> {
+export interface EnrichedRecipeForCard {
+  id:          string
+  name:        string
+  description: string
+  costCrate:   number
+  craftingTimeSec: number
+  output:      CraftingOutput
   ingredients: EnrichedIngredient[]
   canCraft:    boolean
 }
@@ -91,6 +97,12 @@ interface CraftingRecipeCardProps {
   recipe:   EnrichedRecipeForCard
   crafting: boolean
   onCraft:  (recipeId: string) => void
+}
+
+function formatTime(sec: number): string {
+  if (sec < 60)   return `${sec}s`
+  if (sec < 3600) return `${Math.round(sec / 60)}m`
+  return `${Math.round(sec / 3600)}h`
 }
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
@@ -140,6 +152,24 @@ export function CraftingRecipeCard({ recipe, crafting, onCraft }: CraftingRecipe
       {/* Output exato */}
       <OutputPreview output={recipe.output} />
 
+      {/* Custo e tempo */}
+      {(recipe.costCrate > 0 || recipe.craftingTimeSec > 0) && (
+        <div className="flex gap-2 text-xs">
+          {recipe.costCrate > 0 && (
+            <div className="flex items-center gap-1 bg-yellow-500/10 border border-yellow-500/20 rounded px-2 py-1">
+              <span className="text-yellow-400">💰</span>
+              <span className="text-yellow-300 font-mono">{recipe.costCrate} CRATE</span>
+            </div>
+          )}
+          {recipe.craftingTimeSec > 0 && (
+            <div className="flex items-center gap-1 bg-blue-500/10 border border-blue-500/20 rounded px-2 py-1">
+              <span className="text-blue-400">⏱</span>
+              <span className="text-blue-300 font-mono">{formatTime(recipe.craftingTimeSec)}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Craft button */}
       <ActionButton
         variant="outline"
@@ -147,10 +177,14 @@ export function CraftingRecipeCard({ recipe, crafting, onCraft }: CraftingRecipe
         fullWidth
         disabled={!recipe.canCraft || crafting}
         loading={crafting}
-        loadingText="Crafting..."
+        loadingText={recipe.craftingTimeSec > 0 ? 'Starting...' : 'Crafting...'}
         onClick={() => onCraft(recipe.id)}
       >
-        {recipe.canCraft ? '⚒️ Craft' : 'Missing ingredients'}
+        {recipe.canCraft
+          ? recipe.craftingTimeSec > 0
+            ? `⚒️ Start (${formatTime(recipe.craftingTimeSec)})`
+            : '⚒️ Craft'
+          : 'Missing ingredients'}
       </ActionButton>
     </div>
   )
