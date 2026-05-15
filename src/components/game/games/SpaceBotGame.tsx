@@ -38,36 +38,42 @@ interface LaneConfig {
   gap:   number   // gap between obstacles px
 }
 
+// Gaps calibrados para mobile (CELL=44px):
+// Lv1: ~4.5 células de gap (muito fácil de passar)
+// Lv2: ~3.7 células (confortável com swipe)
+// Lv3: ~3.0 células (requer timing)
+// Lv4: ~2.4 células (desafiador mas possível)
+// Lanes distribuídas em linhas alternadas para evitar trechos "vazios"
 const LANE_CONFIGS: Record<number, LaneConfig[]> = {
   1: [
-    { row: 3, dir:  1, speed: 85,  w: 58, gap: 175 },
-    { row: 5, dir: -1, speed: 78,  w: 65, gap: 185 },
-    { row: 7, dir:  1, speed: 92,  w: 54, gap: 168 },
+    { row: 2, dir:  1, speed: 72,  w: 50, gap: 205 },  // linhas 2, 4, 6 — cobertura uniforme
+    { row: 4, dir: -1, speed: 65,  w: 54, gap: 215 },
+    { row: 6, dir:  1, speed: 78,  w: 48, gap: 200 },
   ],
   2: [
-    { row: 2, dir:  1, speed: 110, w: 62, gap: 152 },
-    { row: 3, dir: -1, speed:  98, w: 58, gap: 145 },
-    { row: 5, dir:  1, speed: 115, w: 68, gap: 138 },
-    { row: 6, dir: -1, speed: 102, w: 60, gap: 148 },
-    { row: 7, dir:  1, speed: 108, w: 64, gap: 140 },
+    { row: 1, dir:  1, speed: 90,  w: 56, gap: 175 },  // 5 lanes, gaps ~175px (4 células)
+    { row: 3, dir: -1, speed: 82,  w: 52, gap: 170 },
+    { row: 4, dir:  1, speed: 95,  w: 58, gap: 168 },
+    { row: 6, dir: -1, speed: 88,  w: 54, gap: 172 },
+    { row: 7, dir:  1, speed: 93,  w: 56, gap: 165 },
   ],
   3: [
-    { row: 1, dir: -1, speed: 130, w: 68, gap: 128 },
-    { row: 2, dir:  1, speed: 118, w: 62, gap: 122 },
-    { row: 3, dir: -1, speed: 138, w: 58, gap: 118 },
-    { row: 4, dir:  1, speed: 125, w: 70, gap: 124 },
-    { row: 5, dir: -1, speed: 120, w: 64, gap: 128 },
-    { row: 6, dir:  1, speed: 132, w: 60, gap: 118 },
-    { row: 7, dir: -1, speed: 135, w: 68, gap: 112 },
+    { row: 1, dir: -1, speed: 112, w: 62, gap: 145 },  // 7 lanes, gaps ~140px (3.2 células)
+    { row: 2, dir:  1, speed: 105, w: 58, gap: 140 },
+    { row: 3, dir: -1, speed: 118, w: 54, gap: 138 },
+    { row: 4, dir:  1, speed: 110, w: 64, gap: 142 },
+    { row: 5, dir: -1, speed: 115, w: 60, gap: 138 },
+    { row: 6, dir:  1, speed: 112, w: 56, gap: 140 },
+    { row: 7, dir: -1, speed: 120, w: 62, gap: 135 },
   ],
   4: [
-    { row: 1, dir: -1, speed: 168, w: 72, gap: 108 },
-    { row: 2, dir:  1, speed: 155, w: 68, gap: 102 },
-    { row: 3, dir: -1, speed: 172, w: 64, gap:  98 },
-    { row: 4, dir:  1, speed: 162, w: 72, gap: 104 },
-    { row: 5, dir: -1, speed: 165, w: 68, gap:  98 },
-    { row: 6, dir:  1, speed: 170, w: 64, gap:  94 },
-    { row: 7, dir: -1, speed: 175, w: 72, gap:  98 },
+    { row: 1, dir: -1, speed: 145, w: 68, gap: 112 },  // 7 lanes, gaps ~108px (2.4 células)
+    { row: 2, dir:  1, speed: 135, w: 63, gap: 108 },
+    { row: 3, dir: -1, speed: 150, w: 60, gap: 105 },
+    { row: 4, dir:  1, speed: 142, w: 68, gap: 108 },
+    { row: 5, dir: -1, speed: 148, w: 63, gap: 105 },
+    { row: 6, dir:  1, speed: 152, w: 60, gap: 102 },
+    { row: 7, dir: -1, speed: 158, w: 68, gap: 106 },
   ],
 }
 
