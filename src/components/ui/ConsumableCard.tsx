@@ -63,16 +63,17 @@ export function ConsumableCard({ item, onUse, onDestroy, selectMode, selected, o
       </div>
 
       {/* Label */}
-      <p className="text-white text-xs font-medium mb-3">{typeLabel(item.consumableType, item.value)}</p>
+      <p className="text-white text-xs font-medium flex-1">{typeLabel(item.consumableType, item.value)}</p>
 
-      {/* Use button */}
+      {/* Actions — mt-auto empurra para o fundo */}
+      <div className="mt-auto flex flex-col gap-1.5">
       {item.consumableType === 'REPAIR_KIT' && onUse && (
-        <ActionButton variant="outline" size="sm" fullWidth onClick={() => onUse(item)} className="mb-1.5">
+        <ActionButton variant="outline" size="sm" fullWidth onClick={() => onUse(item)}>
           Use
         </ActionButton>
       )}
 
-      {/* Actions row */}
+      {/* Destroy / Edit row */}
       <div className="flex items-center justify-between">
         {onEdit && (
           <button onClick={() => onEdit(item)} className="text-xs text-gray-600 hover:text-indigo-400 transition-colors">
@@ -87,6 +88,7 @@ export function ConsumableCard({ item, onUse, onDestroy, selectMode, selected, o
             Destroy
           </button>
         )}
+      </div>
       </div>
     </div>
   )

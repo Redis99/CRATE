@@ -97,6 +97,7 @@ model Robot {
   codexEntry    CodexEntry?
   listing       MarketListing?
 
+  @@index([userId, isActive])   // mining queries + outpost
   @@map("robots")
 }
 
@@ -228,6 +229,7 @@ model MiningReward {
   blockNumber Int
   createdAt   DateTime @default(now())
 
+  @@index([userId])             // rewards history per user
   @@map("mining_rewards")
 }
 
@@ -258,6 +260,7 @@ model Transaction {
   status    TxStatus        @default(PENDING)
   createdAt DateTime        @default(now())
 
+  @@index([userId])             // transaction history per user
   @@map("transactions")
 }
 
@@ -303,6 +306,8 @@ model MarketListing {
 
   purchase      MarketPurchase?
 
+  @@index([status])             // browse active listings
+  @@index([sellerId, status])   // my listings
   @@map("market_listings")
 }
 
@@ -404,6 +409,7 @@ model MinigameSession {
   claimed       Boolean   @default(false)
   claimedAt     DateTime?
 
+  @@index([userId, claimed])    // claim route lookup
   @@map("minigame_sessions")
 }
 
@@ -600,6 +606,7 @@ model Notification {
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 
+  @@index([userId, read])       // bell unread count + list
   @@map("notifications")
 }
 

@@ -1,7 +1,8 @@
 export type Rarity = 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY'
 export type Token = 'CRATE' | 'SOL' | 'LC'
 export type LootboxType = 'PARTS_CRATE' | 'SUPPLY_CRATE'
-export type GameType = 'SPACE_DRIFT' | 'BLOCK_FALL' | 'SERPENTINE' | 'ORBITAL_JUMP' | 'SPACE_FROG'
+// GameType re-exportado de minigame-config para evitar duplicação
+export type { GameType } from '@/lib/minigame-config'
 
 export interface UserBalance {
   crate: number

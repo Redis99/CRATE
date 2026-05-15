@@ -56,10 +56,10 @@ const DIFFICULTY_COLORS: Record<number, string> = {
 
 const GAME_ICONS: Record<string, string> = {
   SPACE_DRIFT:  '🚀',
-  BLOCK_FALL:   '🧱',
+  BLOCK_FALL:   '💊',  // Capsule Drop
   SERPENTINE:   '🐍',
   ORBITAL_JUMP: '🪐',
-  SPACE_FROG:   '🐸',
+  SPACE_FROG:   '🤖',  // Space Bot
 }
 
 // ─── Boost Banner ─────────────────────────────────────────────────────────────

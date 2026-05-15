@@ -55,6 +55,9 @@ export async function POST(req: NextRequest) {
   if (typeof won !== 'boolean' || typeof score !== 'number' || !sessionToken) {
     return NextResponse.json({ error: 'Missing fields.' }, { status: 400 })
   }
+  if (!Number.isInteger(score) || score < 0 || score > 100_000) {
+    return NextResponse.json({ error: 'Invalid score value.' }, { status: 400 })
+  }
 
   const now = new Date()
   const cfg = GAME_CONFIGS[gameType]

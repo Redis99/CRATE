@@ -3,12 +3,22 @@ import { Keypair } from '@solana/web3.js'
 import { prisma } from '@/lib/prisma'
 import { encryptPrivateKey } from '@/lib/encrypt'
 import { registerDepositAddress } from '@/lib/helius'
+import { getServerUser } from '@/lib/auth'
 
 export async function POST(req: NextRequest) {
   try {
-    const { id, email, username } = await req.json()
+    // ID e email vêm sempre da sessão Supabase verificada no servidor
+    // — nunca do corpo da request (evita criação de usuários com IDs arbitrários)
+    const authUser = await getServerUser()
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized. Complete Supabase auth first.' }, { status: 401 })
+    }
 
-    if (!id || !email || !username) {
+    const { username } = await req.json()
+    const id    = authUser.id
+    const email = authUser.email ?? ''
+
+    if (!username) {
       return NextResponse.json({ error: 'Dados inválidos.' }, { status: 400 })
     }
 

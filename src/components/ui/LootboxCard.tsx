@@ -71,9 +71,10 @@ export function LootboxCard({ item, onOpen, opening, onDestroy, selectMode, sele
       </div>
 
       {/* Source */}
-      <p className="text-gray-600 text-xs mb-3">{SOURCE_LABEL[item.source] ?? item.source}</p>
+      <p className="text-gray-600 text-xs flex-1">{SOURCE_LABEL[item.source] ?? item.source}</p>
 
-      {/* Qty selector + open button */}
+      {/* Qty selector + open button — mt-auto empurra para o fundo */}
+      <div className="mt-auto flex flex-col gap-1.5">
       {onOpen && (
         <>
           <div className="flex items-center justify-between mb-2">
@@ -109,6 +110,7 @@ export function LootboxCard({ item, onOpen, opening, onDestroy, selectMode, sele
             Destroy
           </button>
         )}
+      </div>
       </div>
     </div>
   )
