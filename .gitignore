@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Documentos internos (marketing, blog — compilados separadamente)
+/docs
+
 # Claude Code (configurações locais do agente)
 .claude/
 
