@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { NotificationBell } from '@/components/layout/NotificationBell'
 
 const navItems = [
   {
@@ -135,12 +136,15 @@ export function GameSidebar() {
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-60 bg-[#0d0d15] border-r border-gray-800/60 flex flex-col z-30">
-      {/* Logo */}
-      <div className="px-5 py-5 border-b border-gray-800/60">
-        <h1 className="text-white font-bold text-base leading-tight">
-          Inside the <span className="text-blue-500">Crate</span>
-        </h1>
-        <p className="text-gray-600 text-xs mt-0.5">Idle Mining</p>
+      {/* Logo + Notificações */}
+      <div className="px-5 py-5 border-b border-gray-800/60 flex items-start justify-between">
+        <div>
+          <h1 className="text-white font-bold text-base leading-tight">
+            Inside the <span className="text-blue-500">Crate</span>
+          </h1>
+          <p className="text-gray-600 text-xs mt-0.5">Idle Mining</p>
+        </div>
+        <NotificationBell />
       </div>
 
       {/* Navigation */}

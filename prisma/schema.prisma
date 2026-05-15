@@ -442,6 +442,70 @@ model MinigameStatus {
 }
 
 // ─────────────────────────────────────────────
+// SHOP (catálogo gerenciado pelo admin)
+// ─────────────────────────────────────────────
+
+model ShopItem {
+  id          String   @id   // mesmo ID de shop-items.ts (ex: 'robot-common')
+  category    String
+  name        String
+  description String
+  price       Float          // preço atual em CRATE — editável pelo admin
+  rarity      String?
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  // Metadados específicos por tipo (gerado, bateria, slot, inventário)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("shop_items_config")
+}
+
+// ─────────────────────────────────────────────
+// LOOTBOX CONFIG (drop tables gerenciadas pelo admin)
+// ─────────────────────────────────────────────
+
+model LootboxConfig {
+  id          String      @id @default(uuid())
+  lootboxType String      // PARTS_CRATE, SUPPLY_CRATE, ou nome de evento sazonal
+  name        String
+  description String
+  priceCrate  Float       @default(0.01)
+  weeklyLimit Int?        // null = ilimitado
+  active      Boolean     @default(true)
+  seasonal    Boolean     @default(false)
+  startsAt    DateTime?   // para eventos sazonais
+  endsAt      DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  dropEntries LootboxDropEntry[]
+
+  @@map("lootbox_configs")
+}
+
+model LootboxDropEntry {
+  id             String        @id @default(uuid())
+  lootboxConfigId String
+  lootboxConfig  LootboxConfig @relation(fields: [lootboxConfigId], references: [id], onDelete: Cascade)
+
+  // O que dropa
+  dropType    LootboxDropType
+  rarity      Rarity?         // para peças, equipamentos, robôs e base upgrades aleatórios
+  minQuantity Int             @default(1)
+  maxQuantity Int             @default(1)
+
+  // Peso relativo (admin define; sistema normaliza para %)
+  weight      Float           @default(1)
+
+  // Item específico (futuro — para itens únicos definidos pelo admin)
+  specificName String?
+
+  @@map("lootbox_drop_entries")
+}
+
+// ─────────────────────────────────────────────
 // CRAFTING (banco de dados — gerenciado pelo admin)
 // ─────────────────────────────────────────────
 
@@ -670,4 +734,12 @@ enum CraftOutputType {
   ROBOT
   EQUIPMENT
   BASE_UPGRADE
+}
+
+enum LootboxDropType {
+  ROBOT
+  EQUIPMENT
+  BASE_UPGRADE
+  PART
+  CONSUMABLE
 }

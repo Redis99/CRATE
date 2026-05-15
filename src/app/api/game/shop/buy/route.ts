@@ -24,6 +24,10 @@ export async function POST(req: NextRequest) {
   const item = getShopItem(itemId)
   if (!item) return NextResponse.json({ error: 'Item not found in shop.' }, { status: 404 })
 
+  // Verifica se o item está ativo no banco (se existir no banco)
+  const dbItem = await prisma.shopItem.findUnique({ where: { id: itemId }, select: { price: true, active: true } })
+  if (dbItem && !dbItem.active) return NextResponse.json({ error: 'Item not available.' }, { status: 400 })
+
   const profile = await prisma.user.findUnique({
     where: { id: user.id },
     select: {
