@@ -238,7 +238,7 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     winTarget:    5,
     winLabel:     'obstacles',
     slug:         'orbital-jump',
-    available:    false,
+    available:    true,
     controls: {
       keyboard: [
         { input: 'Space / ↑', action: 'Jump / Flap' },
