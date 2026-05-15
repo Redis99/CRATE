@@ -12,6 +12,9 @@ import { BASE_SLOT_LABELS, BASE_SLOT_EFFECTS } from '@/lib/game-constants'
 import { CategoryTag } from '@/components/game/CategoryTag'
 import { RobotCard } from '@/components/game/RobotCard'
 import type { RobotCardData } from '@/components/game/RobotCard'
+import { PartCard } from '@/components/ui/PartCard'
+import { ConsumableCard } from '@/components/ui/ConsumableCard'
+import { LootboxCard } from '@/components/ui/LootboxCard'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -607,20 +610,14 @@ function PartsTab({ items, onDestroy, selectMode, selected, onToggleSelect }: { 
   return (
     <div className="grid grid-cols-3 gap-3">
       {items.map((p) => (
-        <div key={p.id} className={`border rounded-xl p-3 bg-[#0d0d15] ${RARITY_BORDER_COLOR[p.rarity]}`}>
-          <div className="flex items-start justify-between mb-1">
-            <div className="flex items-center gap-1.5">
-              {selectMode && <SelectCheckbox id={p.id} selected={selected} onToggle={onToggleSelect} />}
-              <span className={`text-xs font-medium ${RARITY_BORDER_COLOR[p.rarity].split(' ')[0]}`}>{RARITY_LABEL[p.rarity as Rarity]}</span>
-            </div>
-            <span className="text-white text-sm font-bold">×{p.quantity}</span>
-          </div>
-          <p className="text-white text-xs font-medium truncate mt-1">{p.partType}</p>
-          <p className="text-gray-600 text-xs">{p.category}</p>
-          <div className="mt-2 flex justify-end">
-            <DestroyButton itemId={p.id} itemType="part" isLegendary={p.rarity === 'LEGENDARY'} onDestroy={onDestroy} />
-          </div>
-        </div>
+        <PartCard
+          key={p.id}
+          part={p}
+          onDestroy={(id) => onDestroy(id, 'part')}
+          selectMode={selectMode}
+          selected={selected?.has(p.id)}
+          onToggle={onToggleSelect}
+        />
       ))}
     </div>
   )
@@ -632,34 +629,18 @@ function ConsumablesTab({ items, onDestroy, onUse, selectMode, selected, onToggl
   onUse: (item: Consumable) => void
 } & SelectProps) {
   if (!items.length) return <EmptyTab message="No consumables in inventory." />
-
-  const typeLabel = (type: string, value: number) => {
-    if (type === 'REPAIR_KIT') return `Battery +${value} energy`
-    if (type === 'BOOST_TEMP') return `Temp Boost +${value}%`
-    return type
-  }
-
   return (
     <div className="grid grid-cols-3 gap-3">
       {items.map((c) => (
-        <div key={c.id} className="border border-gray-700/50 rounded-xl p-3 bg-[#0d0d15]">
-          <div className="flex justify-between items-start mb-1">
-            <div className="flex items-center gap-1.5">
-              {selectMode && <SelectCheckbox id={c.id} selected={selected} onToggle={onToggleSelect} />}
-              <span className="text-gray-400 text-xs">{c.consumableType === 'REPAIR_KIT' ? '🔋' : '⚡'}</span>
-            </div>
-            <span className="text-white text-sm font-bold">×{c.quantity}</span>
-          </div>
-          <p className="text-white text-xs font-medium mb-3">{typeLabel(c.consumableType, c.value)}</p>
-          {c.consumableType === 'REPAIR_KIT' && (
-            <ActionButton variant="outline" size="sm" fullWidth onClick={() => onUse(c)} className="mb-1.5">
-              Use
-            </ActionButton>
-          )}
-          <div className="flex justify-end">
-            <DestroyButton itemId={c.id} itemType="consumable" isLegendary={false} onDestroy={onDestroy} />
-          </div>
-        </div>
+        <ConsumableCard
+          key={c.id}
+          item={c}
+          onUse={onUse}
+          onDestroy={(id) => onDestroy(id, 'consumable')}
+          selectMode={selectMode}
+          selected={selected?.has(c.id)}
+          onToggle={onToggleSelect}
+        />
       ))}
     </div>
   )
@@ -669,44 +650,21 @@ function LootboxesTab({ items, onDestroy, onOpen, opening, selectMode, selected,
   items: Lootbox[]; onDestroy: (id: string, type: ItemType) => void
   onOpen: (lootboxType: string, qty: number) => void; opening: boolean
 } & SelectProps) {
-  const [quantities, setQuantities] = useState<Record<string, number>>({})
   if (!items.length) return <EmptyTab message="No lootboxes in inventory. Purchase them in the Shop." />
-
-  const sourceLabel: Record<string, string> = {
-    purchased: 'Purchased', ranking: 'Ranking reward',
-    mission: 'Mission reward', weekly_drop: 'Weekly Drop',
-  }
-
   return (
     <div className="grid grid-cols-3 gap-3">
-      {items.map((lb) => {
-        const qty = quantities[lb.id] ?? 1
-        return (
-          <div key={lb.id} className="border border-purple-700/30 rounded-xl p-3 bg-[#0d0d15]">
-            <div className="flex justify-between items-start mb-1">
-              <div className="flex items-center gap-1.5">
-                {selectMode && <SelectCheckbox id={lb.id} selected={selected} onToggle={onToggleSelect} />}
-                <span className="text-purple-400 text-xs font-medium">
-                  {lb.lootboxType === 'PARTS_CRATE' ? 'Parts Crate' : 'Supply Crate'}
-                </span>
-              </div>
-              <span className="text-white text-sm font-bold">×{lb.quantity}</span>
-            </div>
-            <p className="text-gray-600 text-xs mb-3">{sourceLabel[lb.source] ?? lb.source}</p>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-600 text-xs">Qty</span>
-              <QuantityStepper value={qty} min={1} max={Math.min(10, lb.quantity)}
-                onChange={(v) => setQuantities((prev) => ({ ...prev, [lb.id]: v }))} />
-            </div>
-            <ActionButton variant="purple" size="sm" fullWidth onClick={() => onOpen(lb.lootboxType, qty)} loading={opening} loadingText="Opening..." className="mb-1.5">
-              {`Open ${qty}×`}
-            </ActionButton>
-            <div className="flex justify-end">
-              <DestroyButton itemId={lb.id} itemType="lootbox" isLegendary={false} onDestroy={onDestroy} />
-            </div>
-          </div>
-        )
-      })}
+      {items.map((lb) => (
+        <LootboxCard
+          key={lb.id}
+          item={lb}
+          onOpen={onOpen}
+          opening={opening}
+          onDestroy={(id) => onDestroy(id, 'lootbox')}
+          selectMode={selectMode}
+          selected={selected?.has(lb.id)}
+          onToggle={onToggleSelect}
+        />
+      ))}
     </div>
   )
 }
