@@ -213,7 +213,7 @@ interface Props {
   onResult:     (r: GameResult) => void
 }
 
-export function BlockFallGame({ difficulty, winTarget, running, timeLimitSec, onResult }: Props) {
+export function CapsuleDropGame({ difficulty, winTarget, running, timeLimitSec, onResult }: Props) {
   const canvasRef  = useRef<HTMLCanvasElement>(null)
   const stateRef   = useRef<State | null>(null)
   const rafRef     = useRef<number>(0)

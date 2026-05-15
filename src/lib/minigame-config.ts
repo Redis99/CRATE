@@ -176,11 +176,11 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
   BLOCK_FALL: {
     label:        'Capsule Drop',
     description:  'Match 4+ colors to score points or eliminate viruses. First condition wins.',
-    timeLimitSec: 120,
+    timeLimitSec: 60,
     dropChance:   0.18,
-    winTarget:    40,     // pontos alvo no nível 1 (alternativa: eliminar todas as viroses)
+    winTarget:    40,
     winLabel:     'pts',
-    slug:         'block-fall',
+    slug:         'capsule-drop',
     available:    true,
     winTargetsByDiff: { 1: 40, 2: 60, 3: 80, 4: 100 },
     controls: {
