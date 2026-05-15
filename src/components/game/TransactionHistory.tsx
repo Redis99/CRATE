@@ -139,7 +139,8 @@ export function TransactionHistory({ transactions }: TransactionHistoryProps) {
                   <div>
                     <p className="text-gray-300 text-sm">{TX_TYPE_LABEL[tx.type] ?? tx.type}</p>
                     <p className="text-gray-600 text-xs">{formatDate(tx.createdAt)}</p>
-                    {tx.txHash && (
+                    {/* Link on-chain apenas para depósitos e saques reais */}
+                    {tx.txHash && ['DEPOSIT', 'WITHDRAW'].includes(tx.type) && (
                       <a href={explorerUrl(tx.txHash)} target="_blank" rel="noopener noreferrer"
                         className="text-blue-500/70 hover:text-blue-400 text-xs font-mono transition-colors">
                         {shortHash(tx.txHash)} ↗
