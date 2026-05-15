@@ -212,12 +212,12 @@ export function SpaceBotGame({ difficulty, winTarget, running, timeLimitSec, onR
       for (const lane of s.lanes) {
         if (lane.row !== s.robotRow) continue
         const period = lane.w + lane.gap
-        // Verifica posições de obstáculos ao redor
-        for (let k = -2; k <= Math.ceil(BOARD_W / period) + 2; k++) {
+        // Com phase normalizada, calcular quais k's cobrem a área visível ao robô
+        const kMin = Math.floor((robotLeft - lane.phase - lane.w) / period) - 1
+        const kMax = Math.ceil((robotRight - lane.phase) / period) + 1
+        for (let k = kMin; k <= kMax; k++) {
           const obsX = lane.phase + k * period
-          if (obsX + lane.w + shrink < robotLeft + shrink) continue
-          if (obsX - shrink > robotRight - shrink) break
-          if (obsX + shrink < robotRight - shrink && obsX + lane.w - shrink > robotLeft + shrink) {
+          if (obsX + lane.w - shrink > robotLeft + shrink && obsX + shrink < robotRight - shrink) {
             return true
           }
         }
@@ -351,9 +351,14 @@ export function SpaceBotGame({ difficulty, winTarget, running, timeLimitSec, onR
       for (const lane of s.lanes) {
         lane.phase += lane.speed * dtSec * lane.dir
         const period = lane.w + lane.gap
+        // Normaliza phase para [0, period) — garante spawn contínuo independente do tempo
+        lane.phase = ((lane.phase % period) + period) % period
         const py = BOARD_Y + lane.row * CELL
 
-        for (let k = -2; k <= Math.ceil(BOARD_W/period)+2; k++) {
+        // k range cobre toda a área visível + margem de 1 período em cada lado
+        const kMin = -1
+        const kMax = Math.ceil(BOARD_W / period) + 1
+        for (let k = kMin; k <= kMax; k++) {
           const obsX = lane.phase + k * period
           const px   = BOARD_X + obsX
           if (px + lane.w < BOARD_X - 20 || px > BOARD_X + BOARD_W + 20) continue
