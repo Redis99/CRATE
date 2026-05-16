@@ -1,6 +1,7 @@
 import 'server-only'
 import { prisma } from '@/lib/prisma'
 import { effectiveER, effectiveERWithEquipment, durabilityDecayPerBlock } from '@/lib/game-math'
+import { computeCodexBonuses } from '@/lib/codex'
 
 export { effectiveER }
 
@@ -58,16 +59,36 @@ export async function processBlock() {
 
   // 1b. Base upgrades aplicados de todos os jogadores ativos
   const allActiveUserIds = [...new Set(activeRobots.map((r) => r.userId))]
-  const allBaseUpgrades = await prisma.baseUpgrade.findMany({
-    where: { userId: { in: allActiveUserIds }, isApplied: true },
-    select: { userId: true, effectType: true, effectValue: true, effectType2: true, effectValue2: true },
-  })
+  const [allBaseUpgrades, allCodexCollections, allCodexEntries] = await Promise.all([
+    prisma.baseUpgrade.findMany({
+      where: { userId: { in: allActiveUserIds }, isApplied: true },
+      select: { userId: true, effectType: true, effectValue: true, effectType2: true, effectValue2: true },
+    }),
+    prisma.codexCollection.findMany({ where: { active: true } }),
+    prisma.codexEntry.findMany({
+      where: { userId: { in: allActiveUserIds } },
+      select: { userId: true, collection: true },
+    }),
+  ])
 
   // Agrupa base upgrades por userId
   const baseUpgradesByUser = new Map<string, typeof allBaseUpgrades>()
   for (const upg of allBaseUpgrades) {
     if (!baseUpgradesByUser.has(upg.userId)) baseUpgradesByUser.set(upg.userId, [])
     baseUpgradesByUser.get(upg.userId)!.push(upg)
+  }
+
+  // Agrupa codex entries por userId e computa bônus
+  const codexEntriesByUser = new Map<string, Array<{ collection: string }>>()
+  for (const entry of allCodexEntries) {
+    if (!codexEntriesByUser.has(entry.userId)) codexEntriesByUser.set(entry.userId, [])
+    codexEntriesByUser.get(entry.userId)!.push(entry)
+  }
+  const codexBonusByUser = new Map<string, number>()
+  for (const userId of allActiveUserIds) {
+    const entries = codexEntriesByUser.get(userId) ?? []
+    const { erPct } = computeCodexBonuses(allCodexCollections, entries)
+    codexBonusByUser.set(userId, erPct)
   }
 
   if (activeRobots.length === 0) {
@@ -77,7 +98,7 @@ export async function processBlock() {
     return { blockNumber: block.id, totalHashPower: 0, playersRewarded: 0, skipped: false }
   }
 
-  // 2. Agrupa ER efetivo por usuário — inclui equipamentos + base upgrades
+  // 2. Agrupa ER efetivo por usuário — inclui equipamentos + base upgrades + codex
   // Mesma fórmula do display (calculateFleetER), garantindo consistência
   const userERMap = new Map<string, number>()
   for (const robot of activeRobots) {
@@ -85,8 +106,8 @@ export async function processBlock() {
     const upgrades   = baseUpgradesByUser.get(robot.userId) ?? []
     const boosted    = effectiveERWithEquipment(robot.hashPower, equips)
 
-    // Aplica GLOBAL_EFFICIENCY_PCT e HASH_POWER_PCT das base upgrades
-    let globalPct = 0
+    // Aplica GLOBAL_EFFICIENCY_PCT e HASH_POWER_PCT das base upgrades + codex
+    let globalPct = codexBonusByUser.get(robot.userId) ?? 0
     for (const upg of upgrades) {
       if (upg.effectType  === 'GLOBAL_EFFICIENCY_PCT' || upg.effectType  === 'HASH_POWER_PCT') globalPct += upg.effectValue
       if (upg.effectType2 === 'GLOBAL_EFFICIENCY_PCT' || upg.effectType2 === 'HASH_POWER_PCT') globalPct += (upg.effectValue2 ?? 0)

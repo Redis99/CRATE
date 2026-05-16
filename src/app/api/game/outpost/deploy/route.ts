@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
 
   if (!robot) return NextResponse.json({ error: 'Robot not found.' }, { status: 404 })
   if (robot.isActive) return NextResponse.json({ error: 'Robot is already deployed.' }, { status: 409 })
+  if (robot.inCodex)  return NextResponse.json({ error: 'This robot is permanently registered in the Codex.' }, { status: 409 })
   if (robot.durability === 0) return NextResponse.json({ error: 'Robot has 0% durability and cannot be deployed.' }, { status: 400 })
 
   await prisma.robot.update({

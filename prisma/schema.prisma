@@ -91,6 +91,7 @@ model Robot {
   durability    Float       @default(100) // 0-100%
   isActive      Boolean     @default(false) // ativo no Outpost
   outpostSlot   Int?        // slot ocupado (1-6)
+  inCodex       Boolean     @default(false) // permanentemente registrado no Codex
   createdAt     DateTime    @default(now())
 
   equipments    RobotEquipment[]
@@ -335,6 +336,7 @@ model CodexEntry {
   user          User        @relation(fields: [userId], references: [id])
 
   itemType      CodexItemType
+  itemName      String      // nome do item registrado (preservado após remoção do inventário)
   collection    String
   rarity        Rarity
   registeredAt  DateTime    @default(now())
@@ -349,6 +351,39 @@ model CodexEntry {
   baseUpgrade   BaseUpgrade? @relation(fields: [baseUpgradeId], references: [id])
 
   @@map("codex_entries")
+}
+
+model CodexCollection {
+  id            String        @id @default(uuid())
+  name          String        @unique   // deve corresponder ao campo collection dos robôs
+  description   String
+  itemType      CodexItemType @default(ROBOT)
+  totalRequired Int           // quantidade de itens para completar a coleção
+
+  // Bônus individual (por item registrado)
+  bonusPerItemErPct  Float    @default(0)   // % ER global por item registrado
+
+  // Bônus de completude (quando count >= totalRequired)
+  completionErPct    Float    @default(0)   // % ER global adicional
+  completionPdPct    Float    @default(0)   // % redução PD
+  completionSlots    Int      @default(0)   // slots de outpost extras (one-time grant)
+
+  active         Boolean     @default(true)
+  sortOrder      Int         @default(0)
+  createdAt      DateTime    @default(now())
+
+  @@map("codex_collections")
+}
+
+// Rastreia quais bônus de completude (slots) já foram concedidos — evita dupla concessão
+model CodexCompletionReward {
+  id             String   @id @default(uuid())
+  userId         String
+  collectionName String
+  grantedAt      DateTime @default(now())
+
+  @@unique([userId, collectionName])
+  @@map("codex_completion_rewards")
 }
 
 // ─────────────────────────────────────────────

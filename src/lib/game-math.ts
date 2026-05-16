@@ -37,18 +37,21 @@ export function estimatedHoursRemaining(durability: number, energyRate: number):
 // ─── Cálculos de frota ───────────────────────────────────────────────────────
 
 export interface FleetERBreakdown {
-  total:            number  // ER efetivo total (com durabilidade + upgrades + minigame boost)
+  total:            number  // ER efetivo total (com durabilidade + upgrades + minigame boost + codex)
   base:             number  // soma dos hashPower base de todos os robôs
   equipBonus:       number  // bônus dos equipamentos instalados
   baseUpgradePct:   number  // % de eficiência global da melhoria de base
   baseUpgradeBonus: number  // bônus absoluto vindo do upgrade (para exibição)
   minigameBonus:    number  // boost flat temporário de minigame (0 se não ativo)
+  codexBonusPct:    number  // % de eficiência global do Codex
+  codexBonus:       number  // bônus absoluto do Codex (para exibição)
 }
 
 export interface FleetPDBreakdown {
-  total:       number  // PD total da frota por hora
-  base:        number  // PD base (sem equipamentos)
-  equipSaving: number  // redução pelos equipamentos instalados
+  total:        number  // PD total da frota por hora
+  base:         number  // PD base (sem equipamentos)
+  equipSaving:  number  // redução pelos equipamentos instalados
+  codexSaving:  number  // redução pelo Codex (para exibição)
 }
 
 /**
@@ -58,10 +61,11 @@ export interface FleetPDBreakdown {
 export function calculateFleetER(
   robots: Array<{ hashPower: number; durability: number; equipments?: EquipmentEffect[] }>,
   baseUpgrades: Array<EquipmentEffect>,
-  minigameBoostER = 0   // flat ER bonus de minigame ativo
+  minigameBoostER   = 0,  // flat ER bonus de minigame ativo
+  codexBonusErPct   = 0   // % eficiência global do Codex
 ): FleetERBreakdown {
   // Coleta o % de eficiência global das melhorias de base aplicadas
-  let globalPct = 0
+  let baseUpgradePct = 0
   for (const upg of baseUpgrades) {
     const effects = [
       { type: upg.effectType,  value: upg.effectValue },
@@ -69,9 +73,11 @@ export function calculateFleetER(
     ]
     for (const { type, value } of effects) {
       if (!type || value == null) continue
-      if (type === 'GLOBAL_EFFICIENCY_PCT' || type === 'HASH_POWER_PCT') globalPct += value
+      if (type === 'GLOBAL_EFFICIENCY_PCT' || type === 'HASH_POWER_PCT') baseUpgradePct += value
     }
   }
+
+  const globalPct = baseUpgradePct + codexBonusErPct
 
   let base        = 0
   let withEquip   = 0
@@ -87,17 +93,19 @@ export function calculateFleetER(
   }
 
   const equipBonus       = withEquip - base
-  const baseUpgradeBonus = Math.round((withEquip * globalPct / 100) * 10) / 10
-
-  const minigameBonus = Math.round(minigameBoostER * 10) / 10
+  const baseUpgradeBonus = Math.round((withEquip * baseUpgradePct / 100) * 10) / 10
+  const codexBonus       = Math.round((withEquip * codexBonusErPct / 100) * 10) / 10
+  const minigameBonus    = Math.round(minigameBoostER * 10) / 10
 
   return {
     total:            Math.round((totalEffect + minigameBoostER) * 10) / 10,
     base:             Math.round(base        * 10) / 10,
     equipBonus:       Math.round(equipBonus  * 10) / 10,
-    baseUpgradePct:   globalPct,
+    baseUpgradePct,
     baseUpgradeBonus,
     minigameBonus,
+    codexBonusPct:    codexBonusErPct,
+    codexBonus,
   }
 }
 
@@ -105,7 +113,8 @@ export function calculateFleetER(
  * Calcula o PD total da frota com reduções dos equipamentos.
  */
 export function calculateFleetPD(
-  robots: Array<{ energyRate: number; equipments?: EquipmentEffect[] }>
+  robots: Array<{ energyRate: number; equipments?: EquipmentEffect[] }>,
+  codexBonusPdPct = 0   // % redução PD do Codex
 ): FleetPDBreakdown {
   let base  = 0
   let total = 0
@@ -117,10 +126,15 @@ export function calculateFleetPD(
     total += pd
   }
 
+  const afterEquip    = total
+  const withCodex     = total * (1 - codexBonusPdPct / 100)
+  const codexSaving   = Math.round((afterEquip - withCodex) * 10) / 10
+
   return {
-    total:       Math.round(total        * 10) / 10,
-    base:        Math.round(base         * 10) / 10,
-    equipSaving: Math.round((base-total) * 10) / 10,
+    total:       Math.round(withCodex       * 10) / 10,
+    base:        Math.round(base            * 10) / 10,
+    equipSaving: Math.round((base - afterEquip) * 10) / 10,
+    codexSaving,
   }
 }
 

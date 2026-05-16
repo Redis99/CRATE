@@ -50,6 +50,12 @@ export function ERWidget({ er }: { er: FleetERBreakdown }) {
             <span className="font-mono">+{er.baseUpgradePct}% (+{er.baseUpgradeBonus.toFixed(1)})</span>
           </div>
         )}
+        {(er.codexBonusPct ?? 0) > 0 && (
+          <div className="flex justify-between text-yellow-500/70">
+            <span>🏆 Codex bonus</span>
+            <span className="font-mono">+{(er.codexBonusPct ?? 0)}% (+{(er.codexBonus ?? 0).toFixed(1)})</span>
+          </div>
+        )}
         {(er.minigameBonus ?? 0) > 0 && (
           <div className="flex justify-between text-yellow-400/70">
             <span>⚡ Minigame boost</span>
@@ -90,6 +96,12 @@ export function PDWidget({ pd }: { pd: FleetPDBreakdown }) {
           <div className="flex justify-between text-teal-400/70">
             <span>− Equipment</span>
             <span className="font-mono">−{pd.equipSaving.toFixed(1)}</span>
+          </div>
+        )}
+        {(pd.codexSaving ?? 0) > 0 && (
+          <div className="flex justify-between text-yellow-500/70">
+            <span>🏆 Codex bonus</span>
+            <span className="font-mono">−{(pd.codexSaving ?? 0).toFixed(1)}</span>
           </div>
         )}
       </div>

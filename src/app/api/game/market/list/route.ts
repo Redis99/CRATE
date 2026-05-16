@@ -28,8 +28,9 @@ export async function POST(req: NextRequest) {
   switch (itemType) {
     case 'ROBOT': {
       const robot = await prisma.robot.findFirst({ where: { id: itemId, userId: user.id }, include: { listing: true } })
-      if (!robot)        return NextResponse.json({ error: 'Robot not found.' }, { status: 404 })
+      if (!robot)         return NextResponse.json({ error: 'Robot not found.' }, { status: 404 })
       if (robot.isActive) return NextResponse.json({ error: 'Recall the robot from the Outpost before listing.' }, { status: 409 })
+      if (robot.inCodex)  return NextResponse.json({ error: 'This robot is permanently registered in the Codex.' }, { status: 409 })
       if (robot.listing)  return NextResponse.json({ error: 'Robot is already listed.' }, { status: 409 })
 
       await prisma.marketListing.create({

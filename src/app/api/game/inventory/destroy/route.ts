@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
       const robot = await prisma.robot.findFirst({ where: { id: itemId, userId: user.id } })
       if (!robot) return NextResponse.json({ error: 'Robot not found.' }, { status: 404 })
       if (robot.isActive) return NextResponse.json({ error: 'Cannot destroy a deployed robot. Recall it first.' }, { status: 409 })
+      if (robot.inCodex)  return NextResponse.json({ error: 'Cannot destroy a robot registered in the Codex.' }, { status: 409 })
       await prisma.robot.delete({ where: { id: itemId } })
       break
     }

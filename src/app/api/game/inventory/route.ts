@@ -16,7 +16,7 @@ export async function GET(_req: NextRequest) {
       slotsConsumables: true,
       slotsLootboxes: true,
       robots: {
-        where: { isActive: false },
+        where: { isActive: false, inCodex: false },
         select: {
           id: true, name: true, collection: true,
           rarity: true, hashPower: true, energyRate: true, durability: true,
