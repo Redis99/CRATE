@@ -2,6 +2,7 @@ import 'server-only'
 import { prisma } from '@/lib/prisma'
 import { effectiveER, effectiveERWithEquipment, durabilityDecayPerBlock } from '@/lib/game-math'
 import { computeCodexBonuses } from '@/lib/codex'
+import { incrementMission } from '@/lib/mission-progress'
 
 export { effectiveER }
 
@@ -204,6 +205,9 @@ export async function processBlock() {
       data: { durability: 0, isActive: false, outpostSlot: null },
     }),
   ].filter(Boolean))
+
+  // 8b. Incrementa missões de mineração para cada jogador recompensado
+  void Promise.all(userIds.map((id) => incrementMission(id, 'MINING', 1)))
 
   // 9. Notifica donos de robôs que pararam (após writes principais)
   if (robotsToDeactivate.length > 0) {

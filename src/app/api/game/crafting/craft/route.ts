@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { incrementMission } from '@/lib/mission-progress'
 
 type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
 type DbRecipe = NonNullable<Awaited<ReturnType<typeof prisma.craftingRecipe.findFirst>>>
@@ -152,6 +153,8 @@ export async function POST(req: NextRequest) {
       await tx.pendingCraft.update({ where: { id: pending.id }, data: { claimed: true, claimedAt: now } })
     }
   })
+
+  void incrementMission(user.id, 'CRAFTING', 1)
 
   return NextResponse.json({
     success:     true,

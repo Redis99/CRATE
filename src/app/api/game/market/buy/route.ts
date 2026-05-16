@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { incrementMission } from '@/lib/mission-progress'
 
 const MARKET_FEE = 0.05  // 5%
 
@@ -71,6 +72,9 @@ export async function POST(req: NextRequest) {
       },
     })
   })
+
+  void incrementMission(user.id,          'MARKET', 1)
+  void incrementMission(listing.sellerId, 'MARKET', 1)
 
   return NextResponse.json({ success: true })
 }

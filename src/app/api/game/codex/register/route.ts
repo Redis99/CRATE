@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { incrementMission } from '@/lib/mission-progress'
 
 export async function POST(req: NextRequest) {
   const user = await getServerUser()
@@ -105,6 +106,8 @@ export async function POST(req: NextRequest) {
 
     return [e]
   })
+
+  void incrementMission(user.id, 'CODEX', 1)
 
   return NextResponse.json({
     success: true,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { incrementMission } from '@/lib/mission-progress'
 
 export async function POST(req: NextRequest) {
   const user = await getServerUser()
@@ -50,6 +51,8 @@ export async function POST(req: NextRequest) {
     where: { id: robotId },
     data: { isActive: true, outpostSlot: slot },
   })
+
+  void incrementMission(user.id, 'FIRST_STEPS', 1)
 
   return NextResponse.json({ success: true })
 }

@@ -6,6 +6,7 @@ import {
   saveDropToInventory, checkInventorySpace,
   type DropResultType,
 } from '@/lib/lootbox'
+import { incrementMission } from '@/lib/mission-progress'
 
 const MAX_OPEN_AT_ONCE = 10
 
@@ -170,6 +171,10 @@ export async function POST(req: NextRequest) {
         data:  { quantity: newQty },
       })
     }
+  }
+
+  if (drops.length > 0) {
+    void incrementMission(user.id, 'LOOTBOX', drops.length)
   }
 
   return NextResponse.json({

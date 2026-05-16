@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { incrementMission } from '@/lib/mission-progress'
 import {
   GAME_CONFIGS, getCooldownMs, getDifficultyLevel, getWinTarget,
   getEffectiveDailyWins, getEffectiveGlobalGames, shouldResetGlobal,
@@ -195,6 +196,8 @@ export async function POST(req: NextRequest) {
       },
     })
   })
+
+  if (actualWon) void incrementMission(user.id, 'MINIGAMES', 1)
 
   return NextResponse.json({
     won:         actualWon,
