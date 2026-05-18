@@ -71,6 +71,9 @@ model User {
   notifications     Notification[]
   pendingCrafts     PendingCraft[]
 
+  // Ranking semanal — acumula ER contribuído nesta semana; resetado toda segunda
+  weeklyErContributed Float @default(0)
+
   @@map("users")
 }
 
@@ -607,6 +610,19 @@ model PendingCraft {
   claimedAt   DateTime?
 
   @@map("pending_crafts")
+}
+
+// ─────────────────────────────────────────────
+// RANKING SEMANAL
+// ─────────────────────────────────────────────
+
+model WeeklySnapshot {
+  id        String   @id @default(uuid())
+  weekStart DateTime @unique
+  entries   Json     // [{ userId, username, position, erTotal, rewarded }]
+  createdAt DateTime @default(now())
+
+  @@map("weekly_snapshots")
 }
 
 // ─────────────────────────────────────────────

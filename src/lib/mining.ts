@@ -182,17 +182,19 @@ export async function processBlock() {
 
   // 8. Executa writes em paralelo — Prisma ORM padrão (compatível com PgBouncer)
   await Promise.all([
-    // Saldos dos jogadores
-    ...userBalanceUpdates.map(({ userId, crate, sol, lc }) =>
-      prisma.user.update({
+    // Saldos dos jogadores + acumulador semanal de ER
+    ...userBalanceUpdates.map(({ userId, crate, sol, lc }) => {
+      const weeklyEr = userERMap.get(userId) ?? 0
+      return prisma.user.update({
         where: { id: userId },
         data: {
           ...(crate > 0 && { balanceCrate: { increment: crate } }),
           ...(sol   > 0 && { balanceSol:   { increment: sol   } }),
           ...(lc    > 0 && { balanceLc:    { increment: lc    } }),
+          weeklyErContributed: { increment: weeklyEr },
         },
       })
-    ),
+    }),
     // Recompensas em lote
     miningRewardsData.length > 0 && prisma.miningReward.createMany({ data: miningRewardsData }),
     // Durabilidade dos robôs ativos
