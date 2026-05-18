@@ -122,7 +122,7 @@ function roll(table: { weight: number; result: () => DropResultType }[]): DropRe
 export function generateRobotDrop(rarity: Rarity, dbTemplates?: DbRobotTemplate[]): DropResultType {
   // Se há templates no banco para esta raridade, usa um aleatório
   if (dbTemplates && dbTemplates.length > 0) {
-    const matching = dbTemplates.filter(t => t.rarity === rarity)
+    const matching = dbTemplates.filter(t => t.rarity?.toUpperCase() === rarity)
     if (matching.length > 0) {
       const tpl = pick(matching)
       const meta = tpl.metadata as Record<string, unknown>
@@ -150,7 +150,7 @@ export function generateRobotDrop(rarity: Rarity, dbTemplates?: DbRobotTemplate[
 }
 
 // Tipo para templates vindos do banco
-type DbRobotTemplate = { id: string; name: string; rarity: string; metadata: unknown }
+type DbRobotTemplate = { id: string; name: string; rarity: string | null; metadata: unknown }
 
 /**
  * Versão async — busca templates do banco e gera drop.
