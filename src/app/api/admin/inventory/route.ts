@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
       prisma.inventoryPart.findMany({
         where: partFullWhere,
         take: LIMIT, skip: (page - 1) * LIMIT,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { partType: 'asc' },
         select: {
           id: true, partType: true, rarity: true, quantity: true, category: true,
           user: { select: { username: true } },
@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
       prisma.consumable.findMany({
         where: conWhere,
         take: LIMIT, skip: (page - 1) * LIMIT,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { consumableType: 'asc' },
         select: {
           id: true, consumableType: true, value: true, quantity: true,
           user: { select: { username: true } },
