@@ -102,7 +102,8 @@ model Robot {
   energyRate    Float       @default(1)   // Power Draw (PD) — consumo de energia por hora
 
   // Por instância — estado individual do robô
-  durability    Float       @default(100) // valor absoluto (não %)
+  maxDurability Float?                   // valor base do template (para calcular % de desgaste)
+  durability    Float       @default(100) // valor atual (absoluto, não %)
   isActive      Boolean     @default(false) // ativo no Outpost
   outpostSlot   Int?        // slot ocupado (1-6)
   inCodex       Boolean     @default(false) // permanentemente registrado no Codex
