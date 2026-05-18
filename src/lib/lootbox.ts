@@ -8,7 +8,7 @@ type EffectType = 'HASH_POWER_FLAT' | 'HASH_POWER_PCT' | 'DURABILITY_LOSS_PCT' |
 type PartCategory = 'ENERGY' | 'MINING' | 'MAINTENANCE' | 'TERRAIN' | 'AI_SOFTWARE' | 'SPECIAL'
 
 export type DropResultType =
-  | { kind: 'robot';       name: string; collection: string; rarity: Rarity; hashPower: number; energyRate: number }
+  | { kind: 'robot';       name: string; collection: string; rarity: Rarity; hashPower: number; energyRate: number; durability?: number; templateId?: string }
   | { kind: 'equipment';   name: string; rarity: Rarity; effectType: EffectType; effectValue: number; effectType2?: EffectType; effectValue2?: number }
   | { kind: 'baseUpgrade'; name: string; rarity: Rarity; effectType: EffectType; effectValue: number; effectType2?: EffectType; effectValue2?: number }
   | { kind: 'part';        partType: string; category: PartCategory; rarity: Rarity; quantity: number }
@@ -128,11 +128,13 @@ export function generateRobotDrop(rarity: Rarity, dbTemplates?: DbRobotTemplate[
       const meta = tpl.metadata as Record<string, unknown>
       return {
         kind:       'robot',
-        name:       String(meta.robotName ?? tpl.name),
+        templateId: tpl.id,                                        // referência ao template
+        name:       String(meta.robotName ?? tpl.name),           // cache
         collection: String(meta.robotCollection ?? ''),
         rarity,
         hashPower:  Number(meta.hashPower  ?? ROBOT_ER[rarity][0]),
         energyRate: Number(meta.energyRate ?? ROBOT_PD[rarity][0]),
+        durability: Number(meta.durability ?? 100),
       }
     }
   }
@@ -343,12 +345,13 @@ export async function saveDropToInventory(userId: string, drop: DropResultType):
       await prisma.robot.create({
         data: {
           userId,
-          name: drop.name,
+          templateId: drop.templateId ?? null,      // referência ao template (se existir)
+          name:       drop.name,                    // cache do template
           collection: drop.collection,
-          rarity: drop.rarity,
-          hashPower: drop.hashPower,
+          rarity:     drop.rarity,
+          hashPower:  drop.hashPower,
           energyRate: drop.energyRate,
-          durability: 100,
+          durability: drop.durability ?? 100,       // valor base do template
           isActive: false,
         },
       })
