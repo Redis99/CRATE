@@ -28,14 +28,23 @@ export async function POST(req: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await req.json()
-  const { name, collection, rarity, hashPower, energyRate, price, active, description } = body
+  const { name, customId, collection, rarity, hashPower, energyRate, durability, price, active, description } = body
 
   if (!name || !rarity || !hashPower) {
     return NextResponse.json({ error: 'name, rarity and hashPower are required' }, { status: 400 })
   }
 
-  // ID estável baseado no nome (slug)
-  const id = `robot-specific-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${Date.now()}`
+  // ID personalizado (se fornecido) ou gerado pelo slug do nome
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+  const id = customId
+    ? `robot-${customId.toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/(^-|-$)/g, '')}`
+    : `robot-${slug}`
+
+  // Verifica se ID já existe
+  const existing = await prisma.shopItem.findUnique({ where: { id } })
+  if (existing) {
+    return NextResponse.json({ error: `ID "${id}" already exists. Choose a different custom ID.` }, { status: 409 })
+  }
 
   const item = await prisma.shopItem.create({
     data: {
@@ -45,14 +54,15 @@ export async function POST(req: NextRequest) {
       description: description ?? `${rarity} robot — ${collection ?? 'No collection'}`,
       price: price ?? 0,
       rarity,
-      active: active ?? false,  // começa inativo até o admin ativar
+      active: active ?? false,
       sortOrder: 0,
       metadata: {
-        specific: true,
-        robotName: name,
+        specific:        true,
+        robotName:       name,
         robotCollection: collection ?? '',
-        hashPower: Number(hashPower),
-        energyRate: Number(energyRate ?? 1),
+        hashPower:       Number(hashPower),
+        energyRate:      Number(energyRate ?? 1),
+        durability:      Number(durability ?? 100),
       },
     },
   })
@@ -65,7 +75,7 @@ export async function PUT(req: NextRequest) {
   const admin = await getAdminUser()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { id, name, collection, rarity, hashPower, energyRate, price, active, description } = await req.json()
+  const { id, name, collection, rarity, hashPower, energyRate, durability, price, active, description } = await req.json()
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
   const item = await prisma.shopItem.update({
@@ -77,11 +87,12 @@ export async function PUT(req: NextRequest) {
       rarity,
       active,
       metadata: {
-        specific: true,
-        robotName: name,
+        specific:        true,
+        robotName:       name,
         robotCollection: collection ?? '',
-        hashPower: Number(hashPower),
-        energyRate: Number(energyRate ?? 1),
+        hashPower:       Number(hashPower),
+        energyRate:      Number(energyRate ?? 1),
+        durability:      Number(durability ?? 100),
       },
     },
   })

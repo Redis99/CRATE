@@ -40,7 +40,7 @@ const RARITY_COLOR: Record<string, string> = {
 }
 
 const EMPTY_TPL = {
-  name: '', collection: '', rarity: 'COMMON',
+  name: '', customId: '', collection: '', rarity: 'COMMON',
   hashPower: 10, energyRate: 1, durability: 100,
   price: 0, active: false, description: '',
 }
@@ -144,7 +144,7 @@ export default function RobotsAdminPage() {
   function openNewTpl() { setEditTpl({ ...EMPTY_TPL }); setIsTplNew(true) }
   function openEditTpl(t: RobotTemplate) {
     setEditTpl({
-      id: t.id, name: t.metadata.robotName, collection: t.metadata.robotCollection,
+      id: t.id, customId: '', name: t.metadata.robotName, collection: t.metadata.robotCollection,
       rarity: t.rarity, hashPower: t.metadata.hashPower, energyRate: t.metadata.energyRate,
       durability: t.metadata.durability ?? 100,
       price: t.price, active: t.active, description: t.description,
@@ -316,8 +316,31 @@ export default function RobotsAdminPage() {
 
       {/* Template create/edit modal */}
       {editTpl && (
-        <Modal title={isTplNew ? 'New Robot' : 'Edit Template'}
+        <Modal title={isTplNew ? 'New Robot' : `Edit — ${editTpl.name}`}
           onClose={() => setEditTpl(null)}>
+
+          {/* ID (somente na criação) */}
+          {isTplNew ? (
+            <F label={<>Custom ID <span className="text-gray-600">(optional — auto-generated from name if empty)</span></>}>
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-gray-600 font-mono">robot-</span>
+                <input value={editTpl.customId} className="flex-1 ia font-mono"
+                  placeholder="sentinel-mk-vii"
+                  onChange={e => setEditTpl(p => ({ ...p!, customId: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') }))} />
+              </div>
+              <p className="text-xs text-gray-600 mt-1 font-mono">
+                Final ID: <span className="text-gray-400">robot-{editTpl.customId || (editTpl.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')) || '…'}</span>
+              </p>
+            </F>
+          ) : (
+            <div className="flex items-center gap-2 bg-gray-900/50 border border-gray-800 rounded px-3 py-1.5">
+              <span className="text-xs text-gray-500">ID:</span>
+              <span className="text-xs font-mono text-gray-300 flex-1">{editTpl.id}</span>
+              <button onClick={() => navigator.clipboard.writeText(editTpl.id ?? '')}
+                className="text-xs text-gray-600 hover:text-purple-400 transition-colors">copy</button>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <F label="Name"><input value={editTpl.name} className="w-full ia"
               onChange={e => setEditTpl(p => ({ ...p!, name: e.target.value }))}
@@ -452,6 +475,11 @@ export default function RobotsAdminPage() {
                       <span className="text-xs text-gray-500">PD {t.metadata.energyRate}</span>
                       {t.metadata.durability != null && <span className="text-xs text-gray-500">Energia {t.metadata.durability}</span>}
                       <span className="text-xs text-purple-300">{t.price} CRATE</span>
+                    </div>
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="text-xs text-gray-700 font-mono">{t.id}</span>
+                      <button onClick={() => navigator.clipboard.writeText(t.id)}
+                        className="text-xs text-gray-700 hover:text-purple-400 transition-colors">copy</button>
                     </div>
                   </div>
                   <div className="flex gap-1.5 shrink-0">
