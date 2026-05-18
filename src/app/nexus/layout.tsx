@@ -9,6 +9,7 @@ const NAV = [
   { href: '/nexus/crafting',      label: 'Crafting' },
   { href: '/nexus/lootbox',       label: 'Lootbox' },
   { href: '/nexus/shop',          label: 'Shop' },
+  { href: '/nexus/robots',        label: 'Robots' },
   { href: '/nexus/missions',      label: 'Missions' },
   { href: '/nexus/codex',         label: 'Codex' },
   { href: '/nexus/notifications', label: 'Notifications' },
