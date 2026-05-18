@@ -90,12 +90,19 @@ model Robot {
   userId        String
   user          User        @relation(fields: [userId], references: [id])
 
+  // Referência ao template (ShopItem category='robot-specific')
+  // Quando o template é editado, todos os robôs com esse templateId são atualizados
+  templateId    String?     // null = robô gerado aleatoriamente (sem template fixo)
+
+  // Cache do template — atualizados automaticamente quando o template muda
   name          String
-  collection    String      // ex: "Sentinel - Serie Artica"
+  collection    String      // ex: "Sentinel — Standard Series"
   rarity        Rarity
   hashPower     Float       // Extraction Rate (ER) base
   energyRate    Float       @default(1)   // Power Draw (PD) — consumo de energia por hora
-  durability    Float       @default(100) // 0-100%
+
+  // Por instância — estado individual do robô
+  durability    Float       @default(100) // valor absoluto (não %)
   isActive      Boolean     @default(false) // ativo no Outpost
   outpostSlot   Int?        // slot ocupado (1-6)
   inCodex       Boolean     @default(false) // permanentemente registrado no Codex
