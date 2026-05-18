@@ -3,12 +3,14 @@ import { getAdminUser } from '@/lib/admin-auth'
 import Link from 'next/link'
 
 const NAV = [
-  { href: '/nexus',              label: 'Dashboard' },
-  { href: '/nexus/withdrawals',  label: 'Withdrawals' },
-  { href: '/nexus/players',      label: 'Players' },
-  { href: '/nexus/crafting',     label: 'Crafting' },
-  { href: '/nexus/lootbox',      label: 'Lootbox' },
-  { href: '/nexus/shop',         label: 'Shop' },
+  { href: '/nexus',               label: 'Dashboard' },
+  { href: '/nexus/withdrawals',   label: 'Withdrawals' },
+  { href: '/nexus/players',       label: 'Players' },
+  { href: '/nexus/crafting',      label: 'Crafting' },
+  { href: '/nexus/lootbox',       label: 'Lootbox' },
+  { href: '/nexus/shop',          label: 'Shop' },
+  { href: '/nexus/missions',      label: 'Missions' },
+  { href: '/nexus/codex',         label: 'Codex' },
   { href: '/nexus/notifications', label: 'Notifications' },
 ]
 
