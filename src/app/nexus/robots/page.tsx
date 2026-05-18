@@ -179,6 +179,10 @@ export default function RobotsAdminPage() {
               <select value={editing.collection} className="w-full ia"
                 onChange={e => setEditing(p => ({ ...p!, collection: e.target.value }))}>
                 <option value="">— No collection —</option>
+                {/* Inclui o valor atual mesmo que não esteja na lista de Codex */}
+                {editing.collection && !collections.includes(editing.collection) && (
+                  <option value={editing.collection}>{editing.collection}</option>
+                )}
                 {collections.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
               {editing.collection && (
