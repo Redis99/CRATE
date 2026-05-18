@@ -282,7 +282,7 @@ export default function ItemsAdminPage() {
               <option value="">— No collection —</option>
               {collections.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            {editData.collection && <CollectionChip name={String(editData.collection)} />}
+            {editData.collection ? <CollectionChip name={String(editData.collection)} /> : null}
           </F>
           <div className="grid grid-cols-2 gap-3">
             <F label="Effect Type">

@@ -275,7 +275,7 @@ export default function RobotsAdminPage() {
               <option value="">— No collection —</option>
               {collections.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            {editData.collection && <CollectionChip name={String(editData.collection)} />}
+            {editData.collection ? <CollectionChip name={String(editData.collection)} /> : null}
           </F>
           <div className="grid grid-cols-3 gap-3">
             <F label="ER"><input type="number" step="0.1" value={Number(editData.hashPower ?? 0)} className="w-full ia"
