@@ -151,13 +151,12 @@ export default function RobotsAdminPage() {
           <div className="bg-[#0d0d1a] border border-purple-800/50 rounded-lg p-5 w-full max-w-lg my-4 space-y-3">
             <h2 className="text-sm font-bold text-purple-300">{isNew ? 'New Robot' : 'Edit Robot'}</h2>
 
-            <Field label="Name">
-              <input value={editing.name}
-                onChange={e => setEditing(p => ({ ...p!, name: e.target.value }))}
-                className="w-full input-admin" placeholder="e.g. Sentinel Mk.VII" />
-            </Field>
-
             <div className="grid grid-cols-2 gap-3">
+              <Field label="Name">
+                <input value={editing.name}
+                  onChange={e => setEditing(p => ({ ...p!, name: e.target.value }))}
+                  className="w-full input-admin" placeholder="e.g. Sentinel Mk.VII" />
+              </Field>
               <Field label="Rarity">
                 <select value={editing.rarity}
                   onChange={e => setEditing(p => ({ ...p!, rarity: e.target.value }))}
@@ -165,20 +164,40 @@ export default function RobotsAdminPage() {
                   {RARITIES.map(r => <option key={r}>{r}</option>)}
                 </select>
               </Field>
-              <Field label="Collection">
-                {/* Dropdown com coleções existentes + opção de digitar livremente */}
+            </div>
+
+            {/* Collection — campo separado, vira tag visual */}
+            <Field label="Collection tag (optional)">
+              <div className="flex items-center gap-2">
                 <input
                   list="collections-list"
                   value={editing.collection}
                   onChange={e => setEditing(p => ({ ...p!, collection: e.target.value }))}
-                  className="w-full input-admin"
-                  placeholder="Select or type…"
+                  className="flex-1 input-admin"
+                  placeholder="Select a collection or leave empty…"
                 />
-                <datalist id="collections-list">
-                  {collections.map(c => <option key={c} value={c} />)}
-                </datalist>
-              </Field>
-            </div>
+                {editing.collection && (
+                  <button type="button"
+                    onClick={() => setEditing(p => ({ ...p!, collection: '' }))}
+                    className="text-xs text-gray-500 hover:text-red-400 transition-colors px-1">
+                    ✕
+                  </button>
+                )}
+              </div>
+              <datalist id="collections-list">
+                {collections.map(c => <option key={c} value={c} />)}
+              </datalist>
+              {editing.collection && (
+                <div className="mt-1.5">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-900/40 border border-purple-700/40 text-purple-300">
+                    🏷 {editing.collection}
+                  </span>
+                </div>
+              )}
+              <p className="text-xs text-gray-600 mt-1">
+                Deve ser idêntico ao nome de uma coleção do Codex para o vínculo funcionar.
+              </p>
+            </Field>
 
             <div className="grid grid-cols-2 gap-3">
               <Field label="Extraction Rate (ER)">
@@ -271,6 +290,7 @@ export default function RobotsAdminPage() {
                 r.active ? 'border-purple-900/30' : 'border-gray-800/40 opacity-70'
               }`}>
               <div className="flex-1 min-w-0">
+                {/* Linha 1: nome + raridade + status */}
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium text-gray-200">{r.metadata.robotName}</span>
                   <span className={`text-xs font-bold ${RARITY_COLOR[r.rarity] ?? 'text-gray-400'}`}>
@@ -281,14 +301,17 @@ export default function RobotsAdminPage() {
                     : <span className="text-xs bg-gray-800 text-gray-500 px-1.5 rounded">Airdrop only</span>
                   }
                 </div>
-                <div className="flex gap-3 mt-1 text-xs text-gray-500 flex-wrap">
+                {/* Linha 2: collection tag separada */}
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
                   {r.metadata.robotCollection
-                    ? <span className="text-purple-400/80">{r.metadata.robotCollection}</span>
-                    : <span className="text-gray-600 italic">No collection</span>
+                    ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-900/30 border border-purple-800/40 text-purple-300">
+                        🏷 {r.metadata.robotCollection}
+                      </span>
+                    : <span className="text-xs text-gray-700 italic">No collection</span>
                   }
-                  <span>ER {r.metadata.hashPower}</span>
-                  <span>PD {r.metadata.energyRate}</span>
-                  <span className="text-purple-300">{r.price} CRATE</span>
+                  <span className="text-xs text-gray-600">ER {r.metadata.hashPower}</span>
+                  <span className="text-xs text-gray-600">PD {r.metadata.energyRate}</span>
+                  <span className="text-xs text-purple-300">{r.price} CRATE</span>
                 </div>
               </div>
               <div className="flex gap-1.5 shrink-0">

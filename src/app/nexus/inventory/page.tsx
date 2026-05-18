@@ -266,8 +266,7 @@ export default function InventoryAdminPage() {
                 <tr className="text-gray-500 border-b border-gray-800">
                   <th className="text-left pb-2 pr-3">Player</th>
                   {tab === 'robot' && <>
-                    <th className="text-left pb-2 pr-3">Name</th>
-                    <th className="text-left pb-2 pr-3">Collection</th>
+                    <th className="text-left pb-2 pr-3">Name / Collection</th>
                     <th className="text-left pb-2 pr-3">Rarity</th>
                     <th className="text-right pb-2 pr-3">ER</th>
                     <th className="text-right pb-2 pr-3">PD</th>
@@ -301,8 +300,15 @@ export default function InventoryAdminPage() {
                     <td className="py-1.5 pr-3 text-gray-400">{item.user?.username}</td>
 
                     {tab === 'robot' && <>
-                      <td className="py-1.5 pr-3 text-gray-200 font-medium">{item.name}</td>
-                      <td className="py-1.5 pr-3 text-purple-400/80 text-xs">{item.collection || '—'}</td>
+                      <td className="py-1.5 pr-3">
+                        <div className="font-medium text-gray-200">{item.name}</div>
+                        {item.collection
+                          ? <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs bg-purple-900/30 border border-purple-800/40 text-purple-300 mt-0.5">
+                              🏷 {item.collection}
+                            </span>
+                          : <span className="text-xs text-gray-700 italic">No collection</span>
+                        }
+                      </td>
                       <td className="py-1.5 pr-3"><span className={RARITY_COLOR[item.rarity]}>{item.rarity}</span></td>
                       <td className="py-1.5 pr-3 text-right text-gray-200">{item.hashPower}</td>
                       <td className="py-1.5 pr-3 text-right text-gray-400">{item.energyRate}</td>
