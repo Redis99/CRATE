@@ -78,10 +78,6 @@ export async function PUT(req: NextRequest) {
   const { id, name, collection, rarity, hashPower, energyRate, durability, price, active, description } = await req.json()
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-  // Busca o nome atual antes de alterar (para localizar instâncias existentes)
-  const existing = await prisma.shopItem.findUnique({ where: { id }, select: { name: true, metadata: true } })
-  const oldName = (existing?.metadata as Record<string, unknown> | null)?.robotName as string ?? existing?.name ?? ''
-
   const [item] = await Promise.all([
     // 1. Atualiza o template (ShopItem)
     prisma.shopItem.update({
@@ -102,13 +98,14 @@ export async function PUT(req: NextRequest) {
         },
       },
     }),
-    // 2. Propaga alterações para todas as instâncias existentes nos inventários
-    //    Não propaga durability (desgaste individual por robô)
+    // 2. Propaga para todos os robôs vinculados a este template (via templateId)
+    //    Durability NÃO é propagada — é estado individual por instância
     prisma.robot.updateMany({
-      where: { name: oldName, ...(rarity ? { rarity: rarity as never } : {}) },
+      where: { templateId: id },
       data: {
         name:       name,
         collection: collection ?? '',
+        rarity:     rarity as never,
         hashPower:  Number(hashPower),
         energyRate: Number(energyRate ?? 1),
       },
