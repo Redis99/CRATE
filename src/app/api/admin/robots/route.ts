@@ -108,14 +108,10 @@ export async function PUT(req: NextRequest) {
         },
       },
     }),
-    // 2. Propaga para robôs vinculados via templateId (link exato)
+    // 2. Propaga para todos os robôs com esse nome (templateId ou não)
+    //    Garante que nenhum robô fique com dados desatualizados
     prisma.robot.updateMany({
-      where: { templateId: id },
-      data:  propagateData,
-    }),
-    // 3. Retrocompatibilidade — vincula e atualiza robôs sem templateId pelo nome atual
-    prisma.robot.updateMany({
-      where: { templateId: null, name: currentName, rarity: rarity as never },
+      where: { name: currentName },
       data:  { ...propagateData, templateId: id },
     }),
   ])
