@@ -35,13 +35,22 @@ export async function POST(req: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await req.json()
-  const { category, name, collection, rarity, effectType, effectValue, effectType2, effectValue2, price, active, description } = body
+  const { category, customId, name, collection, rarity, effectType, effectValue, effectType2, effectValue2, price, active, description } = body
 
   if (!category || !name || !rarity || !effectType || effectValue == null) {
     return NextResponse.json({ error: 'category, name, rarity, effectType and effectValue are required' }, { status: 400 })
   }
 
-  const id = `${category}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${Date.now()}`
+  const prefix = category === 'equipment-specific' ? 'equip' : 'upgrade'
+  const slug   = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+  const id = customId
+    ? `${prefix}-${customId.toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/(^-|-$)/g, '')}`
+    : `${prefix}-${slug}`
+
+  const existing = await prisma.shopItem.findUnique({ where: { id } })
+  if (existing) {
+    return NextResponse.json({ error: `ID "${id}" already exists. Choose a different custom ID.` }, { status: 409 })
+  }
 
   const item = await prisma.shopItem.create({
     data: {

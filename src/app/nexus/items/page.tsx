@@ -44,7 +44,7 @@ const RARITY_COLOR: Record<string, string> = {
   RARE: 'text-blue-400', EPIC: 'text-purple-400', LEGENDARY: 'text-yellow-400',
 }
 const EMPTY_TPL = {
-  name: '', collection: '', rarity: 'COMMON',
+  name: '', customId: '', collection: '', rarity: 'COMMON',
   effectType: '', effectValue: 0, effectType2: '', effectValue2: 0,
   price: 0, active: false, description: '',
 }
@@ -145,7 +145,7 @@ export default function ItemsAdminPage() {
   function openNewTpl() { setEditTpl({ ...EMPTY_TPL }); setIsTplNew(true) }
   function openEditTpl(t: ItemTemplate) {
     setEditTpl({
-      id: t.id, name: t.name, collection: t.metadata.collection ?? '',
+      id: t.id, customId: '', name: t.name, collection: t.metadata.collection ?? '',
       rarity: t.rarity,
       effectType:   t.metadata.effectType  ?? '',
       effectValue:  t.metadata.effectValue ?? 0,
@@ -312,7 +312,35 @@ export default function ItemsAdminPage() {
       )}
 
       {editTpl && (
-        <Modal title={isTplNew ? `New ${typeLabel}` : `Edit Template`} onClose={() => setEditTpl(null)}>
+        <Modal title={isTplNew ? `New ${typeLabel}` : `Edit — ${editTpl.name}`} onClose={() => setEditTpl(null)}>
+
+          {/* ID */}
+          {isTplNew ? (
+            <F label={<>Custom ID <span className="text-gray-600">(optional)</span></>}>
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-gray-600 font-mono">
+                  {itemTab === 'equipment' ? 'equip-' : 'upgrade-'}
+                </span>
+                <input value={editTpl.customId} className="flex-1 ia font-mono"
+                  placeholder="mining-drill-plus"
+                  onChange={e => setEditTpl(p => ({ ...p!, customId: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') }))} />
+              </div>
+              <p className="text-xs text-gray-600 mt-1 font-mono">
+                Final ID:{' '}
+                <span className="text-gray-400">
+                  {itemTab === 'equipment' ? 'equip' : 'upgrade'}-{editTpl.customId || editTpl.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || '…'}
+                </span>
+              </p>
+            </F>
+          ) : (
+            <div className="flex items-center gap-2 bg-gray-900/50 border border-gray-800 rounded px-3 py-1.5">
+              <span className="text-xs text-gray-500">ID:</span>
+              <span className="text-xs font-mono text-gray-300 flex-1">{editTpl.id}</span>
+              <button onClick={() => navigator.clipboard.writeText(editTpl.id ?? '')}
+                className="text-xs text-gray-600 hover:text-purple-400 transition-colors">copy</button>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <F label="Name"><input value={editTpl.name} className="w-full ia" placeholder="e.g. Mining Drill+"
               onChange={e => setEditTpl(p => ({ ...p!, name: e.target.value }))} /></F>
@@ -443,6 +471,11 @@ export default function ItemsAdminPage() {
                       {t.metadata.effectType && <span className="text-xs text-gray-500">{t.metadata.effectType}: {t.metadata.effectValue}</span>}
                       {t.metadata.effectType2 && <span className="text-xs text-gray-500">{t.metadata.effectType2}: {t.metadata.effectValue2}</span>}
                       <span className="text-xs text-purple-300">{t.price} CRATE</span>
+                    </div>
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="text-xs text-gray-700 font-mono">{t.id}</span>
+                      <button onClick={() => navigator.clipboard.writeText(t.id)}
+                        className="text-xs text-gray-700 hover:text-purple-400 transition-colors">copy</button>
                     </div>
                   </div>
                   <div className="flex gap-1.5 shrink-0">
