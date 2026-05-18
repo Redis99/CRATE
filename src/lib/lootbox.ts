@@ -119,7 +119,24 @@ function roll(table: { weight: number; result: () => DropResultType }[]): DropRe
 
 // ─── Geração de itens ─────────────────────────────────────────────────────────
 
-export function generateRobotDrop(rarity: Rarity): DropResultType {
+export function generateRobotDrop(rarity: Rarity, dbTemplates?: DbRobotTemplate[]): DropResultType {
+  // Se há templates no banco para esta raridade, usa um aleatório
+  if (dbTemplates && dbTemplates.length > 0) {
+    const matching = dbTemplates.filter(t => t.rarity === rarity)
+    if (matching.length > 0) {
+      const tpl = pick(matching)
+      const meta = tpl.metadata as Record<string, unknown>
+      return {
+        kind:       'robot',
+        name:       String(meta.robotName ?? tpl.name),
+        collection: String(meta.robotCollection ?? ''),
+        rarity,
+        hashPower:  Number(meta.hashPower  ?? ROBOT_ER[rarity][0]),
+        energyRate: Number(meta.energyRate ?? ROBOT_PD[rarity][0]),
+      }
+    }
+  }
+  // Fallback: geração hardcoded (mantida enquanto banco estiver vazio)
   const [erMin, erMax] = ROBOT_ER[rarity]
   const [pdMin, pdMax] = ROBOT_PD[rarity]
   return {
@@ -130,6 +147,21 @@ export function generateRobotDrop(rarity: Rarity): DropResultType {
     hashPower:  Math.round(randInt(erMin, erMax) * 10) / 10,
     energyRate: Math.round(randInt(pdMin * 10, pdMax * 10)) / 10,
   }
+}
+
+// Tipo para templates vindos do banco
+type DbRobotTemplate = { id: string; name: string; rarity: string; metadata: unknown }
+
+/**
+ * Versão async — busca templates do banco e gera drop.
+ * Use em lootbox open e crafting para usar o banco como fonte primária.
+ */
+export async function generateRobotDropFromDB(rarity: Rarity): Promise<DropResultType> {
+  // Todos os templates daquela raridade (ativos ou não) são elegíveis para drops
+  const templates = await prisma.shopItem.findMany({
+    where: { category: 'robot-specific', rarity },
+  })
+  return generateRobotDrop(rarity, templates)
 }
 
 export function generateEquipmentDrop(rarity: Rarity): DropResultType {
@@ -214,6 +246,34 @@ export function rollSupplyCrate(): DropResultType {
     { weight:  0.5,result: () => generateEquipmentDrop('LEGENDARY') },
     { weight:  0.3,result: () => generateBaseUpgradeDrop('LEGENDARY') },
     { weight:  0.2,result: () => generateRobotDrop('LEGENDARY') },
+  ])
+}
+
+/**
+ * Versões async das funções de roll — buscam templates do banco antes de gerar.
+ * Use estas em lootbox/open e outros endpoints que geram drops.
+ */
+export async function rollSupplyCrateAsync(): Promise<DropResultType> {
+  const robotTemplates = await prisma.shopItem.findMany({
+    where: { category: 'robot-specific' },
+  })
+  return roll([
+    { weight: 18,  result: () => generateEquipmentDrop('COMMON') },
+    { weight: 15,  result: () => generateBaseUpgradeDrop('COMMON') },
+    { weight: 12,  result: () => ({ kind: 'consumable', consumableType: 'REPAIR_KIT', value: 25, quantity: 5 }) },
+    { weight: 12,  result: () => generateRobotDrop('COMMON', robotTemplates) },
+    { weight:  9,  result: () => generateEquipmentDrop('UNCOMMON') },
+    { weight:  8,  result: () => generateBaseUpgradeDrop('UNCOMMON') },
+    { weight:  7,  result: () => generateRobotDrop('UNCOMMON', robotTemplates) },
+    { weight:  5,  result: () => generateEquipmentDrop('RARE') },
+    { weight:  4,  result: () => generateBaseUpgradeDrop('RARE') },
+    { weight:  4,  result: () => generateRobotDrop('RARE', robotTemplates) },
+    { weight:  2,  result: () => generateEquipmentDrop('EPIC') },
+    { weight:  2,  result: () => generateBaseUpgradeDrop('EPIC') },
+    { weight:  1,  result: () => generateRobotDrop('EPIC', robotTemplates) },
+    { weight:  0.5,result: () => generateEquipmentDrop('LEGENDARY') },
+    { weight:  0.3,result: () => generateBaseUpgradeDrop('LEGENDARY') },
+    { weight:  0.2,result: () => generateRobotDrop('LEGENDARY', robotTemplates) },
   ])
 }
 

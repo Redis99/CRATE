@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
 
   // Seeds — chama cada route internamente usando fetch com CRON_SECRET
   // A partir desta correção, os seed routes aceitam admin session como fallback
-  const SEEDS = ['seed-crafting','seed-lootbox','seed-shop','seed-codex','seed-missions']
+  const SEEDS = ['seed-robots','seed-crafting','seed-lootbox','seed-shop','seed-codex','seed-missions']
   if (SEEDS.includes(action)) {
     // Redireciona para o seed route com o cookie de sessão do admin
     // (que já foi validado acima via getAdminUser)
