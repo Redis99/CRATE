@@ -1,14 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import {
-  ALL_SHOP_ITEMS, SHOP_INVENTORY,
-  INVENTORY_DEFAULT, INVENTORY_FIELD, INVENTORY_MAX,
-} from '@/lib/shop-items'
+import { INVENTORY_DEFAULT, INVENTORY_MAX } from '@/lib/shop-items'
 
-function expansionPrice(basePrice: number, currentSlots: number, defaultSlots: number, addPerPurchase: number): number {
+function expansionPrice(
+  basePrice: number,
+  currentSlots: number,
+  defaultSlots: number,
+  addPerPurchase: number,
+): number {
   const purchased = Math.round((currentSlots - defaultSlots) / addPerPurchase)
   return Math.round(basePrice * Math.pow(1.2, purchased) * 100) / 100
+}
+
+/** Normaliza categorias *-specific para o slug que o ShopManager usa nas abas */
+function normalizeCategory(category: string): string {
+  if (category === 'robot-specific')        return 'robots'
+  if (category === 'equipment-specific')    return 'equipment'
+  if (category === 'base-upgrade-specific') return 'baseUpgrades'
+  return category
 }
 
 export async function GET(_req: NextRequest) {
@@ -24,49 +34,72 @@ export async function GET(_req: NextRequest) {
         slotsParts: true, slotsConsumables: true, slotsLootboxes: true,
       },
     }),
-    // Lê preços e active do banco (se disponível)
-    prisma.shopItem.findMany({ select: { id: true, price: true, active: true } }),
+    // Única fonte de verdade: banco de dados
+    prisma.shopItem.findMany({
+      where: { active: true },
+      orderBy: { sortOrder: 'asc' },
+    }),
   ])
 
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
 
-  // Mapa DB id → { price, active } para override de preços
-  const dbMap = new Map(dbItems.map((i) => [i.id, i]))
-
   const slotMap: Record<string, number> = {
-    robots: profile.slotsRobots, equipments: profile.slotsEquipments,
-    baseUpgrades: profile.slotsBaseUpgrades, parts: profile.slotsParts,
-    consumables: profile.slotsConsumables, lootboxes: profile.slotsLootboxes,
+    robots:       profile.slotsRobots,
+    equipments:   profile.slotsEquipments,
+    baseUpgrades: profile.slotsBaseUpgrades,
+    parts:        profile.slotsParts,
+    consumables:  profile.slotsConsumables,
+    lootboxes:    profile.slotsLootboxes,
   }
 
-  // Aplica preço do banco (ou mantém hardcoded como fallback)
-  const staticItems = ALL_SHOP_ITEMS
-    .filter((i) => i.category !== 'inventory')
-    .map((item) => {
-      const db = dbMap.get(item.id)
-      return {
-        ...item,
-        price:  db?.price  ?? item.price,
-        active: db?.active ?? true,
-      }
-    })
-    .filter((i) => i.active)
+  const items = dbItems.map((si) => {
+    const meta = (si.metadata as Record<string, unknown>) ?? {}
+    const category = normalizeCategory(si.category)
 
-  const inventoryItems = SHOP_INVENTORY.map((item) => {
-    const tab      = item.inventoryTab!
-    const current  = slotMap[tab]
-    const maxSlots = INVENTORY_MAX[tab]
-    const db       = dbMap.get(item.id)
-    // Usa || em vez de ?? porque o DB pode armazenar 0 para itens de inventário
-    // (cujo preço real é o inventoryBasePrice, não o price do arquivo que é 0)
-    const basePrice = db?.price || item.inventoryBasePrice!
-    const price    = expansionPrice(basePrice, current, INVENTORY_DEFAULT[tab], item.inventoryAdd!)
-    return { ...item, price, currentSlots: current, maxSlots, isCapped: current >= maxSlots, active: db?.active ?? true }
-  }).filter((i) => i.active)
+    // ── Expansões de inventário: preço dinâmico ──────────────────────────
+    if (category === 'inventory') {
+      const tab        = String(meta.inventoryTab ?? '')
+      const current    = slotMap[tab] ?? 0
+      const maxSlots   = INVENTORY_MAX[tab] ?? 0
+      const add        = Number(meta.inventoryAdd ?? 5)
+      // Usa || porque o campo price pode ser 0 no banco (preço base vem do metadata)
+      const basePrice  = si.price || Number(meta.inventoryBasePrice ?? 5)
+      const price      = expansionPrice(basePrice, current, INVENTORY_DEFAULT[tab] ?? 0, add)
+      return {
+        id:                 si.id,
+        category,
+        name:               si.name,
+        description:        si.description,
+        rarity:             si.rarity ?? undefined,
+        price,
+        inventoryTab:       tab,
+        inventoryAdd:       add,
+        inventoryBasePrice: basePrice,
+        currentSlots:       current,
+        maxSlots,
+        isCapped:           current >= maxSlots,
+      }
+    }
+
+    // ── Demais categorias ────────────────────────────────────────────────
+    return {
+      id:           si.id,
+      category,
+      name:         si.name,
+      description:  si.description,
+      price:        si.price,
+      rarity:       si.rarity ?? undefined,
+      generateType: meta.generateType   as string | undefined,
+      batteryValue: meta.batteryValue   != null ? Number(meta.batteryValue)  : undefined,
+      slotNumber:   meta.slotNumber     != null ? Number(meta.slotNumber)    : undefined,
+      slotRequires: meta.slotRequires   != null ? Number(meta.slotRequires)  : undefined,
+      specific:     meta.specific === true ? true : undefined,
+    }
+  })
 
   return NextResponse.json({
     balance:      profile.balanceCrate,
     outpostSlots: profile.outpostSlots,
-    items:        [...staticItems, ...inventoryItems],
+    items,
   })
 }
