@@ -40,6 +40,8 @@ export default function RobotsAdminPage() {
   const [airdropId, setAirdropId]     = useState<string | null>(null)
   const [airdropUser, setAirdropUser] = useState('')
   const [airdropMsg, setAirdropMsg]   = useState('')
+  const [rarityFilter, setRarityFilter] = useState('ALL')
+  const [search, setSearch]             = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -123,6 +125,28 @@ export default function RobotsAdminPage() {
           + New Robot
         </button>
       </div>
+
+      {/* Rarity filter */}
+      <div className="flex gap-1 flex-wrap">
+        {['ALL','COMMON','UNCOMMON','RARE','EPIC','LEGENDARY'].map(r => (
+          <button key={r} onClick={() => setRarityFilter(r)}
+            className={`px-2.5 py-1 text-xs rounded border transition-colors ${
+              rarityFilter === r
+                ? 'bg-purple-800/60 border-purple-600 text-purple-200'
+                : 'border-gray-800 text-gray-500 hover:border-gray-600 hover:text-gray-300'
+            }`}>
+            {r}
+          </button>
+        ))}
+      </div>
+
+      {/* Search */}
+      <input
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        placeholder="Search by name…"
+        className="w-full max-w-sm px-3 py-1.5 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 placeholder-gray-600 outline-none focus:border-purple-700"
+      />
 
       {msg && <p className="text-xs font-mono text-yellow-400">{msg}</p>}
 
@@ -275,11 +299,19 @@ export default function RobotsAdminPage() {
       {/* Robot list */}
       {loading ? (
         <p className="text-gray-400 text-sm">Loading…</p>
-      ) : robots.length === 0 ? (
-        <p className="text-gray-500 text-sm">No robots yet. Click + New Robot to create one.</p>
-      ) : (
+      ) : (() => {
+        const filtered = robots.filter(t =>
+          (rarityFilter === 'ALL' || t.rarity === rarityFilter) &&
+          (!search || t.metadata.robotName.toLowerCase().includes(search.toLowerCase()))
+        )
+        if (filtered.length === 0) return (
+          <p className="text-gray-500 text-sm">
+            {robots.length === 0 ? 'No robots yet. Click + New Robot to create one.' : 'No robots match the current filters.'}
+          </p>
+        )
+        return (
         <div className="space-y-1.5">
-          {robots.map(t => (
+          {filtered.map(t => (
             <div key={t.id}
               className={`bg-[#0d0d1a] border rounded-lg p-3 flex items-center gap-4 ${
                 t.active ? 'border-purple-900/30' : 'border-gray-800/40 opacity-70'
@@ -334,7 +366,8 @@ export default function RobotsAdminPage() {
             </div>
           ))}
         </div>
-      )}
+        )
+      })()}
 
       <style jsx global>{`
         .ia { background:#111122;border:1px solid #2d2d50;border-radius:4px;padding:4px 8px;font-size:12px;color:#d1d5db;outline:none; }
