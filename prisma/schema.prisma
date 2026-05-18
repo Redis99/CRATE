@@ -130,6 +130,7 @@ model Equipment {
   user        User           @relation(fields: [userId], references: [id])
 
   name         String
+  collection   String?       // tag de coleção do Codex (opcional)
   rarity       Rarity
   effectType   EffectType
   effectValue  Float
@@ -156,6 +157,7 @@ model BaseUpgrade {
   user        User          @relation(fields: [userId], references: [id])
 
   name         String
+  collection   String?      // tag de coleção do Codex (opcional)
   rarity       Rarity
   effectType   EffectType
   effectValue  Float
