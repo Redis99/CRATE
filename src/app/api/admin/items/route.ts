@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { searchParams } = new URL(req.url)
-  const category = searchParams.get('category') // equipment-specific | base-upgrade-specific
+  const category = searchParams.get('category')
 
   const where = category
     ? { category }
@@ -20,7 +20,14 @@ export async function GET(req: NextRequest) {
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
   })
 
-  return NextResponse.json(items)
+  // Also return collections for dropdown
+  const collections = await prisma.codexCollection.findMany({
+    where: { active: true },
+    select: { name: true },
+    orderBy: { name: 'asc' },
+  })
+
+  return NextResponse.json({ items, collections: collections.map(c => c.name) })
 }
 
 export async function POST(req: NextRequest) {
@@ -28,7 +35,7 @@ export async function POST(req: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await req.json()
-  const { category, name, rarity, effectType, effectValue, effectType2, effectValue2, price, active, description } = body
+  const { category, name, collection, rarity, effectType, effectValue, effectType2, effectValue2, price, active, description } = body
 
   if (!category || !name || !rarity || !effectType || effectValue == null) {
     return NextResponse.json({ error: 'category, name, rarity, effectType and effectValue are required' }, { status: 400 })
@@ -48,6 +55,7 @@ export async function POST(req: NextRequest) {
       sortOrder: 0,
       metadata: {
         specific:     true,
+        collection:   collection   ?? null,
         effectType:   effectType   ?? null,
         effectValue:  effectValue  ?? null,
         effectType2:  effectType2  ?? null,
@@ -63,7 +71,7 @@ export async function PUT(req: NextRequest) {
   const admin = await getAdminUser()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { id, name, rarity, effectType, effectValue, effectType2, effectValue2, price, active, description } = await req.json()
+  const { id, name, collection, rarity, effectType, effectValue, effectType2, effectValue2, price, active, description } = await req.json()
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
   const item = await prisma.shopItem.update({
@@ -72,6 +80,7 @@ export async function PUT(req: NextRequest) {
       name, description, price, rarity, active,
       metadata: {
         specific:     true,
+        collection:   collection   ?? null,
         effectType:   effectType   ?? null,
         effectValue:  effectValue  ?? null,
         effectType2:  effectType2  ?? null,

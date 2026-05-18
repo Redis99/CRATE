@@ -61,10 +61,12 @@ export default function InventoryAdminPage() {
         rarity:     g.rarity,
         hashPower:  g.hashPower,
         energyRate: g.energyRate,
+        durability: 100,  // bulk reset to 100 when editing
       })
     } else if (tab === 'equipment' || tab === 'base-upgrade') {
       setEditData({
-        name:         g.name,
+        name:       g.name,
+        collection: g.collection ?? '',
         rarity:       g.rarity,
         effectType:   g.effectType,
         effectValue:  g.effectValue,
@@ -212,6 +214,11 @@ export default function InventoryAdminPage() {
                       onChange={e => setEditData(p => ({ ...p, energyRate: parseFloat(e.target.value) }))}
                       className="w-full input-admin" />
                   </EField>
+                  <EField label="Durability (Energia %)">
+                    <input type="number" step="0.1" min={0} max={100} value={editData.durability ?? 100}
+                      onChange={e => setEditData(p => ({ ...p, durability: parseFloat(e.target.value) }))}
+                      className="w-full input-admin" />
+                  </EField>
                 </div>
               </>
             )}
@@ -234,6 +241,21 @@ export default function InventoryAdminPage() {
                     </select>
                   </EField>
                 </div>
+                <EField label="Collection tag (optional)">
+                  <select value={editData.collection ?? ''}
+                    onChange={e => setEditData(p => ({ ...p, collection: e.target.value }))}
+                    className="w-full input-admin">
+                    <option value="">— No collection —</option>
+                    {collections.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                  {editData.collection && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-900/40 border border-purple-700/40 text-purple-300 mt-1.5">
+                      🏷 {editData.collection}
+                    </span>
+                  )}
+                </EField>
                 <div className="grid grid-cols-2 gap-3">
                   <EField label="Effect Type">
                     <select value={editData.effectType ?? ''}
@@ -319,6 +341,12 @@ export default function InventoryAdminPage() {
                       <span className={`text-xs font-bold ${RARITY_COLOR[g.rarity] ?? 'text-gray-400'}`}>
                         {g.rarity}
                       </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {g.collection
+                        ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-900/30 border border-purple-800/40 text-purple-300">🏷 {g.collection}</span>
+                        : null
+                      }
                     </div>
                     <div className="flex gap-3 mt-1 text-xs text-gray-500">
                       <span>{g.effectType}: <span className="text-gray-300">{g.effectValue}</span></span>

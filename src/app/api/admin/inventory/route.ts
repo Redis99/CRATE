@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 
   if (type === 'equipment') {
     const groups = await prisma.equipment.groupBy({
-      by: ['name', 'rarity', 'effectType', 'effectType2'],
+      by: ['name', 'collection', 'rarity', 'effectType', 'effectType2'],
       where: rarityWhere,
       _count: { id: true },
       _avg:   { effectValue: true, effectValue2: true },
@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
     })
     return NextResponse.json(groups.map(g => ({
       name:         g.name,
+      collection:   g.collection ?? null,
       rarity:       g.rarity,
       effectType:   g.effectType,
       effectType2:  g.effectType2,
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest) {
 
   if (type === 'base-upgrade') {
     const groups = await prisma.baseUpgrade.groupBy({
-      by: ['name', 'rarity', 'effectType', 'effectType2'],
+      by: ['name', 'collection', 'rarity', 'effectType', 'effectType2'],
       where: rarityWhere,
       _count: { id: true },
       _avg:   { effectValue: true, effectValue2: true },
@@ -60,6 +61,7 @@ export async function GET(req: NextRequest) {
     })
     return NextResponse.json(groups.map(g => ({
       name:         g.name,
+      collection:   g.collection ?? null,
       rarity:       g.rarity,
       effectType:   g.effectType,
       effectType2:  g.effectType2,
@@ -123,9 +125,9 @@ export async function PATCH(req: NextRequest) {
   }
 
   const ALLOWED: Record<string, string[]> = {
-    robot:          ['name', 'collection', 'hashPower', 'energyRate', 'rarity'],
-    equipment:      ['name', 'rarity', 'effectType', 'effectValue', 'effectType2', 'effectValue2'],
-    'base-upgrade': ['name', 'rarity', 'effectType', 'effectValue', 'effectType2', 'effectValue2'],
+    robot:          ['name', 'collection', 'hashPower', 'energyRate', 'durability', 'rarity'],
+    equipment:      ['name', 'collection', 'rarity', 'effectType', 'effectValue', 'effectType2', 'effectValue2'],
+    'base-upgrade': ['name', 'collection', 'rarity', 'effectType', 'effectValue', 'effectType2', 'effectValue2'],
     part:           [],  // partes não têm stats para balancear
     consumable:     [],
   }

@@ -11,7 +11,8 @@ interface GameItem {
   rarity: string
   active: boolean
   metadata: {
-    specific: boolean
+    specific:     boolean
+    collection:   string | null
     effectType:   string | null
     effectValue:  number | null
     effectType2:  string | null
@@ -31,19 +32,20 @@ const RARITY_COLOR: Record<string, string> = {
   LEGENDARY: 'text-yellow-400',
 }
 const EMPTY = {
-  name: '', rarity: 'COMMON', effectType: '', effectValue: 0,
+  name: '', collection: '', rarity: 'COMMON', effectType: '', effectValue: 0,
   effectType2: '', effectValue2: 0, price: 0, active: false, description: '',
 }
 
 type Tab = 'equipment-specific' | 'base-upgrade-specific'
 
 export default function ItemsAdminPage() {
-  const [tab, setTab]         = useState<Tab>('equipment-specific')
-  const [items, setItems]     = useState<GameItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState<typeof EMPTY & { id?: string } | null>(null)
-  const [isNew, setIsNew]     = useState(false)
-  const [msg, setMsg]         = useState('')
+  const [tab, setTab]             = useState<Tab>('equipment-specific')
+  const [items, setItems]         = useState<GameItem[]>([])
+  const [collections, setCollections] = useState<string[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [editing, setEditing]     = useState<typeof EMPTY & { id?: string } | null>(null)
+  const [isNew, setIsNew]         = useState(false)
+  const [msg, setMsg]             = useState('')
 
   // Airdrop modal
   const [airdropId, setAirdropId]     = useState<string | null>(null)
@@ -53,7 +55,9 @@ export default function ItemsAdminPage() {
   async function load(category: Tab) {
     setLoading(true)
     const r = await fetch(`/api/admin/items?category=${category}`)
-    setItems(await r.json())
+    const data = await r.json()
+    setItems(data.items ?? [])
+    setCollections(data.collections ?? [])
     setLoading(false)
   }
   useEffect(() => { load(tab) }, [tab])
@@ -62,7 +66,9 @@ export default function ItemsAdminPage() {
   function openEdit(i: GameItem) {
     setEditing({
       id: i.id,
-      name: i.name, rarity: i.rarity,
+      name: i.name,
+      collection:   i.metadata.collection  ?? '',
+      rarity: i.rarity,
       effectType:   i.metadata.effectType  ?? '',
       effectValue:  i.metadata.effectValue ?? 0,
       effectType2:  i.metadata.effectType2 ?? '',
@@ -107,7 +113,7 @@ export default function ItemsAdminPage() {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id: i.id, name: i.name, rarity: i.rarity,
+        id: i.id, name: i.name, collection: i.metadata.collection, rarity: i.rarity,
         effectType:   i.metadata.effectType,
         effectValue:  i.metadata.effectValue,
         effectType2:  i.metadata.effectType2,
@@ -185,6 +191,24 @@ export default function ItemsAdminPage() {
                 </select>
               </Field>
             </div>
+
+            {/* Collection tag — dropdown real do banco */}
+            <Field label="Collection tag (optional)">
+              <select
+                value={editing.collection}
+                onChange={e => setEditing(p => ({ ...p!, collection: e.target.value }))}
+                className="w-full input-admin">
+                <option value="">— No collection —</option>
+                {collections.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              {editing.collection && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-900/40 border border-purple-700/40 text-purple-300 mt-1.5">
+                  🏷 {editing.collection}
+                </span>
+              )}
+            </Field>
 
             {/* Primary effect */}
             <p className="text-xs text-gray-500 pt-1">Primary Effect</p>
@@ -307,6 +331,12 @@ export default function ItemsAdminPage() {
                   {i.active
                     ? <span className="text-xs bg-green-900/30 text-green-400 px-1.5 rounded">In Shop</span>
                     : <span className="text-xs bg-gray-800 text-gray-500 px-1.5 rounded">Airdrop only</span>
+                  }
+                </div>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  {i.metadata.collection
+                    ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-900/30 border border-purple-800/40 text-purple-300">🏷 {i.metadata.collection}</span>
+                    : null
                   }
                 </div>
                 <div className="flex gap-3 mt-1 text-xs text-gray-500 flex-wrap">
