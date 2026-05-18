@@ -6,7 +6,7 @@ const NAV = [
   { href: '/nexus',               label: 'Dashboard' },
   { href: '/nexus/withdrawals',   label: 'Withdrawals' },
   { href: '/nexus/players',       label: 'Players' },
-  { href: '/nexus/inventory',     label: 'All Items' },
+  { href: '/nexus/inventory',     label: 'Parts & Cons.' },
   { href: '/nexus/crafting',      label: 'Crafting' },
   { href: '/nexus/lootbox',       label: 'Lootbox' },
   { href: '/nexus/shop',          label: 'Shop' },
