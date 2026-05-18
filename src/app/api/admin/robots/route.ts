@@ -98,8 +98,7 @@ export async function PUT(req: NextRequest) {
         },
       },
     }),
-    // 2. Propaga para todos os robôs vinculados a este template (via templateId)
-    //    Durability NÃO é propagada — é estado individual por instância
+    // 2. Propaga os 3 atributos para todos os robôs vinculados (via templateId)
     prisma.robot.updateMany({
       where: { templateId: id },
       data: {
@@ -108,6 +107,7 @@ export async function PUT(req: NextRequest) {
         rarity:     rarity as never,
         hashPower:  Number(hashPower),
         energyRate: Number(energyRate ?? 1),
+        durability: Number(durability ?? 100),
       },
     }),
   ])
