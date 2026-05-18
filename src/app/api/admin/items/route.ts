@@ -1,0 +1,95 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getAdminUser } from '@/lib/admin-auth'
+import { prisma } from '@/lib/prisma'
+
+// category: 'equipment-specific' | 'base-upgrade-specific'
+
+export async function GET(req: NextRequest) {
+  const admin = await getAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { searchParams } = new URL(req.url)
+  const category = searchParams.get('category') // equipment-specific | base-upgrade-specific
+
+  const where = category
+    ? { category }
+    : { category: { in: ['equipment-specific', 'base-upgrade-specific'] } }
+
+  const items = await prisma.shopItem.findMany({
+    where,
+    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+  })
+
+  return NextResponse.json(items)
+}
+
+export async function POST(req: NextRequest) {
+  const admin = await getAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const body = await req.json()
+  const { category, name, rarity, effectType, effectValue, effectType2, effectValue2, price, active, description } = body
+
+  if (!category || !name || !rarity || !effectType || effectValue == null) {
+    return NextResponse.json({ error: 'category, name, rarity, effectType and effectValue are required' }, { status: 400 })
+  }
+
+  const id = `${category}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${Date.now()}`
+
+  const item = await prisma.shopItem.create({
+    data: {
+      id,
+      category,
+      name,
+      description: description ?? `${rarity} ${category.replace('-specific', '').replace('-', ' ')}`,
+      price: price ?? 0,
+      rarity,
+      active: active ?? false,
+      sortOrder: 0,
+      metadata: {
+        specific:     true,
+        effectType:   effectType   ?? null,
+        effectValue:  effectValue  ?? null,
+        effectType2:  effectType2  ?? null,
+        effectValue2: effectValue2 ?? null,
+      },
+    },
+  })
+
+  return NextResponse.json(item)
+}
+
+export async function PUT(req: NextRequest) {
+  const admin = await getAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { id, name, rarity, effectType, effectValue, effectType2, effectValue2, price, active, description } = await req.json()
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+
+  const item = await prisma.shopItem.update({
+    where: { id },
+    data: {
+      name, description, price, rarity, active,
+      metadata: {
+        specific:     true,
+        effectType:   effectType   ?? null,
+        effectValue:  effectValue  ?? null,
+        effectType2:  effectType2  ?? null,
+        effectValue2: effectValue2 ?? null,
+      },
+    },
+  })
+
+  return NextResponse.json(item)
+}
+
+export async function DELETE(req: NextRequest) {
+  const admin = await getAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { id } = await req.json()
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+
+  await prisma.shopItem.delete({ where: { id } })
+  return NextResponse.json({ success: true })
+}
