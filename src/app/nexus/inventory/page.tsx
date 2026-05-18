@@ -34,6 +34,8 @@ export default function InventoryAdminPage() {
   const [editing, setEditing]     = useState<AnyGroup | null>(null)
   const [editData, setEditData]   = useState<AnyGroup>({})
   const [msg, setMsg]             = useState('')
+  const [deleting, setDeleting]   = useState<AnyGroup | null>(null)
+  const [delConfirm, setDelConfirm] = useState('')
 
   const load = useCallback(async (t: ItemType, r: string) => {
     setLoading(true)
@@ -103,6 +105,30 @@ export default function InventoryAdminPage() {
     if (r.ok) {
       setMsg(`✓ Updated ${result.updated} item(s)`)
       setEditing(null)
+      load(tab, rarity)
+    } else {
+      setMsg(`Error: ${result.error}`)
+    }
+  }
+
+  async function deleteAll() {
+    if (!deleting || delConfirm !== deleting.name) return
+    setMsg(`Deleting ${deleting.ownerCount} robot(s)…`)
+    const r = await fetch('/api/admin/inventory', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'robot',
+        name: deleting.name,
+        rarity: deleting.rarity,
+        confirm: delConfirm,
+      }),
+    })
+    const result = await r.json()
+    if (r.ok) {
+      setMsg(`✓ Deleted ${result.deleted} robot(s) permanently`)
+      setDeleting(null)
+      setDelConfirm('')
       load(tab, rarity)
     } else {
       setMsg(`Error: ${result.error}`)
@@ -214,8 +240,8 @@ export default function InventoryAdminPage() {
                       onChange={e => setEditData(p => ({ ...p, energyRate: parseFloat(e.target.value) }))}
                       className="w-full input-admin" />
                   </EField>
-                  <EField label="Durability (Energia %)">
-                    <input type="number" step="0.1" min={0} max={100} value={editData.durability ?? 100}
+                  <EField label="Durability (Energia)">
+                    <input type="number" step="1" min={0} value={editData.durability ?? 100}
                       onChange={e => setEditData(p => ({ ...p, durability: parseFloat(e.target.value) }))}
                       className="w-full input-admin" />
                   </EField>
@@ -301,6 +327,46 @@ export default function InventoryAdminPage() {
         </div>
       )}
 
+      {/* Delete confirmation modal */}
+      {deleting && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0d0d1a] border border-red-800/60 rounded-lg p-5 w-full max-w-md space-y-4">
+            <h2 className="text-sm font-bold text-red-400">⚠ Permanent Delete</h2>
+            <p className="text-xs text-gray-300">
+              This will <strong className="text-red-400">permanently remove</strong> all{' '}
+              <strong>{deleting.ownerCount}</strong> instance(s) of{' '}
+              <strong className="text-gray-200">{deleting.name}</strong> ({deleting.rarity})
+              from every player&apos;s inventory. This cannot be undone.
+            </p>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">
+                Type <span className="text-red-400 font-mono">{deleting.name}</span> to confirm:
+              </label>
+              <input
+                value={delConfirm}
+                onChange={e => setDelConfirm(e.target.value)}
+                className="w-full input-admin border-red-900/60"
+                placeholder={deleting.name}
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={deleteAll}
+                disabled={delConfirm !== deleting.name}
+                className="flex-1 px-3 py-2 text-sm bg-red-900/50 border border-red-700 text-red-300 rounded hover:bg-red-900/70 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                Delete permanently
+              </button>
+              <button
+                onClick={() => { setDeleting(null); setDelConfirm('') }}
+                className="flex-1 px-3 py-2 text-sm border border-gray-700 text-gray-400 rounded hover:bg-gray-800">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Grouped list */}
       {loading ? (
         <p className="text-gray-400 text-sm">Loading…</p>
@@ -330,6 +396,7 @@ export default function InventoryAdminPage() {
                       }
                       <span className="text-xs text-gray-500">ER {g.hashPower}</span>
                       <span className="text-xs text-gray-500">PD {g.energyRate}</span>
+                      <span className="text-xs text-gray-500">Energia {g.durability}</span>
                     </div>
                   </>
                 )}
@@ -382,10 +449,18 @@ export default function InventoryAdminPage() {
               </div>
 
               {canEdit && (
-                <button onClick={() => startEdit(g)}
-                  className="shrink-0 px-3 py-1.5 text-xs border border-gray-700 text-gray-300 rounded hover:bg-gray-800 transition-colors">
-                  Edit all
-                </button>
+                <div className="flex gap-1.5 shrink-0">
+                  <button onClick={() => startEdit(g)}
+                    className="px-3 py-1.5 text-xs border border-gray-700 text-gray-300 rounded hover:bg-gray-800 transition-colors">
+                    Edit all
+                  </button>
+                  {tab === 'robot' && (
+                    <button onClick={() => { setDeleting(g); setDelConfirm('') }}
+                      className="px-3 py-1.5 text-xs border border-red-900/60 text-red-400 rounded hover:bg-red-900/20 transition-colors">
+                      Delete all
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           ))}

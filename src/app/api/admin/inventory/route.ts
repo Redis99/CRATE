@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
       by: ['name', 'collection', 'rarity'],
       where: rarityWhere,
       _count: { id: true },
-      _avg:   { hashPower: true, energyRate: true },
+      _avg:   { hashPower: true, energyRate: true, durability: true },
       orderBy: { _count: { id: 'desc' } },
     })
     return NextResponse.json(groups.map(g => ({
@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
       ownerCount: g._count.id,
       hashPower:  Math.round((g._avg.hashPower  ?? 0) * 100) / 100,
       energyRate: Math.round((g._avg.energyRate ?? 0) * 100) / 100,
+      durability: Math.round((g._avg.durability ?? 0) * 100) / 100,
     })))
   }
 
@@ -164,4 +165,43 @@ export async function PATCH(req: NextRequest) {
   }
 
   return NextResponse.json({ success: true, updated: count })
+}
+
+// DELETE — remove TODOS os robôs de um tipo do banco (irreversível)
+export async function DELETE(req: NextRequest) {
+  const admin = await getAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { type, name, rarity, confirm } = await req.json() as {
+    type: string
+    name: string
+    rarity: string
+    confirm: string  // deve ser igual ao nome do robô para confirmar
+  }
+
+  if (type !== 'robot') {
+    return NextResponse.json({ error: 'Delete only supported for robots' }, { status: 400 })
+  }
+  if (!name || !rarity) {
+    return NextResponse.json({ error: 'name and rarity required' }, { status: 400 })
+  }
+  if (confirm !== name) {
+    return NextResponse.json({ error: 'Confirmation name does not match' }, { status: 400 })
+  }
+
+  // Remove equipamentos instalados antes de deletar os robôs
+  const robots = await prisma.robot.findMany({
+    where: { name, rarity: rarity as never },
+    select: { id: true },
+  })
+  const ids = robots.map(r => r.id)
+
+  await prisma.$transaction([
+    prisma.robotEquipment.deleteMany({ where: { robotId: { in: ids } } }),
+    prisma.codexEntry.deleteMany({ where: { robotId: { in: ids } } }),
+    prisma.marketListing.deleteMany({ where: { robotId: { in: ids } } }),
+    prisma.robot.deleteMany({ where: { id: { in: ids } } }),
+  ])
+
+  return NextResponse.json({ success: true, deleted: ids.length })
 }
