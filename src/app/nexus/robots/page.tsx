@@ -166,37 +166,22 @@ export default function RobotsAdminPage() {
               </Field>
             </div>
 
-            {/* Collection — campo separado, vira tag visual */}
+            {/* Collection — dropdown real populado do banco */}
             <Field label="Collection tag (optional)">
-              <div className="flex items-center gap-2">
-                <input
-                  list="collections-list"
-                  value={editing.collection}
-                  onChange={e => setEditing(p => ({ ...p!, collection: e.target.value }))}
-                  className="flex-1 input-admin"
-                  placeholder="Select a collection or leave empty…"
-                />
-                {editing.collection && (
-                  <button type="button"
-                    onClick={() => setEditing(p => ({ ...p!, collection: '' }))}
-                    className="text-xs text-gray-500 hover:text-red-400 transition-colors px-1">
-                    ✕
-                  </button>
-                )}
-              </div>
-              <datalist id="collections-list">
-                {collections.map(c => <option key={c} value={c} />)}
-              </datalist>
+              <select
+                value={editing.collection}
+                onChange={e => setEditing(p => ({ ...p!, collection: e.target.value }))}
+                className="w-full input-admin">
+                <option value="">— No collection —</option>
+                {collections.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
               {editing.collection && (
-                <div className="mt-1.5">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-900/40 border border-purple-700/40 text-purple-300">
-                    🏷 {editing.collection}
-                  </span>
-                </div>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-900/40 border border-purple-700/40 text-purple-300 mt-1.5">
+                  🏷 {editing.collection}
+                </span>
               )}
-              <p className="text-xs text-gray-600 mt-1">
-                Deve ser idêntico ao nome de uma coleção do Codex para o vínculo funcionar.
-              </p>
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
