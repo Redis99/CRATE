@@ -3,7 +3,7 @@
 import { RarityBadge } from '@/components/ui/RarityBadge'
 import { DurabilityBar } from '@/components/ui/DurabilityBar'
 import { CategoryTag } from '@/components/game/CategoryTag'
-import { effectiveERWithEquipment, effectivePDWithEquipment, effectiveER } from '@/lib/game-math'
+import { effectiveERWithEquipment, effectivePDWithEquipment, effectiveER, durabilityPct } from '@/lib/game-math'
 import type { Rarity } from '@/lib/rarity'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -29,6 +29,7 @@ export interface RobotCardData {
   hashPower: number
   energyRate: number
   durability: number
+  maxDurability?: number | null  // valor base do template (null = fallback 100)
   isActive?: boolean
   outpostSlot?: number | null
   equipments?: RobotEquipmentData[]
@@ -45,15 +46,11 @@ export type RobotCardVariant = 'full' | 'outpost' | 'mini'
 interface RobotCardProps {
   robot: RobotCardData
   variant?: RobotCardVariant
-  // Slot (variant outpost)
   slotNumber?: number
-  // Checkboxes (variant full)
   selectMode?: boolean
   selected?: boolean
   onToggleSelect?: (id: string) => void
-  // Ações — renderizadas no rodapé
   actions?: React.ReactNode
-  // Unequip inline (variant full)
   onUnequip?: (equipmentId: string) => void
 }
 
@@ -69,25 +66,28 @@ export function RobotCard({
   actions,
   onUnequip,
 }: RobotCardProps) {
-  const equips     = robot.equipments?.map((e) => e.equipment) ?? []
-  const boostedER  = effectiveERWithEquipment(robot.hashPower, equips)
+  const equips      = robot.equipments?.map((e) => e.equipment) ?? []
+  const boostedER   = effectiveERWithEquipment(robot.hashPower, equips)
   const effectivePD = effectivePDWithEquipment(robot.energyRate, equips)
+  const maxDur      = robot.maxDurability ?? 100  // fallback para robôs antigos
 
-  // ER efetivo considera desgaste quando deployado
-  const actualER   = variant === 'outpost'
-    ? effectiveER(boostedER, robot.durability)
+  // ER efetivo considera desgaste (usa maxDurability para calcular % corretamente)
+  const actualER = variant === 'outpost'
+    ? effectiveER(boostedER, robot.durability, maxDur)
     : boostedER
 
-  const erBonus    = Math.round((boostedER - robot.hashPower) * 10) / 10
-  const pdSaved    = Math.round((robot.energyRate - effectivePD) * 10) / 10
-  const hrsLeft    = effectivePD > 0 ? robot.durability / effectivePD : 0
-  const hrsStr     = hrsLeft < 1
+  const erBonus  = Math.round((boostedER - robot.hashPower) * 10) / 10
+  const pdSaved  = Math.round((robot.energyRate - effectivePD) * 10) / 10
+
+  // Horas restantes: durabilidade atual / desgaste por hora (PD)
+  const hrsLeft  = effectivePD > 0 ? robot.durability / effectivePD : 0
+  const hrsStr   = hrsLeft < 1
     ? `${(hrsLeft * 60).toFixed(0)}min`
     : `~${hrsLeft.toFixed(1)}h`
 
-  const energyColor = robot.durability > 50
-    ? 'text-green-400'
-    : robot.durability > 20 ? 'text-yellow-400' : 'text-red-400'
+  // Cor baseada em % relativa ao máximo
+  const pct = durabilityPct(robot.durability, maxDur)
+  const energyColor = pct > 50 ? 'text-green-400' : pct > 20 ? 'text-yellow-400' : 'text-red-400'
 
   const usedSlots = robot.equipments?.length ?? 0
   const freeSlots = MAX_EQUIPMENT_SLOTS - usedSlots
@@ -106,10 +106,10 @@ export function RobotCard({
             <span className="text-teal-400">{effectivePD.toFixed(1)} PD/hr</span>
             {slotNumber && <span>Slot {slotNumber}</span>}
           </div>
-          <DurabilityBar value={robot.durability} height="sm" />
+          <DurabilityBar value={robot.durability} max={maxDur} height="sm" />
           <div className="flex justify-between text-xs mt-0.5">
             <span className="text-gray-600">Energy</span>
-            <span className={energyColor}>{robot.durability.toFixed(1)} · {hrsStr}</span>
+            <span className={energyColor}>{robot.durability.toFixed(1)} / {maxDur} · {hrsStr}</span>
           </div>
         </div>
       </div>
@@ -123,7 +123,6 @@ export function RobotCard({
         <p className="text-white text-sm font-semibold truncate">{robot.name}</p>
         <p className="text-gray-500 text-xs truncate mb-2">{robot.collection}</p>
 
-        {/* Stats */}
         <div className="space-y-1 mb-2">
           <div className="flex items-center gap-1.5 text-xs">
             <span className="text-orange-400 font-medium w-5">ER</span>
@@ -137,14 +136,14 @@ export function RobotCard({
           </div>
         </div>
 
-        {/* Energy bar */}
         <div className="flex justify-between text-xs mb-1">
           <span className="text-gray-500">Energy</span>
           <span className={`${energyColor} font-mono`}>
-            {robot.durability.toFixed(1)} <span className="text-gray-600">· {hrsStr}</span>
+            {robot.durability.toFixed(1)} / {maxDur}
+            <span className="text-gray-600"> · {hrsStr}</span>
           </span>
         </div>
-        <DurabilityBar value={robot.durability} />
+        <DurabilityBar value={robot.durability} max={maxDur} />
 
         {actions && <div className="mt-3">{actions}</div>}
       </div>
@@ -154,7 +153,6 @@ export function RobotCard({
   // ─── Full (inventário) ────────────────────────────────────────────────────
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
       <div className="flex items-start justify-between mb-1">
         <div className="flex items-center gap-2">
           {selectMode && onToggleSelect && (
@@ -173,7 +171,6 @@ export function RobotCard({
       <p className="text-white text-sm font-semibold mt-1 truncate">{robot.name}</p>
       <p className="text-gray-500 text-xs truncate">{robot.collection}</p>
 
-      {/* Stats */}
       <div className="mt-2 mb-1 space-y-1.5">
         <div className="flex items-center gap-1.5 text-xs">
           <span className="text-orange-400 font-medium w-5">ER</span>
@@ -190,14 +187,13 @@ export function RobotCard({
             <span className="text-gray-600 text-xs">Energy</span>
             <div className="flex items-center gap-1">
               <span className={`text-xs font-mono ${energyColor}`}>{robot.durability.toFixed(1)}</span>
-              <span className="text-gray-600 text-xs">/ 100 · {hrsStr}</span>
+              <span className="text-gray-600 text-xs">/ {maxDur} · {hrsStr}</span>
             </div>
           </div>
-          <DurabilityBar value={robot.durability} height="sm" />
+          <DurabilityBar value={robot.durability} max={maxDur} height="sm" />
         </div>
       </div>
 
-      {/* Equipment slots */}
       {equips.length > 0 || onUnequip ? (
         <div className="mt-2 pt-2 border-t border-gray-800/60 flex-1">
           <div className="flex justify-between text-xs mb-1.5">

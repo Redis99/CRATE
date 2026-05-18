@@ -345,13 +345,14 @@ export async function saveDropToInventory(userId: string, drop: DropResultType):
       await prisma.robot.create({
         data: {
           userId,
-          templateId: drop.templateId ?? null,      // referência ao template (se existir)
-          name:       drop.name,                    // cache do template
-          collection: drop.collection,
-          rarity:     drop.rarity,
-          hashPower:  drop.hashPower,
-          energyRate: drop.energyRate,
-          durability: drop.durability ?? 100,       // valor base do template
+          templateId:    drop.templateId    ?? null,  // referência ao template (se existir)
+          name:          drop.name,                   // cache do template
+          collection:    drop.collection,
+          rarity:        drop.rarity,
+          hashPower:     drop.hashPower,
+          energyRate:    drop.energyRate,
+          maxDurability: drop.durability    ?? 100,   // máximo do template
+          durability:    drop.durability    ?? 100,   // começa no máximo
           isActive: false,
         },
       })
