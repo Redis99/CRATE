@@ -5,16 +5,25 @@
 
 /**
  * Calcula o Extraction Rate (ER) efetivo considerando durabilidade.
+ * Usa percentual relativo ao maxDurability (fallback: 100 para compatibilidade).
  * - 100–51%: ER normal
  * -  50–21%: ER -20%
  * -  20– 1%: ER -60% (modo emergência)
  * -      0%: offline (ER = 0)
  */
-export function effectiveER(hashPower: number, durability: number): number {
-  if (durability === 0) return 0
-  if (durability <= 20) return hashPower * 0.4
-  if (durability <= 50) return hashPower * 0.8
+export function effectiveER(hashPower: number, durability: number, maxDurability = 100): number {
+  const max = maxDurability > 0 ? maxDurability : 100
+  const pct = (durability / max) * 100
+  if (pct <= 0)  return 0
+  if (pct <= 20) return hashPower * 0.4
+  if (pct <= 50) return hashPower * 0.8
   return hashPower
+}
+
+/** Converte durabilidade absoluta em percentual (0–100). */
+export function durabilityPct(durability: number, maxDurability = 100): number {
+  const max = maxDurability > 0 ? maxDurability : 100
+  return Math.min(100, Math.max(0, (durability / max) * 100))
 }
 
 /**

@@ -98,16 +98,31 @@ export async function PUT(req: NextRequest) {
         },
       },
     }),
-    // 2. Propaga os 3 atributos para todos os robôs vinculados (via templateId)
+    // 2. Propaga para robôs vinculados via templateId (link exato)
     prisma.robot.updateMany({
       where: { templateId: id },
       data: {
-        name:       name,
-        collection: collection ?? '',
-        rarity:     rarity as never,
-        hashPower:  Number(hashPower),
-        energyRate: Number(energyRate ?? 1),
-        durability: Number(durability ?? 100),
+        name:          name,
+        collection:    collection ?? '',
+        rarity:        rarity as never,
+        hashPower:     Number(hashPower),
+        energyRate:    Number(energyRate ?? 1),
+        durability:    Number(durability ?? 100),
+        maxDurability: Number(durability ?? 100),
+      },
+    }),
+    // 3. Retrocompatibilidade — robôs criados antes do templateId
+    //    Vincula e atualiza os que têm o mesmo nome mas templateId nulo
+    prisma.robot.updateMany({
+      where: { templateId: null, name: (existing?.metadata as Record<string,unknown>|null)?.robotName as string ?? existing?.name ?? '', rarity: rarity as never },
+      data: {
+        templateId:    id,
+        name:          name,
+        collection:    collection ?? '',
+        hashPower:     Number(hashPower),
+        energyRate:    Number(energyRate ?? 1),
+        durability:    Number(durability ?? 100),
+        maxDurability: Number(durability ?? 100),
       },
     }),
   ])
