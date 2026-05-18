@@ -78,16 +78,26 @@ export async function PUT(req: NextRequest) {
   const { id, name, collection, rarity, hashPower, energyRate, durability, price, active, description } = await req.json()
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
+  // Busca o nome atual do template para localizar robôs antigos (templateId null)
+  const current = await prisma.shopItem.findUnique({ where: { id }, select: { name: true, metadata: true } })
+  const currentName = (current?.metadata as Record<string, unknown> | null)?.robotName as string ?? current?.name ?? name
+
+  const propagateData = {
+    name:          name,
+    collection:    collection ?? '',
+    rarity:        rarity as never,
+    hashPower:     Number(hashPower),
+    energyRate:    Number(energyRate ?? 1),
+    durability:    Number(durability ?? 100),
+    maxDurability: Number(durability ?? 100),
+  }
+
   const [item] = await Promise.all([
     // 1. Atualiza o template (ShopItem)
     prisma.shopItem.update({
       where: { id },
       data: {
-        name,
-        description,
-        price,
-        rarity,
-        active,
+        name, description, price, rarity, active,
         metadata: {
           specific:        true,
           robotName:       name,
@@ -101,29 +111,12 @@ export async function PUT(req: NextRequest) {
     // 2. Propaga para robôs vinculados via templateId (link exato)
     prisma.robot.updateMany({
       where: { templateId: id },
-      data: {
-        name:          name,
-        collection:    collection ?? '',
-        rarity:        rarity as never,
-        hashPower:     Number(hashPower),
-        energyRate:    Number(energyRate ?? 1),
-        durability:    Number(durability ?? 100),
-        maxDurability: Number(durability ?? 100),
-      },
+      data:  propagateData,
     }),
-    // 3. Retrocompatibilidade — robôs criados antes do templateId
-    //    Vincula e atualiza os que têm o mesmo nome mas templateId nulo
+    // 3. Retrocompatibilidade — vincula e atualiza robôs sem templateId pelo nome atual
     prisma.robot.updateMany({
-      where: { templateId: null, name: (existing?.metadata as Record<string,unknown>|null)?.robotName as string ?? existing?.name ?? '', rarity: rarity as never },
-      data: {
-        templateId:    id,
-        name:          name,
-        collection:    collection ?? '',
-        hashPower:     Number(hashPower),
-        energyRate:    Number(energyRate ?? 1),
-        durability:    Number(durability ?? 100),
-        maxDurability: Number(durability ?? 100),
-      },
+      where: { templateId: null, name: currentName, rarity: rarity as never },
+      data:  { ...propagateData, templateId: id },
     }),
   ])
 
