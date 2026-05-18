@@ -74,6 +74,10 @@ model User {
   // Ranking semanal — acumula ER contribuído nesta semana; resetado toda segunda
   weeklyErContributed Float @default(0)
 
+  // Admin
+  isAdmin             Boolean  @default(false)
+  isBanned            Boolean  @default(false)
+
   @@map("users")
 }
 
