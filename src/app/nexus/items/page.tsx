@@ -212,6 +212,9 @@ export default function ItemsAdminPage() {
               <select value={editTpl.collection} className="w-full ia"
                 onChange={e => setEditTpl(p => ({ ...p!, collection: e.target.value }))}>
                 <option value="">— No collection —</option>
+                {editTpl.collection && !collections.includes(editTpl.collection) && (
+                  <option value={editTpl.collection}>{editTpl.collection}</option>
+                )}
                 {collections.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
               {editTpl.collection && (

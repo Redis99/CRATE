@@ -78,24 +78,42 @@ export async function PUT(req: NextRequest) {
   const { id, name, collection, rarity, hashPower, energyRate, durability, price, active, description } = await req.json()
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-  const item = await prisma.shopItem.update({
-    where: { id },
-    data: {
-      name,
-      description,
-      price,
-      rarity,
-      active,
-      metadata: {
-        specific:        true,
-        robotName:       name,
-        robotCollection: collection ?? '',
-        hashPower:       Number(hashPower),
-        energyRate:      Number(energyRate ?? 1),
-        durability:      Number(durability ?? 100),
+  // Busca o nome atual antes de alterar (para localizar instâncias existentes)
+  const existing = await prisma.shopItem.findUnique({ where: { id }, select: { name: true, metadata: true } })
+  const oldName = (existing?.metadata as Record<string, unknown> | null)?.robotName as string ?? existing?.name ?? ''
+
+  const [item] = await Promise.all([
+    // 1. Atualiza o template (ShopItem)
+    prisma.shopItem.update({
+      where: { id },
+      data: {
+        name,
+        description,
+        price,
+        rarity,
+        active,
+        metadata: {
+          specific:        true,
+          robotName:       name,
+          robotCollection: collection ?? '',
+          hashPower:       Number(hashPower),
+          energyRate:      Number(energyRate ?? 1),
+          durability:      Number(durability ?? 100),
+        },
       },
-    },
-  })
+    }),
+    // 2. Propaga alterações para todas as instâncias existentes nos inventários
+    //    Não propaga durability (desgaste individual por robô)
+    prisma.robot.updateMany({
+      where: { name: oldName, ...(rarity ? { rarity: rarity as never } : {}) },
+      data: {
+        name:       name,
+        collection: collection ?? '',
+        hashPower:  Number(hashPower),
+        energyRate: Number(energyRate ?? 1),
+      },
+    }),
+  ])
 
   return NextResponse.json(item)
 }
