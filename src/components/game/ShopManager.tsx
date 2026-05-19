@@ -23,25 +23,33 @@ interface ShopData {
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
 const TABS: { key: ShopCategory; label: string; icon: string }[] = [
-  { key: 'robots',       label: 'Robots',       icon: '🤖' },
-  { key: 'equipment',    label: 'Equipment',    icon: '⚙️' },
+  { key: 'robots',       label: 'Robots',        icon: '🤖' },
+  { key: 'equipment',    label: 'Equipment',     icon: '⚙️' },
   { key: 'baseUpgrades', label: 'Base Upgrades', icon: '🏗️' },
-  { key: 'batteries',    label: 'Batteries',    icon: '🔋' },
-  { key: 'outpostSlots', label: 'Outpost',      icon: '🚀' },
-  { key: 'inventory',    label: 'Storage',      icon: '📦' },
+  { key: 'batteries',    label: 'Batteries',     icon: '🔋' },
+  { key: 'outpostSlots', label: 'Outpost',       icon: '🚀' },
+  { key: 'inventory',    label: 'Storage',       icon: '📦' },
 ]
+
+// ─── Quantidade máxima comprável ──────────────────────────────────────────────
+// Baseado puramente na acessibilidade (saldo ÷ preço unitário).
+// A API aplica as regras de negócio reais (slots livres, unlock sequencial, etc.)
+
+function getMaxQty(price: number, balance: number): number {
+  if (price <= 0) return 1
+  return Math.min(99, Math.floor(balance / price))
+}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function ShopManager() {
-  const [data, setData]           = useState<ShopData | null>(null)
-  const [loading, setLoading]     = useState(true)
-  const [activeTab, setActiveTab] = useState<ShopCategory>('robots')
-  const [buying, setBuying]       = useState<string | null>(null)
-  const [error, setError]         = useState('')
-  const [success, setSuccess]     = useState('')
-  const [drop, setDrop]           = useState<DropResultType | null>(null)
-  // Quantidade por item (usado apenas na aba batteries)
+  const [data, setData]             = useState<ShopData | null>(null)
+  const [loading, setLoading]       = useState(true)
+  const [activeTab, setActiveTab]   = useState<ShopCategory>('robots')
+  const [buying, setBuying]         = useState<string | null>(null)
+  const [error, setError]           = useState('')
+  const [success, setSuccess]       = useState('')
+  const [drops, setDrops]           = useState<DropResultType[]>([])
   const [quantities, setQuantities] = useState<Record<string, number>>({})
 
   const fetchData = useCallback(async () => {
@@ -56,21 +64,23 @@ export function ShopManager() {
     setQuantities(prev => ({ ...prev, [itemId]: qty }))
   }
 
-  async function handleBuy(itemId: string, qty: number = 1) {
-    setBuying(itemId); setError(''); setSuccess('')
+  async function handleBuy(itemId: string, qty: number) {
+    setBuying(itemId); setError(''); setSuccess(''); setDrops([])
+
     const res  = await fetch('/api/game/shop/buy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ itemId, quantity: qty }),
     })
     const json = await res.json()
+
     if (!res.ok) {
       setError(json.error ?? 'Purchase failed.')
     } else {
-      const label = qty > 1 ? `×${qty} purchased!` : 'Purchase successful!'
-      setSuccess(label)
-      if (json.drop) setDrop(json.drop)
-      // Reseta a quantidade do item para 1 após compra bem-sucedida
+      const bought = json.quantity ?? qty
+      setSuccess(bought > 1 ? `×${bought} purchased!` : 'Purchase successful!')
+      if (json.drops?.length > 0) setDrops(json.drops)
+      // Reseta a quantidade do item para 1
       setQuantities(prev => ({ ...prev, [itemId]: 1 }))
       await fetchData()
     }
@@ -84,7 +94,9 @@ export function ShopManager() {
 
   return (
     <>
-      {drop && <LootboxDropModal drops={[drop]} onClose={() => setDrop(null)} />}
+      {drops.length > 0 && (
+        <LootboxDropModal drops={drops} onClose={() => setDrops([])} />
+      )}
 
       {/* Balance */}
       <div className="bg-[#111118] border border-gray-800/60 rounded-xl px-5 py-3 mb-5 flex justify-between items-center">
@@ -101,7 +113,7 @@ export function ShopManager() {
           <button onClick={() => setError('')} className="text-red-400/60 hover:text-red-400 text-xs">✕</button>
         </div>
       )}
-      {success && !drop && (
+      {success && drops.length === 0 && (
         <div className="mb-4 bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-3 flex justify-between">
           <p className="text-green-400 text-sm">{success}</p>
           <button onClick={() => setSuccess('')} className="text-green-400/60 hover:text-green-400 text-xs">✕</button>
@@ -142,6 +154,7 @@ export function ShopManager() {
               balance={data.balance}
               buying={buying === item.id}
               quantity={quantities[item.id] ?? 1}
+              maxQty={getMaxQty(item.price, data.balance)}
               onQtyChange={handleQtyChange}
               onBuy={handleBuy}
             />

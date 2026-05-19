@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { INVENTORY_DEFAULT, INVENTORY_FIELD, INVENTORY_MAX } from '@/lib/shop-items'
 import {
   generateRobotDrop, generateEquipmentDrop, generateBaseUpgradeDrop,
-  saveDropToInventory, checkInventorySpace,
+  type DropResultType,
 } from '@/lib/lootbox'
 
 function expansionPrice(
@@ -25,18 +25,61 @@ function normalizeCategory(category: string): string {
   return category
 }
 
+/** Monta o `prisma.create` para um drop gerado aleatoriamente */
+function buildDropCreate(userId: string, drop: DropResultType) {
+  switch (drop.kind) {
+    case 'robot':
+      return prisma.robot.create({ data: {
+        userId,
+        templateId:    drop.templateId ?? null,
+        name:          drop.name,
+        collection:    drop.collection,
+        rarity:        drop.rarity,
+        hashPower:     drop.hashPower,
+        energyRate:    drop.energyRate,
+        maxDurability: drop.durability ?? null,
+        durability:    drop.durability ?? 100,
+        isActive:      false,
+      }})
+    case 'equipment':
+      return prisma.equipment.create({ data: {
+        userId,
+        name:        drop.name,
+        rarity:      drop.rarity,
+        effectType:  drop.effectType,
+        effectValue: drop.effectValue,
+        effectType2:  drop.effectType2  ?? null,
+        effectValue2: drop.effectValue2 ?? null,
+        isPermanent: true,
+      }})
+    case 'baseUpgrade':
+      return prisma.baseUpgrade.create({ data: {
+        userId,
+        name:        drop.name,
+        rarity:      drop.rarity,
+        effectType:  drop.effectType,
+        effectValue: drop.effectValue,
+        isApplied:   false,
+      }})
+    default:
+      throw new Error(`Unsupported drop kind for shop: ${(drop as DropResultType).kind}`)
+  }
+}
+
 export async function POST(req: NextRequest) {
   const user = await getServerUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body     = await req.json()
+  const body       = await req.json()
   const { itemId } = body
-  const quantity   = Math.min(100, Math.max(1, Math.floor(Number(body.quantity ?? 1))))
+  // Quantidade: 1–99, sempre inteiro positivo
+  const quantity   = Math.min(99, Math.max(1, Math.floor(Number(body.quantity ?? 1))))
+
   if (!itemId) return NextResponse.json({ error: 'Missing itemId.' }, { status: 400 })
 
   // ── Busca item no banco (única fonte de verdade) ───────────────────────
   const dbItem = await prisma.shopItem.findUnique({ where: { id: itemId } })
-  if (!dbItem)       return NextResponse.json({ error: 'Item not found in shop.' }, { status: 404 })
+  if (!dbItem)        return NextResponse.json({ error: 'Item not found in shop.' }, { status: 404 })
   if (!dbItem.active) return NextResponse.json({ error: 'Item not available.'    }, { status: 400 })
 
   const meta     = (dbItem.metadata as Record<string, unknown>) ?? {}
@@ -52,18 +95,9 @@ export async function POST(req: NextRequest) {
   })
   if (!profile) return NextResponse.json({ error: 'Profile not found.' }, { status: 404 })
 
-  // ── Calcula preço real (inventário tem preço dinâmico) ─────────────────
-  let price = dbItem.price
-  if (category === 'inventory') {
-    const tab       = String(meta.inventoryTab ?? '')
-    const field     = INVENTORY_FIELD[tab]
-    const current   = field ? (profile as Record<string, number>)[field] : (INVENTORY_DEFAULT[tab] ?? 0)
-    const basePrice = dbItem.price || Number(meta.inventoryBasePrice ?? 5)
-    price = expansionPrice(basePrice, current, INVENTORY_DEFAULT[tab] ?? 0, Number(meta.inventoryAdd ?? 5))
-  }
-
-  if (profile.balanceCrate < price) {
-    return NextResponse.json({ error: `Insufficient balance. Need ${price} CRATE.` }, { status: 400 })
+  // ── Verificação de saldo mínimo (1 unidade) ───────────────────────────
+  if (profile.balanceCrate < dbItem.price) {
+    return NextResponse.json({ error: `Insufficient balance. Need ${dbItem.price} CRATE.` }, { status: 400 })
   }
 
   // ── Processa compra por categoria ──────────────────────────────────────
@@ -74,44 +108,49 @@ export async function POST(req: NextRequest) {
     case 'robots':
     case 'equipment':
     case 'baseUpgrades': {
-      const rarity      = (dbItem.rarity ?? 'COMMON') as 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY'
+      const rarity       = (dbItem.rarity ?? 'COMMON') as 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY'
       const generateType = String(meta.generateType ?? '')
-      const isSpecific   = meta.specific === true     // item com atributos fixos criado pelo admin
+      const isSpecific   = meta.specific === true
+      const isRobot      = category === 'robots'
+      const isEquipment  = category === 'equipment'
 
-      const isRobot       = category === 'robots'
-      const isEquipment   = category === 'equipment'
-      const isBaseUpgrade = category === 'baseUpgrades'
+      const totalCost = Math.round(dbItem.price * quantity * 100) / 100
+      if (profile.balanceCrate < totalCost) {
+        return NextResponse.json({ error: `Insufficient balance. Need ${totalCost} CRATE.` }, { status: 400 })
+      }
 
-      // Verificação de espaço no inventário
-      if (isRobot) {
-        const count = await prisma.robot.count({ where: { userId: user.id } })
-        if (count >= profile.slotsRobots)
-          return NextResponse.json({ error: 'Robot inventory is full.' }, { status: 400 })
-      }
-      if (isEquipment) {
-        const count = await prisma.equipment.count({ where: { userId: user.id } })
-        if (count >= profile.slotsEquipments)
-          return NextResponse.json({ error: 'Equipment inventory is full.' }, { status: 400 })
-      }
-      if (isBaseUpgrade) {
-        const count = await prisma.baseUpgrade.count({ where: { userId: user.id } })
-        if (count >= profile.slotsBaseUpgrades)
-          return NextResponse.json({ error: 'Base upgrade inventory is full.' }, { status: 400 })
+      // Verifica slots livres para N itens
+      const [robotCount, equipCount, baseCount] = await Promise.all([
+        isRobot     ? prisma.robot.count({ where: { userId: user.id } })       : Promise.resolve(0),
+        isEquipment ? prisma.equipment.count({ where: { userId: user.id } })   : Promise.resolve(0),
+        !isRobot && !isEquipment ? prisma.baseUpgrade.count({ where: { userId: user.id } }) : Promise.resolve(0),
+      ])
+
+      const freeSlots = isRobot     ? profile.slotsRobots       - robotCount
+                      : isEquipment ? profile.slotsEquipments   - equipCount
+                      :               profile.slotsBaseUpgrades - baseCount
+
+      if (freeSlots < quantity) {
+        const label = isRobot ? 'robot' : isEquipment ? 'equipment' : 'base upgrade'
+        return NextResponse.json({
+          error: `Not enough ${label} inventory slots. Free: ${freeSlots}, requested: ${quantity}.`,
+        }, { status: 400 })
       }
 
       if (isSpecific) {
-        // ── Item com atributos fixos (criado pelo admin) ─────────────────
-        const itemCreate = isRobot
+        // ── Item com atributos fixos criado pelo admin ────────────────────
+        const makeCreate = () => isRobot
           ? prisma.robot.create({ data: {
-              userId:     user.id,
-              templateId: dbItem.id,                                  // referência ao template
-              name:       String(meta.robotName ?? dbItem.name),     // cache do template
-              collection: String(meta.robotCollection ?? ''),
+              userId:       user.id,
+              templateId:   dbItem.id,
+              name:         String(meta.robotName ?? dbItem.name),
+              collection:   String(meta.robotCollection ?? ''),
               rarity,
-              hashPower:  Number(meta.hashPower  ?? 10),
-              energyRate: Number(meta.energyRate ?? 1),
-              maxDurability: Number(meta.durability ?? 100),          // máximo do template
-              durability:    Number(meta.durability ?? 100),          // começa no máximo
+              hashPower:    Number(meta.hashPower  ?? 10),
+              energyRate:   Number(meta.energyRate ?? 1),
+              maxDurability: Number(meta.durability ?? 100),
+              durability:    Number(meta.durability ?? 100),
+              isActive:     false,
             }})
           : isEquipment
           ? prisma.equipment.create({ data: {
@@ -122,75 +161,74 @@ export async function POST(req: NextRequest) {
               effectValue:  Number(meta.effectValue  ?? 0),
               effectType2:  (meta.effectType2  as never) ?? null,
               effectValue2: meta.effectValue2 != null ? Number(meta.effectValue2) : null,
+              isPermanent:  true,
             }})
           : prisma.baseUpgrade.create({ data: {
-              userId:       user.id,
-              name:         dbItem.name,
+              userId:      user.id,
+              name:        dbItem.name,
               rarity,
-              effectType:   meta.effectType   as never,
-              effectValue:  Number(meta.effectValue  ?? 0),
-              effectType2:  (meta.effectType2  as never) ?? null,
-              effectValue2: meta.effectValue2 != null ? Number(meta.effectValue2) : null,
+              effectType:  meta.effectType   as never,
+              effectValue: Number(meta.effectValue  ?? 0),
+              isApplied:   false,
             }})
 
         await prisma.$transaction([
           prisma.user.update({
             where: { id: user.id },
-            data:  { balanceCrate: { decrement: price } },
+            data:  { balanceCrate: { decrement: totalCost } },
           }),
           prisma.transaction.create({
-            data: { userId: user.id, type: 'SHOP_PURCHASE', token: 'CRATE', amount: price, status: 'CONFIRMED' },
+            data: { userId: user.id, type: 'SHOP_PURCHASE', token: 'CRATE', amount: totalCost, status: 'CONFIRMED' },
           }),
-          itemCreate,
+          ...Array.from({ length: quantity }, makeCreate),
         ])
-        return NextResponse.json({ success: true, specific: true })
+        return NextResponse.json({ success: true, quantity })
 
       } else {
-        // ── Item gerado aleatoriamente por raridade ───────────────────────
+        // ── Geração aleatória por raridade ────────────────────────────────
         const rarityForDrop = rarity as 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC'
-        const drop =
+        const generatedDrops = Array.from({ length: quantity }, () =>
           generateType === 'robot'       ? generateRobotDrop(rarityForDrop) :
           generateType === 'equipment'   ? generateEquipmentDrop(rarityForDrop) :
                                           generateBaseUpgradeDrop(rarityForDrop)
-
-        const spaceError = await checkInventorySpace(user.id, drop)
-        if (spaceError) return NextResponse.json({ error: spaceError }, { status: 400 })
+        )
 
         await prisma.$transaction([
           prisma.user.update({
             where: { id: user.id },
-            data:  { balanceCrate: { decrement: price } },
+            data:  { balanceCrate: { decrement: totalCost } },
           }),
           prisma.transaction.create({
-            data: { userId: user.id, type: 'SHOP_PURCHASE', token: 'CRATE', amount: price, status: 'CONFIRMED' },
+            data: { userId: user.id, type: 'SHOP_PURCHASE', token: 'CRATE', amount: totalCost, status: 'CONFIRMED' },
           }),
+          ...generatedDrops.map(drop => buildDropCreate(user.id, drop)),
         ])
-        await saveDropToInventory(user.id, drop)
-        return NextResponse.json({ success: true, drop })
+        return NextResponse.json({ success: true, drops: generatedDrops })
       }
     }
 
     // ── Baterias (Kits de Reparo) ─────────────────────────────────────────
     case 'batteries': {
-      const value      = Number(meta.batteryValue ?? 0)
+      const value     = Number(meta.batteryValue ?? 0)
       if (!value) return NextResponse.json({ error: 'Invalid battery item.' }, { status: 400 })
 
-      const totalCost  = Math.round(price * quantity * 100) / 100
+      const totalCost = Math.round(dbItem.price * quantity * 100) / 100
       if (profile.balanceCrate < totalCost) {
         return NextResponse.json({ error: `Insufficient balance. Need ${totalCost} CRATE.` }, { status: 400 })
       }
 
-      // Kits empilham na mesma linha — só precisa de slot novo se esse tipo ainda não existe
-      const profile2 = await prisma.user.findUnique({
-        where: { id: user.id },
-        select: { slotsConsumables: true, _count: { select: { consumables: true } } },
-      })
+      // Slot novo só é necessário se esse tipo de kit ainda não existir
       const existingRow = await prisma.consumable.findUnique({
         where: { userId_consumableType_value: { userId: user.id, consumableType: 'REPAIR_KIT', value } },
       })
-      const needsNewSlot = !existingRow
-      if (needsNewSlot && profile2 && profile2._count.consumables >= profile2.slotsConsumables) {
-        return NextResponse.json({ error: 'Consumables inventory is full.' }, { status: 400 })
+      if (!existingRow) {
+        const profile2 = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: { slotsConsumables: true, _count: { select: { consumables: true } } },
+        })
+        if (profile2 && profile2._count.consumables >= profile2.slotsConsumables) {
+          return NextResponse.json({ error: 'Consumables inventory is full.' }, { status: 400 })
+        }
       }
 
       await prisma.$transaction(async (tx) => {
@@ -208,6 +246,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Slots do Outpost ──────────────────────────────────────────────────
+    // Unlock é sequencial — sempre processa 1 por vez independente de quantity
     case 'outpostSlots': {
       const slotNum      = Number(meta.slotNumber  ?? 0)
       const slotRequires = Number(meta.slotRequires ?? 0)
@@ -223,38 +262,56 @@ export async function POST(req: NextRequest) {
       await prisma.$transaction([
         prisma.user.update({
           where: { id: user.id },
-          data:  { balanceCrate: { decrement: price }, outpostSlots: { increment: 1 } },
+          data:  { balanceCrate: { decrement: dbItem.price }, outpostSlots: { increment: 1 } },
         }),
         prisma.transaction.create({
-          data: { userId: user.id, type: 'SHOP_PURCHASE', token: 'CRATE', amount: price, status: 'CONFIRMED' },
+          data: { userId: user.id, type: 'SHOP_PURCHASE', token: 'CRATE', amount: dbItem.price, status: 'CONFIRMED' },
         }),
       ])
-      return NextResponse.json({ success: true })
+      return NextResponse.json({ success: true, quantity: 1 })
     }
 
     // ── Expansões de Inventário ───────────────────────────────────────────
+    // Preço escalonado: cada unidade custa +20% em relação à anterior.
+    // Processa tantas compras quantas forem acessíveis até o limite máximo.
     case 'inventory': {
       const tab     = String(meta.inventoryTab ?? '')
       const field   = INVENTORY_FIELD[tab]
       const add     = Number(meta.inventoryAdd ?? 0)
       if (!field || !add) return NextResponse.json({ error: 'Invalid inventory item.' }, { status: 400 })
 
-      const current  = (profile as Record<string, number>)[field]
-      const maxSlots = INVENTORY_MAX[tab] ?? 0
-      if (current >= maxSlots) {
+      const maxSlots  = INVENTORY_MAX[tab] ?? 0
+      const basePrice = dbItem.price || Number(meta.inventoryBasePrice ?? 5)
+      let current     = (profile as Record<string, number>)[field]
+
+      // Calcula custo real escalonado para N compras (para quando bater no max)
+      let totalCost  = 0
+      let actualQty  = 0
+      for (let i = 0; i < quantity; i++) {
+        if (current >= maxSlots) break
+        totalCost += expansionPrice(basePrice, current, INVENTORY_DEFAULT[tab] ?? 0, add)
+        current   += add
+        actualQty++
+      }
+      totalCost = Math.round(totalCost * 100) / 100
+
+      if (actualQty === 0) {
         return NextResponse.json({ error: `${tab} inventory is already at maximum capacity.` }, { status: 400 })
+      }
+      if (profile.balanceCrate < totalCost) {
+        return NextResponse.json({ error: `Insufficient balance. Need ${totalCost} CRATE.` }, { status: 400 })
       }
 
       await prisma.$transaction([
         prisma.user.update({
           where: { id: user.id },
-          data:  { balanceCrate: { decrement: price }, [field]: { increment: add } },
+          data:  { balanceCrate: { decrement: totalCost }, [field]: { increment: add * actualQty } },
         }),
         prisma.transaction.create({
-          data: { userId: user.id, type: 'SHOP_PURCHASE', token: 'CRATE', amount: price, status: 'CONFIRMED' },
+          data: { userId: user.id, type: 'SHOP_PURCHASE', token: 'CRATE', amount: totalCost, status: 'CONFIRMED' },
         }),
       ])
-      return NextResponse.json({ success: true })
+      return NextResponse.json({ success: true, quantity: actualQty, totalCost })
     }
 
     default:
