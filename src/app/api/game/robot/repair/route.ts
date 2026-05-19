@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
-const MAX_DURABILITY = 100
-
 export async function POST(req: NextRequest) {
   const user = await getServerUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -18,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   const [consumable, robot] = await Promise.all([
     prisma.consumable.findFirst({ where: { id: consumableId, userId: user.id } }),
-    prisma.robot.findFirst({ where: { id: robotId, userId: user.id } }),
+    prisma.robot.findFirst({ where: { id: robotId, userId: user.id }, select: { id: true, durability: true, maxDurability: true } }),
   ])
 
   if (!consumable) return NextResponse.json({ error: 'Consumable not found.' }, { status: 404 })
@@ -26,7 +24,11 @@ export async function POST(req: NextRequest) {
   if (consumable.consumableType !== 'REPAIR_KIT') {
     return NextResponse.json({ error: 'This consumable is not a Repair Kit.' }, { status: 400 })
   }
-  if (robot.durability >= MAX_DURABILITY) {
+
+  // Usa maxDurability individual do robô; fallback 100 para robôs antigos sem esse campo
+  const maxDurability = robot.maxDurability ?? 100
+
+  if (robot.durability >= maxDurability) {
     return NextResponse.json({ error: 'Robot is already at full durability.' }, { status: 400 })
   }
   if (quantity > consumable.quantity) {
@@ -34,7 +36,7 @@ export async function POST(req: NextRequest) {
   }
 
   const qty = Math.min(quantity, consumable.quantity)
-  const newDurability = Math.min(MAX_DURABILITY, robot.durability + consumable.value * qty)
+  const newDurability = Math.min(maxDurability, robot.durability + consumable.value * qty)
   const actualUsed = Math.ceil((newDurability - robot.durability) / consumable.value)
   const consume = Math.min(qty, actualUsed)  // nunca consome mais do que o necessário
 

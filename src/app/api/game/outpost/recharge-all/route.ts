@@ -6,11 +6,15 @@ export async function POST(_req: NextRequest) {
   const user = await getServerUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Busca robôs ativos com energia < 100, ordenados do mais descarregado para o mais carregado
-  const robots = await prisma.robot.findMany({
-    where: { userId: user.id, isActive: true, durability: { lt: 100 } },
+  // Busca todos os robôs ativos — filtra em JS porque cada robô tem seu próprio maxDurability
+  const allRobots = await prisma.robot.findMany({
+    where: { userId: user.id, isActive: true },
     orderBy: { durability: 'asc' },
+    select: { id: true, durability: true, maxDurability: true },
   })
+
+  // Robôs que não estão no máximo (maxDurability ?? 100 = padrão para robôs antigos)
+  const robots = allRobots.filter((r) => r.durability < (r.maxDurability ?? 100))
 
   if (robots.length === 0) {
     return NextResponse.json({ success: true, message: 'All robots already at full energy.', batteriesUsed: 0, robotsRecharged: 0 })
@@ -27,7 +31,8 @@ export async function POST(_req: NextRequest) {
   }
 
   // Simula uso das baterias — do menor valor para o maior
-  const robotEnergy = new Map(robots.map((r) => [r.id, r.durability]))
+  const robotEnergy    = new Map(robots.map((r) => [r.id, r.durability]))
+  const robotMax       = new Map(robots.map((r) => [r.id, r.maxDurability ?? 100]))
   const batteryRemaining = new Map(batteries.map((b) => [b.id, b.quantity]))
   let batteriesUsed = 0
 
@@ -36,12 +41,13 @@ export async function POST(_req: NextRequest) {
     const remaining = batteryRemaining.get(battery.id)!
 
     for (const robot of robots) {
-      let currentEnergy = robotEnergy.get(robot.id)!
-      if (currentEnergy >= 100) continue
+      const maxEnergy    = robotMax.get(robot.id)!
+      let currentEnergy  = robotEnergy.get(robot.id)!
+      if (currentEnergy >= maxEnergy) continue
 
       let qty = batteryRemaining.get(battery.id)!
-      while (qty > 0 && currentEnergy < 100) {
-        currentEnergy = Math.min(100, currentEnergy + battery.value)
+      while (qty > 0 && currentEnergy < maxEnergy) {
+        currentEnergy = Math.min(maxEnergy, currentEnergy + battery.value)
         qty--
         batteriesUsed++
       }
