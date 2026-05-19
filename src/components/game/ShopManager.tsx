@@ -34,13 +34,15 @@ const TABS: { key: ShopCategory; label: string; icon: string }[] = [
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function ShopManager() {
-  const [data, setData]       = useState<ShopData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [data, setData]           = useState<ShopData | null>(null)
+  const [loading, setLoading]     = useState(true)
   const [activeTab, setActiveTab] = useState<ShopCategory>('robots')
-  const [buying, setBuying]   = useState<string | null>(null)
-  const [error, setError]     = useState('')
-  const [success, setSuccess] = useState('')
-  const [drop, setDrop]       = useState<DropResultType | null>(null)
+  const [buying, setBuying]       = useState<string | null>(null)
+  const [error, setError]         = useState('')
+  const [success, setSuccess]     = useState('')
+  const [drop, setDrop]           = useState<DropResultType | null>(null)
+  // Quantidade por item (usado apenas na aba batteries)
+  const [quantities, setQuantities] = useState<Record<string, number>>({})
 
   const fetchData = useCallback(async () => {
     const res = await fetch('/api/game/shop')
@@ -50,19 +52,26 @@ export function ShopManager() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  async function handleBuy(itemId: string) {
+  function handleQtyChange(itemId: string, qty: number) {
+    setQuantities(prev => ({ ...prev, [itemId]: qty }))
+  }
+
+  async function handleBuy(itemId: string, qty: number = 1) {
     setBuying(itemId); setError(''); setSuccess('')
     const res  = await fetch('/api/game/shop/buy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ itemId }),
+      body: JSON.stringify({ itemId, quantity: qty }),
     })
     const json = await res.json()
     if (!res.ok) {
       setError(json.error ?? 'Purchase failed.')
     } else {
-      setSuccess('Purchase successful!')
+      const label = qty > 1 ? `×${qty} purchased!` : 'Purchase successful!'
+      setSuccess(label)
       if (json.drop) setDrop(json.drop)
+      // Reseta a quantidade do item para 1 após compra bem-sucedida
+      setQuantities(prev => ({ ...prev, [itemId]: 1 }))
       await fetchData()
     }
     setBuying(null)
@@ -132,6 +141,8 @@ export function ShopManager() {
               outpostSlots={data.outpostSlots}
               balance={data.balance}
               buying={buying === item.id}
+              quantity={quantities[item.id] ?? 1}
+              onQtyChange={handleQtyChange}
               onBuy={handleBuy}
             />
           ))}

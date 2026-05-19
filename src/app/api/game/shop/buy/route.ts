@@ -29,7 +29,9 @@ export async function POST(req: NextRequest) {
   const user = await getServerUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { itemId } = await req.json()
+  const body     = await req.json()
+  const { itemId } = body
+  const quantity   = Math.min(100, Math.max(1, Math.floor(Number(body.quantity ?? 1))))
   if (!itemId) return NextResponse.json({ error: 'Missing itemId.' }, { status: 400 })
 
   // ── Busca item no banco (única fonte de verdade) ───────────────────────
@@ -170,32 +172,39 @@ export async function POST(req: NextRequest) {
 
     // ── Baterias (Kits de Reparo) ─────────────────────────────────────────
     case 'batteries': {
-      const value = Number(meta.batteryValue ?? 0)
+      const value      = Number(meta.batteryValue ?? 0)
       if (!value) return NextResponse.json({ error: 'Invalid battery item.' }, { status: 400 })
 
+      const totalCost  = Math.round(price * quantity * 100) / 100
+      if (profile.balanceCrate < totalCost) {
+        return NextResponse.json({ error: `Insufficient balance. Need ${totalCost} CRATE.` }, { status: 400 })
+      }
+
+      // Kits empilham na mesma linha — só precisa de slot novo se esse tipo ainda não existe
       const profile2 = await prisma.user.findUnique({
         where: { id: user.id },
         select: { slotsConsumables: true, _count: { select: { consumables: true } } },
       })
-      if (profile2 && profile2._count.consumables >= profile2.slotsConsumables) {
+      const existingRow = await prisma.consumable.findUnique({
+        where: { userId_consumableType_value: { userId: user.id, consumableType: 'REPAIR_KIT', value } },
+      })
+      const needsNewSlot = !existingRow
+      if (needsNewSlot && profile2 && profile2._count.consumables >= profile2.slotsConsumables) {
         return NextResponse.json({ error: 'Consumables inventory is full.' }, { status: 400 })
       }
 
       await prisma.$transaction(async (tx) => {
-        await tx.user.update({ where: { id: user.id }, data: { balanceCrate: { decrement: price } } })
+        await tx.user.update({ where: { id: user.id }, data: { balanceCrate: { decrement: totalCost } } })
         await tx.transaction.create({
-          data: { userId: user.id, type: 'SHOP_PURCHASE', token: 'CRATE', amount: price, status: 'CONFIRMED' },
+          data: { userId: user.id, type: 'SHOP_PURCHASE', token: 'CRATE', amount: totalCost, status: 'CONFIRMED' },
         })
-        const existing = await tx.consumable.findUnique({
-          where: { userId_consumableType_value: { userId: user.id, consumableType: 'REPAIR_KIT', value } },
-        })
-        if (existing) {
-          await tx.consumable.update({ where: { id: existing.id }, data: { quantity: { increment: 1 } } })
+        if (existingRow) {
+          await tx.consumable.update({ where: { id: existingRow.id }, data: { quantity: { increment: quantity } } })
         } else {
-          await tx.consumable.create({ data: { userId: user.id, consumableType: 'REPAIR_KIT', value, quantity: 1 } })
+          await tx.consumable.create({ data: { userId: user.id, consumableType: 'REPAIR_KIT', value, quantity } })
         }
       })
-      return NextResponse.json({ success: true })
+      return NextResponse.json({ success: true, quantity })
     }
 
     // ── Slots do Outpost ──────────────────────────────────────────────────
