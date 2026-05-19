@@ -92,9 +92,10 @@ export async function GET(_req: NextRequest) {
       // Campos de geração aleatória
       generateType: meta.generateType   as string | undefined,
       // Campos de item específico (admin-created com stats fixos)
-      specific:       meta.specific === true ? true : undefined,
-      hashPower:      meta.hashPower      != null ? Number(meta.hashPower)      : undefined,
-      energyRate:     meta.energyRate     != null ? Number(meta.energyRate)     : undefined,
+      specific:        meta.specific === true ? true : undefined,
+      hashPower:       meta.hashPower       != null ? Number(meta.hashPower)       : undefined,
+      energyRate:      meta.energyRate      != null ? Number(meta.energyRate)      : undefined,
+      durability:      meta.durability      != null ? Number(meta.durability)      : undefined,
       robotCollection: meta.robotCollection != null ? String(meta.robotCollection) : undefined,
       effectType:     meta.effectType     != null ? String(meta.effectType)     : undefined,
       effectValue:    meta.effectValue    != null ? Number(meta.effectValue)    : undefined,

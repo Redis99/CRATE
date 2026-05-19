@@ -22,6 +22,7 @@ export interface ShopItem {
   specific?:        boolean
   hashPower?:       number     // ER exato do robô
   energyRate?:      number     // PD exato do robô
+  durability?:      number     // durabilidade máxima do robô (padrão 100)
   robotCollection?: string     // coleção do robô
   effectType?:      string     // efeito do equipamento/base upgrade
   effectValue?:     number

@@ -58,10 +58,12 @@ export function ShopItemCard({
     // ── Item específico com atributos fixos (criado pelo admin) ──────────
     if (item.specific) {
       if (isRobotCategory && item.hashPower != null && item.energyRate != null) {
+        const maxDur = item.durability ?? 100
         return (
-          <div className="flex gap-3 text-xs mt-1">
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs mt-1">
             <span className="text-orange-400">ER {item.hashPower}</span>
             <span className="text-teal-400">PD {item.energyRate}/hr</span>
+            <span className="text-green-400">Energy {maxDur}%</span>
           </div>
         )
       }
@@ -82,9 +84,10 @@ export function ShopItemCard({
     // ── Item gerado aleatoriamente — exibe ranges por raridade ───────────
     if (item.generateType === 'robot' && rarity) {
       return (
-        <div className="flex gap-3 text-xs mt-1">
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs mt-1">
           <span className="text-orange-400">ER {ER_RANGE[rarity]}</span>
           <span className="text-teal-400">PD {PD_RANGE[rarity]}/hr</span>
+          <span className="text-green-400">Energy 100%</span>
         </div>
       )
     }
