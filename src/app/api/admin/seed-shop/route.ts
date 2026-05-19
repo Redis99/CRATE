@@ -9,8 +9,11 @@ import { ALL_SHOP_ITEMS } from '@/lib/shop-items'
 
 export async function POST(req: NextRequest) {
   const auth = req.headers.get('authorization')
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`)
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    const { getAdminUser } = await import('@/lib/admin-auth')
+    const admin = await getAdminUser()
+    if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   const existing = await prisma.shopItem.count()
   if (existing > 0)

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import {
-  rollPartsCrate, rollSupplyCrate,
+  rollPartsCrate, rollSupplyCrate, rollSupplyCrateAsync,
   saveDropToInventory, checkInventorySpace,
   type DropResultType,
 } from '@/lib/lootbox'
@@ -149,7 +149,9 @@ export async function POST(req: NextRequest) {
     // Usa config pré-carregado ou fallback hardcoded
     let drop = dbConfig ? rollFromConfigSync(dbConfig) : null
     if (!drop) {
-      drop = lootboxType === 'PARTS_CRATE' ? rollPartsCrate() : rollSupplyCrate()
+      drop = lootboxType === 'PARTS_CRATE'
+        ? rollPartsCrate()
+        : await rollSupplyCrateAsync()  // usa templates do banco para robôs
     }
 
     const spaceError = await checkInventorySpace(user.id, drop)

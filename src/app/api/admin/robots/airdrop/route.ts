@@ -31,12 +31,14 @@ export async function POST(req: NextRequest) {
   const robot = await prisma.robot.create({
     data: {
       userId:     userId,
-      name:       String(meta.robotName ?? shopItem.name),
+      templateId: shopItem.id,                                          // referência ao template
+      name:       String(meta.robotName ?? shopItem.name),             // cache do template
       collection: String(meta.robotCollection ?? ''),
       rarity:     shopItem.rarity as 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY',
       hashPower:  Number(meta.hashPower  ?? 10),
       energyRate: Number(meta.energyRate ?? 1),
-      durability: 100,
+      maxDurability: Number(meta.durability ?? 100),                    // máximo do template
+      durability:    Number(meta.durability ?? 100),                   // começa no máximo
     },
   })
 

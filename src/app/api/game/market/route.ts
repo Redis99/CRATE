@@ -3,7 +3,7 @@ import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 const ITEM_SELECT = {
-  robot:       { select: { id: true, name: true, collection: true, rarity: true, hashPower: true, energyRate: true, durability: true, equipments: { select: { equipment: { select: { id: true, name: true, rarity: true, effectType: true, effectValue: true, effectType2: true, effectValue2: true } } } } } },
+  robot:       { select: { id: true, name: true, collection: true, rarity: true, hashPower: true, energyRate: true, durability: true, maxDurability: true, equipments: { select: { equipment: { select: { id: true, name: true, rarity: true, effectType: true, effectValue: true, effectType2: true, effectValue2: true } } } } } },
   equipment:   { select: { id: true, name: true, rarity: true, effectType: true, effectValue: true, effectType2: true, effectValue2: true, isPermanent: true } },
   baseUpgrade: { select: { id: true, name: true, rarity: true, effectType: true, effectValue: true, effectType2: true, effectValue2: true } },
 }
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
         where: { userId: user.id, isActive: false, listing: null },
         select: {
           id: true, name: true, collection: true, rarity: true,
-          hashPower: true, energyRate: true, durability: true,
+          hashPower: true, energyRate: true, durability: true, maxDurability: true,
           equipments: { select: { equipmentId: true, equipment: { select: { id: true, name: true } } } },
         },
         orderBy: { rarity: 'asc' },

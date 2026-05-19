@@ -68,7 +68,7 @@ export interface FleetPDBreakdown {
  * Inclui: equipamentos individuais + GLOBAL_EFFICIENCY_PCT da melhoria de base.
  */
 export function calculateFleetER(
-  robots: Array<{ hashPower: number; durability: number; equipments?: EquipmentEffect[] }>,
+  robots: Array<{ hashPower: number; durability: number; maxDurability?: number | null; equipments?: EquipmentEffect[] }>,
   baseUpgrades: Array<EquipmentEffect>,
   minigameBoostER   = 0,  // flat ER bonus de minigame ativo
   codexBonusErPct   = 0   // % eficiência global do Codex
@@ -96,9 +96,11 @@ export function calculateFleetER(
     const equips   = robot.equipments ?? []
     const boosted  = effectiveERWithEquipment(robot.hashPower, equips)
     const boostedWithBase = boosted * (1 + globalPct / 100)
+    // Resolve maxDurability: valor do banco (individual por robô) → fallback = durabilidade atual
+    const maxDur   = robot.maxDurability ?? robot.durability ?? 100
     base        += robot.hashPower
     withEquip   += boosted
-    totalEffect += effectiveER(boostedWithBase, robot.durability)
+    totalEffect += effectiveER(boostedWithBase, robot.durability, maxDur)
   }
 
   const equipBonus       = withEquip - base

@@ -69,7 +69,8 @@ export function RobotCard({
   const equips      = robot.equipments?.map((e) => e.equipment) ?? []
   const boostedER   = effectiveERWithEquipment(robot.hashPower, equips)
   const effectivePD = effectivePDWithEquipment(robot.energyRate, equips)
-  const maxDur      = robot.maxDurability ?? 100  // fallback para robôs antigos
+  // maxDurability vem do banco (individual por robô); fallback = durabilidade atual
+  const maxDur      = robot.maxDurability ?? robot.durability
 
   // ER efetivo considera desgaste (usa maxDurability para calcular % corretamente)
   const actualER = variant === 'outpost'

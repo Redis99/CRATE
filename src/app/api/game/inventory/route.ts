@@ -19,7 +19,7 @@ export async function GET(_req: NextRequest) {
         where: { isActive: false, inCodex: false },
         select: {
           id: true, name: true, collection: true,
-          rarity: true, hashPower: true, energyRate: true, durability: true,
+          rarity: true, hashPower: true, energyRate: true, durability: true, maxDurability: true,
           equipments: {
             select: {
               equipmentId: true,

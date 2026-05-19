@@ -102,12 +102,14 @@ export async function POST(req: NextRequest) {
         const itemCreate = isRobot
           ? prisma.robot.create({ data: {
               userId:     user.id,
-              name:       String(meta.robotName ?? dbItem.name),
+              templateId: dbItem.id,                                  // referência ao template
+              name:       String(meta.robotName ?? dbItem.name),     // cache do template
               collection: String(meta.robotCollection ?? ''),
               rarity,
               hashPower:  Number(meta.hashPower  ?? 10),
               energyRate: Number(meta.energyRate ?? 1),
-              durability: 100,
+              maxDurability: Number(meta.durability ?? 100),          // máximo do template
+              durability:    Number(meta.durability ?? 100),          // começa no máximo
             }})
           : isEquipment
           ? prisma.equipment.create({ data: {

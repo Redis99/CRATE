@@ -35,7 +35,7 @@ async function getDashboardData() {
           where: { isActive: true },
           select: {
             id: true, name: true, collection: true,
-            hashPower: true, energyRate: true, durability: true,
+            hashPower: true, energyRate: true, durability: true, maxDurability: true,
             rarity: true, outpostSlot: true, isActive: true,
             equipments: {
               select: {
@@ -66,6 +66,8 @@ async function getDashboardData() {
         userId: true,
         hashPower: true,
         durability: true,
+        maxDurability: true,
+        rarity: true,
         equipments: {
           select: {
             equipment: {
@@ -106,11 +108,10 @@ async function getDashboardData() {
         appliedSlot: true,
       },
     }),
-    // Robôs com energia baixa (< 50) — qualquer robô do jogador
+    // Robôs com energia baixa — busca todos e filtra por % do lado do servidor
     prisma.robot.findMany({
-      where: { userId: user.id, durability: { lt: 50 } },
-      select: { id: true, name: true, durability: true, isActive: true },
-      orderBy: { durability: 'asc' },
+      where: { userId: user.id },
+      select: { id: true, name: true, durability: true, maxDurability: true, isActive: true },
     }),
     // Soma de ER boost ativo do próprio jogador (N entradas independentes)
     prisma.minigameBoost.aggregate({
@@ -135,14 +136,27 @@ export default async function DashboardPage() {
     return <div className="p-8 text-gray-400">Loading profile...</div>
   }
 
-  const { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair, minigameBoost, allMinigameBoosts } = data
+  const { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, minigameBoost, allMinigameBoosts } = data
   const activeRobots = profile.robots
 
+  // Filtra robôs com energia < 50% (baseado no maxDurability individual do banco)
+  const robotsNeedingRepair = data.robotsNeedingRepair
+    .filter((r) => {
+      const max = r.maxDurability ?? r.durability
+      return max > 0 && (r.durability / max) < 0.5
+    })
+    .sort((a, b) => {
+      const maxA = a.maxDurability ?? a.durability
+      const maxB = b.maxDurability ?? b.durability
+      return (a.durability / maxA) - (b.durability / maxB)
+    })
+
   const robotsForCalc = activeRobots.map((r) => ({
-    hashPower:  r.hashPower,
-    energyRate: (r as typeof r & { energyRate?: number }).energyRate ?? 1,
-    durability: r.durability,
-    equipments: r.equipments?.map((e) => e.equipment) ?? [],
+    hashPower:     r.hashPower,
+    energyRate:    (r as typeof r & { energyRate?: number }).energyRate ?? 1,
+    durability:    r.durability,
+    maxDurability: r.maxDurability,
+    equipments:    r.equipments?.map((e) => e.equipment) ?? [],
   }))
 
   const now = new Date()
@@ -183,9 +197,10 @@ export default async function DashboardPage() {
     const boostER      = minigameBoostByUser.get(userId) ?? 0
     const { total } = calculateFleetER(
       robots.map((r) => ({
-        hashPower:  r.hashPower,
-        durability: r.durability,
-        equipments: (r.equipments ?? []).map((e) => e.equipment),
+        hashPower:     r.hashPower,
+        durability:    r.durability,
+        maxDurability: r.maxDurability,
+        equipments:    (r.equipments ?? []).map((e) => e.equipment),
       })),
       upgrades,
       boostER
@@ -237,14 +252,17 @@ export default async function DashboardPage() {
                 : `${robotsNeedingRepair.length} robots need repair`}
             </p>
             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-              {robotsNeedingRepair.map((r) => (
+              {robotsNeedingRepair.map((r) => {
+                const max = r.maxDurability ?? r.durability
+                const pct = max > 0 ? Math.round((r.durability / max) * 100) : 0
+                return (
                 <span key={r.id} className="text-xs text-amber-300/70">
                   {r.name}
                   <span className="text-amber-500/60 ml-1">
-                    ({r.durability.toFixed(0)}% — {r.isActive ? 'at outpost' : 'in inventory'})
+                    ({pct}% — {r.isActive ? 'at outpost' : 'in inventory'})
                   </span>
                 </span>
-              ))}
+              )})}
             </div>
           </div>
 

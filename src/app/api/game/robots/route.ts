@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest) {
       name: true,
       rarity: true,
       hashPower: true,
-      durability: true,
+      durability: true, maxDurability: true,
       isActive: true,
       outpostSlot: true,
       _count: { select: { equipments: true } },

@@ -47,7 +47,8 @@ export async function processBlock() {
   const activeRobots = await prisma.robot.findMany({
     where: { isActive: true },
     select: {
-      id: true, userId: true, hashPower: true, durability: true, energyRate: true,
+      id: true, userId: true, hashPower: true, durability: true,
+      maxDurability: true, energyRate: true,
       equipments: {
         select: {
           equipment: {
@@ -114,8 +115,9 @@ export async function processBlock() {
       if (upg.effectType2 === 'GLOBAL_EFFICIENCY_PCT' || upg.effectType2 === 'HASH_POWER_PCT') globalPct += (upg.effectValue2 ?? 0)
     }
 
-    const withBase = boosted * (1 + globalPct / 100)
-    const er = effectiveER(withBase, robot.durability)
+    const withBase  = boosted * (1 + globalPct / 100)
+    const maxDur    = robot.maxDurability ?? robot.durability  // maxDurability individual do banco
+    const er        = effectiveER(withBase, robot.durability, maxDur)
     userERMap.set(robot.userId, (userERMap.get(robot.userId) ?? 0) + er)
   }
 

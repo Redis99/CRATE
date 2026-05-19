@@ -139,6 +139,7 @@ export function generateRobotDrop(rarity: Rarity, dbTemplates?: DbRobotTemplate[
     }
   }
   // Fallback: geração hardcoded (mantida enquanto banco estiver vazio)
+  // durability não é definido aqui — saveDropToInventory usará o default do schema (100)
   const [erMin, erMax] = ROBOT_ER[rarity]
   const [pdMin, pdMax] = ROBOT_PD[rarity]
   return {
@@ -351,8 +352,8 @@ export async function saveDropToInventory(userId: string, drop: DropResultType):
           rarity:        drop.rarity,
           hashPower:     drop.hashPower,
           energyRate:    drop.energyRate,
-          maxDurability: drop.durability    ?? 100,   // máximo do template
-          durability:    drop.durability    ?? 100,   // começa no máximo
+          maxDurability: drop.durability    ?? null,  // valor individual do template
+          durability:    drop.durability    ?? 100,   // começa no máximo; 100 se template não definir
           isActive: false,
         },
       })

@@ -27,7 +27,7 @@ export async function GET(_req: NextRequest) {
           rarity: true,
           hashPower: true,
           energyRate: true,
-          durability: true,
+          durability: true, maxDurability: true,
           isActive: true,
           outpostSlot: true,
           equipments: {

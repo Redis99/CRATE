@@ -69,10 +69,11 @@ export function OutpostManager() {
   const inventoryRobots = sortByRarity(data.robots.filter((r) => !r.isActive))
 
   const robotsForCalc = deployedRobots.map((r) => ({
-    hashPower:  r.hashPower,
-    energyRate: r.energyRate ?? 1,
-    durability: r.durability,
-    equipments: r.equipments?.map((e) => e.equipment) ?? [],
+    hashPower:     r.hashPower,
+    energyRate:    r.energyRate ?? 1,
+    durability:    r.durability,
+    maxDurability: r.maxDurability,
+    equipments:    r.equipments?.map((e) => e.equipment) ?? [],
   }))
 
   const erBreakdown = calculateFleetER(robotsForCalc, data.baseUpgrades)
