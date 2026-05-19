@@ -18,6 +18,15 @@ export interface ShopItem {
   rarity?:     string          // COMMON | UNCOMMON | RARE | EPIC
   // Itens gerados aleatoriamente (robôs, equipamentos, upgrades)
   generateType?: GenerateType
+  // Itens com atributos fixos criados pelo admin (specific: true)
+  specific?:        boolean
+  hashPower?:       number     // ER exato do robô
+  energyRate?:      number     // PD exato do robô
+  robotCollection?: string     // coleção do robô
+  effectType?:      string     // efeito do equipamento/base upgrade
+  effectValue?:     number
+  effectType2?:     string     // efeito secundário (opcional)
+  effectValue2?:    number
   // Baterias
   batteryValue?: number        // energia restaurada
   // Slots de Outpost

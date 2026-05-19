@@ -5,9 +5,10 @@ import { ActionButton } from '@/components/ui/ActionButton'
 import { CategoryTag } from '@/components/game/CategoryTag'
 import { QuantityStepper } from '@/components/ui/QuantityStepper'
 import { RARITY_BORDER_COLOR, type Rarity } from '@/lib/rarity'
+import { effectLabel } from '@/lib/effect-label'
 import type { ShopItem } from '@/lib/shop-items'
 
-// ER e PD ranges por raridade
+// Ranges de atributos para itens gerados aleatoriamente
 const ER_RANGE: Record<string, string> = {
   COMMON: '8–12', UNCOMMON: '25–35', RARE: '70–90', EPIC: '180–220',
 }
@@ -51,6 +52,34 @@ export function ShopItemCard({
 
   // ── Sub-descrição por tipo ──────────────────────────────────────────────
   function renderStats() {
+    const isRobotCategory    = item.category === 'robots'
+    const isEffectCategory   = item.category === 'equipment' || item.category === 'baseUpgrades'
+
+    // ── Item específico com atributos fixos (criado pelo admin) ──────────
+    if (item.specific) {
+      if (isRobotCategory && item.hashPower != null && item.energyRate != null) {
+        return (
+          <div className="flex gap-3 text-xs mt-1">
+            <span className="text-orange-400">ER {item.hashPower}</span>
+            <span className="text-teal-400">PD {item.energyRate}/hr</span>
+          </div>
+        )
+      }
+      if (isEffectCategory && item.effectType && item.effectValue != null) {
+        return (
+          <div className="flex flex-col gap-0.5 mt-1">
+            <span className="text-blue-400 text-xs">{effectLabel(item.effectType, item.effectValue)}</span>
+            {item.effectType2 && item.effectValue2 != null && (
+              <span className="text-purple-400 text-xs">{effectLabel(item.effectType2, item.effectValue2)}</span>
+            )}
+          </div>
+        )
+      }
+      // Specific sem stats mapeados — não exibe nada além da descrição
+      return null
+    }
+
+    // ── Item gerado aleatoriamente — exibe ranges por raridade ───────────
     if (item.generateType === 'robot' && rarity) {
       return (
         <div className="flex gap-3 text-xs mt-1">
@@ -62,6 +91,8 @@ export function ShopItemCard({
     if ((item.generateType === 'equipment' || item.generateType === 'baseUpgrade') && rarity) {
       return <p className="text-gray-600 text-xs mt-1">Effect range: {EFFECT_RANGE[rarity]}</p>
     }
+
+    // ── Outros tipos ─────────────────────────────────────────────────────
     if (item.batteryValue) {
       return <p className="text-teal-400/70 text-xs mt-1">+{item.batteryValue} energy</p>
     }

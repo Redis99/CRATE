@@ -89,11 +89,21 @@ export async function GET(_req: NextRequest) {
       description:  si.description,
       price:        si.price,
       rarity:       si.rarity ?? undefined,
+      // Campos de geração aleatória
       generateType: meta.generateType   as string | undefined,
+      // Campos de item específico (admin-created com stats fixos)
+      specific:       meta.specific === true ? true : undefined,
+      hashPower:      meta.hashPower      != null ? Number(meta.hashPower)      : undefined,
+      energyRate:     meta.energyRate     != null ? Number(meta.energyRate)     : undefined,
+      robotCollection: meta.robotCollection != null ? String(meta.robotCollection) : undefined,
+      effectType:     meta.effectType     != null ? String(meta.effectType)     : undefined,
+      effectValue:    meta.effectValue    != null ? Number(meta.effectValue)    : undefined,
+      effectType2:    meta.effectType2    != null ? String(meta.effectType2)    : undefined,
+      effectValue2:   meta.effectValue2   != null ? Number(meta.effectValue2)   : undefined,
+      // Campos de outros tipos
       batteryValue: meta.batteryValue   != null ? Number(meta.batteryValue)  : undefined,
       slotNumber:   meta.slotNumber     != null ? Number(meta.slotNumber)    : undefined,
       slotRequires: meta.slotRequires   != null ? Number(meta.slotRequires)  : undefined,
-      specific:     meta.specific === true ? true : undefined,
     }
   })
 
