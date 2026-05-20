@@ -21,17 +21,23 @@ export async function POST(req: NextRequest) {
   if (mission.expiresAt && mission.expiresAt < new Date()) {
     return NextResponse.json({ error: 'Mission has expired.' }, { status: 404 })
   }
-  if (!userMission?.completed)        return NextResponse.json({ error: 'Mission not completed yet.' }, { status: 400 })
-  if (userMission.claimedAt)          return NextResponse.json({ error: 'Reward already claimed.'   }, { status: 400 })
+  if (!userMission?.completed) return NextResponse.json({ error: 'Mission not completed yet.' }, { status: 400 })
+  if (userMission.claimedAt)   return NextResponse.json({ error: 'Reward already claimed.'   }, { status: 400 })
+
+  // Marca como claimed atomicamente antes de entregar a recompensa.
+  // updateMany com claimedAt: null no WHERE garante que apenas um request
+  // concorrente consegue fazer a marcação (o segundo vê count = 0).
+  const claimed = await prisma.userMission.updateMany({
+    where: { userId: user.id, missionId, claimedAt: null },
+    data:  { claimedAt: new Date() },
+  })
+  if (claimed.count === 0) {
+    return NextResponse.json({ error: 'Reward already claimed.' }, { status: 400 })
+  }
 
   const rewardData = mission.rewardData as Record<string, unknown>
   const error = await deliverMissionReward(user.id, mission.rewardType, rewardData)
   if (error) return NextResponse.json({ error }, { status: 400 })
-
-  await prisma.userMission.update({
-    where: { userId_missionId: { userId: user.id, missionId } },
-    data:  { claimedAt: new Date() },
-  })
 
   await prisma.transaction.create({
     data: {

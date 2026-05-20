@@ -155,13 +155,22 @@ export async function deliverMissionReward(
       return null
     }
 
-    case 'TITLE':
-    case 'COSMETIC': {
-      const label = rewardType === 'TITLE'
-        ? `You earned the title: "${data.title as string}"`
-        : `You earned a cosmetic: "${data.name as string}"`
+    case 'TITLE': {
+      const titleName = data.title as string
+      await prisma.userTitle.upsert({
+        where:  { userId_title: { userId, title: titleName } },
+        create: { userId, title: titleName, source: 'MISSION' },
+        update: {},
+      })
       await prisma.notification.create({
-        data: { userId, title: 'Reward Unlocked!', message: label },
+        data: { userId, title: 'Title Unlocked!', message: `You earned the title: "${titleName}"` },
+      }).catch(() => {})
+      return null
+    }
+
+    case 'COSMETIC': {
+      await prisma.notification.create({
+        data: { userId, title: 'Reward Unlocked!', message: `You earned a cosmetic: "${data.name as string}"` },
       })
       return null
     }

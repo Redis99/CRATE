@@ -120,13 +120,18 @@ export async function POST(req: NextRequest) {
   const now         = new Date()
   const completesAt = new Date(now.getTime() + recipe.craftingTimeSec * 1000)
 
+  try {
   await prisma.$transaction(async (tx) => {
-    // Debita custo em CRATE
+    // Debita custo em CRATE de forma atômica — WHERE gte impede saldo negativo em requests concorrentes
     if (recipe.costCrate > 0) {
-      await tx.user.update({ where: { id: user.id }, data: { balanceCrate: { decrement: recipe.costCrate } } })
+      const deducted = await tx.user.updateMany({
+        where: { id: user.id, balanceCrate: { gte: recipe.costCrate } },
+        data:  { balanceCrate: { decrement: recipe.costCrate } },
+      })
+      if (deducted.count === 0) throw new Error('INSUFFICIENT_BALANCE')
     }
 
-    // Consome ingredientes
+    // Consome ingredientes — updateMany com quantity gte impede decremento além do disponível
     for (const ing of recipe.ingredients) {
       const stacks  = allParts.filter((p) => p.partType === ing.partType)
       let remaining = ing.quantity
@@ -135,7 +140,11 @@ export async function POST(req: NextRequest) {
         const consume = Math.min(stack.quantity, remaining)
         remaining -= consume
         if (stack.quantity > consume) {
-          await tx.inventoryPart.update({ where: { id: stack.id }, data: { quantity: { decrement: consume } } })
+          const updated = await tx.inventoryPart.updateMany({
+            where: { id: stack.id, quantity: { gte: consume } },
+            data:  { quantity: { decrement: consume } },
+          })
+          if (updated.count === 0) throw new Error('PARTS_CONSUMED')
         } else {
           await tx.inventoryPart.delete({ where: { id: stack.id } })
         }
@@ -153,6 +162,15 @@ export async function POST(req: NextRequest) {
       await tx.pendingCraft.update({ where: { id: pending.id }, data: { claimed: true, claimedAt: now } })
     }
   })
+  } catch (e) {
+    if (e instanceof Error && e.message === 'INSUFFICIENT_BALANCE') {
+      return NextResponse.json({ error: 'Insufficient CRATE balance.' }, { status: 400 })
+    }
+    if (e instanceof Error && e.message === 'PARTS_CONSUMED') {
+      return NextResponse.json({ error: 'Parts were already consumed by a concurrent request. Please retry.' }, { status: 409 })
+    }
+    throw e
+  }
 
   void incrementMission(user.id, 'CRAFTING', 1)
 

@@ -74,11 +74,34 @@ model User {
   // Ranking semanal — acumula ER contribuído nesta semana; resetado toda segunda
   weeklyErContributed Float @default(0)
 
+  // Perfil público
+  profilePublic  Boolean  @default(true)
+  bio            String?  @db.VarChar(200)
+  avatarUrl      String?
+  equippedTitle  String?
+  titles         UserTitle[]
+
   // Admin
   isAdmin             Boolean  @default(false)
   isBanned            Boolean  @default(false)
 
   @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// TÍTULOS DO JOGADOR
+// ─────────────────────────────────────────────
+
+model UserTitle {
+  id       String   @id @default(uuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id])
+  title    String
+  source   String   // 'MISSION' | 'CODEX'
+  earnedAt DateTime @default(now())
+
+  @@unique([userId, title])
+  @@map("user_titles")
 }
 
 // ─────────────────────────────────────────────
@@ -384,6 +407,7 @@ model CodexCollection {
   completionErPct    Float    @default(0)   // % ER global adicional
   completionPdPct    Float    @default(0)   // % redução PD
   completionSlots    Int      @default(0)   // slots de outpost extras (one-time grant)
+  completionTitle    String?               // título concedido ao completar (opcional)
 
   active         Boolean     @default(true)
   sortOrder      Int         @default(0)

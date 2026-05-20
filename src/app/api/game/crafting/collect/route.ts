@@ -42,59 +42,69 @@ export async function POST(req: NextRequest) {
 
   const now = new Date()
 
-  await prisma.$transaction(async (tx) => {
-    // Cria o item
-    if (recipe.outputType === 'ROBOT') {
-      await tx.robot.create({
-        data: {
-          userId:     user.id,
-          name:       recipe.outputName,
-          collection: recipe.outputCollection ?? 'Crafted Series',
-          rarity:     recipe.outputRarity,
-          hashPower:  recipe.outputHashPower  ?? 10,
-          energyRate: recipe.outputEnergyRate ?? 1,
-          durability: 100,
-          isActive:   false,
-        },
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Marca como claimed atomicamente no início da transação.
+      // WHERE claimed: false garante que dois requests concorrentes não
+      // consigam ambos criar o item — o segundo vê count = 0 e faz rollback.
+      const claim = await tx.pendingCraft.updateMany({
+        where: { id: pendingCraftId, userId: user.id, claimed: false },
+        data:  { claimed: true, claimedAt: now },
       })
-    } else if (recipe.outputType === 'EQUIPMENT') {
-      if (!recipe.outputEffectType || recipe.outputEffectValue == null)
-        throw new Error('Equipment requires effectType and effectValue.')
-      await tx.equipment.create({
-        data: {
-          userId:       user.id,
-          name:         recipe.outputName,
-          rarity:       recipe.outputRarity,
-          effectType:   recipe.outputEffectType,
-          effectValue:  recipe.outputEffectValue,
-          effectType2:  recipe.outputEffectType2  ?? null,
-          effectValue2: recipe.outputEffectValue2 ?? null,
-          isPermanent:  true,
-        },
-      })
-    } else {
-      if (!recipe.outputEffectType || recipe.outputEffectValue == null)
-        throw new Error('Base upgrade requires effectType and effectValue.')
-      await tx.baseUpgrade.create({
-        data: {
-          userId:       user.id,
-          name:         recipe.outputName,
-          rarity:       recipe.outputRarity,
-          effectType:   recipe.outputEffectType,
-          effectValue:  recipe.outputEffectValue,
-          effectType2:  recipe.outputEffectType2  ?? null,
-          effectValue2: recipe.outputEffectValue2 ?? null,
-          isApplied:    false,
-        },
-      })
-    }
+      if (claim.count === 0) throw new Error('ALREADY_CLAIMED')
 
-    // Marca como coletado
-    await tx.pendingCraft.update({
-      where: { id: pendingCraftId },
-      data:  { claimed: true, claimedAt: now },
+      // Cria o item
+      if (recipe.outputType === 'ROBOT') {
+        await tx.robot.create({
+          data: {
+            userId:     user.id,
+            name:       recipe.outputName,
+            collection: recipe.outputCollection ?? 'Crafted Series',
+            rarity:     recipe.outputRarity,
+            hashPower:  recipe.outputHashPower  ?? 10,
+            energyRate: recipe.outputEnergyRate ?? 1,
+            durability: 100,
+            isActive:   false,
+          },
+        })
+      } else if (recipe.outputType === 'EQUIPMENT') {
+        if (!recipe.outputEffectType || recipe.outputEffectValue == null)
+          throw new Error('Equipment requires effectType and effectValue.')
+        await tx.equipment.create({
+          data: {
+            userId:       user.id,
+            name:         recipe.outputName,
+            rarity:       recipe.outputRarity,
+            effectType:   recipe.outputEffectType,
+            effectValue:  recipe.outputEffectValue,
+            effectType2:  recipe.outputEffectType2  ?? null,
+            effectValue2: recipe.outputEffectValue2 ?? null,
+            isPermanent:  true,
+          },
+        })
+      } else {
+        if (!recipe.outputEffectType || recipe.outputEffectValue == null)
+          throw new Error('Base upgrade requires effectType and effectValue.')
+        await tx.baseUpgrade.create({
+          data: {
+            userId:       user.id,
+            name:         recipe.outputName,
+            rarity:       recipe.outputRarity,
+            effectType:   recipe.outputEffectType,
+            effectValue:  recipe.outputEffectValue,
+            effectType2:  recipe.outputEffectType2  ?? null,
+            effectValue2: recipe.outputEffectValue2 ?? null,
+            isApplied:    false,
+          },
+        })
+      }
     })
-  })
+  } catch (e) {
+    if (e instanceof Error && e.message === 'ALREADY_CLAIMED') {
+      return NextResponse.json({ error: 'Already collected.' }, { status: 400 })
+    }
+    throw e
+  }
 
   return NextResponse.json({
     success: true,

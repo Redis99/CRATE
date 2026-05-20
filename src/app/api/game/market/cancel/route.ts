@@ -15,7 +15,11 @@ export async function POST(req: NextRequest) {
   if (listing.sellerId !== user.id) return NextResponse.json({ error: 'Not your listing.' }, { status: 403 })
   if (listing.status !== 'ACTIVE') return NextResponse.json({ error: 'Listing is not active.' }, { status: 409 })
 
-  await prisma.marketListing.update({ where: { id: listingId }, data: { status: 'CANCELLED' } })
+  // Desvincula o item ao cancelar — permite re-listagem futura
+  await prisma.marketListing.update({
+    where: { id: listingId },
+    data:  { status: 'CANCELLED', robotId: null, equipmentId: null, baseUpgradeId: null },
+  })
 
   return NextResponse.json({ success: true })
 }

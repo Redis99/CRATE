@@ -2,10 +2,11 @@ import 'server-only'
 import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 import type { User } from '@supabase/supabase-js'
+import { prisma } from '@/lib/prisma'
 
 /**
  * Retorna o usuário autenticado no contexto de servidor (API routes e Server Components).
- * Retorna null se não houver sessão ativa.
+ * Retorna null se não houver sessão ativa OU se o usuário estiver banido.
  */
 export async function getServerUser(): Promise<User | null> {
   const cookieStore = await cookies()
@@ -28,5 +29,14 @@ export async function getServerUser(): Promise<User | null> {
     }
   )
   const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  // Verifica ban no banco — usuários banidos recebem 401 em todas as rotas de jogo
+  const dbUser = await prisma.user.findUnique({
+    where:  { id: user.id },
+    select: { isBanned: true },
+  })
+  if (!dbUser || dbUser.isBanned) return null
+
   return user
 }

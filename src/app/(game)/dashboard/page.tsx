@@ -1,5 +1,6 @@
 import { getServerUser } from '@/lib/auth'
 import { calculateFleetER, calculateFleetPD } from '@/lib/game-math'
+import { computeCodexBonuses } from '@/lib/codex'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { BalanceDropdown } from '@/components/game/BalanceDropdown'
@@ -19,10 +20,11 @@ async function getDashboardData() {
   const user = await getServerUser()
   if (!user) return null
 
-  const [profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair, minigameBoost, allMinigameBoosts] = await Promise.all([
+  const [profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair, minigameBoost, allMinigameBoosts, codexCollections, allCodexEntries] = await Promise.all([
     prisma.user.findUnique({
       where: { id: user.id },
       select: {
+        id: true,
         username: true,
         balanceCrate: true,
         balanceSol: true,
@@ -124,9 +126,13 @@ async function getDashboardData() {
       where: { expiresAt: { gt: new Date() } },
       _sum:  { erFlat: true },
     }),
+    // Coleções do Codex (para bônus de ER/PD)
+    prisma.codexCollection.findMany({ where: { active: true } }),
+    // Entradas do Codex de todos os jogadores (para bônus no networkER)
+    prisma.codexEntry.findMany({ select: { userId: true, collection: true } }),
   ])
 
-  return { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair, minigameBoost, allMinigameBoosts }
+  return { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, robotsNeedingRepair, minigameBoost, allMinigameBoosts, codexCollections, allCodexEntries }
 }
 
 export default async function DashboardPage() {
@@ -136,7 +142,7 @@ export default async function DashboardPage() {
     return <div className="p-8 text-gray-400">Loading profile...</div>
   }
 
-  const { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, minigameBoost, allMinigameBoosts } = data
+  const { profile, allActiveRobots, lastBlock, totalMined, allNetworkUpgrades, baseUpgrades, minigameBoost, allMinigameBoosts, codexCollections, allCodexEntries } = data
   const activeRobots = profile.robots
 
   // Filtra robôs com energia < 50% (baseado no maxDurability individual do banco)
@@ -159,17 +165,20 @@ export default async function DashboardPage() {
     equipments:    r.equipments?.map((e) => e.equipment) ?? [],
   }))
 
-  const now = new Date()
+  // Bônus do Codex do próprio jogador
+  const userCodexEntries = allCodexEntries.filter((e) => e.userId === profile.id)
+  const { erPct: codexBonusErPct, pdPct: codexBonusPdPct } = computeCodexBonuses(codexCollections, userCodexEntries)
+
   // Soma de todas as entradas de boost ativas (cada vitória = entrada independente)
   const activeMinigameBoostER = minigameBoost._sum.erFlat ?? 0
-  const erBreakdown = calculateFleetER(robotsForCalc, baseUpgrades, activeMinigameBoostER)
-  const pdBreakdown = calculateFleetPD(robotsForCalc)
+  const erBreakdown = calculateFleetER(robotsForCalc, baseUpgrades, activeMinigameBoostER, codexBonusErPct)
+  const pdBreakdown = calculateFleetPD(robotsForCalc, codexBonusPdPct)
 
-  // userShareER = ER total do jogador com equipamentos + base upgrades próprios
+  // userShareER = ER total do jogador com equipamentos + base upgrades + codex próprios
   const userShareER = erBreakdown.total
 
   // networkER = Σ do ER de cada jogador calculado com calculateFleetER
-  // Garante fórmula idêntica ao userShareER → share sempre entre 0-100%
+  // Inclui codex bonus por jogador para fórmula idêntica à do engine de mineração
   const upgradesByUser = new Map<string, typeof allNetworkUpgrades>()
   for (const upg of allNetworkUpgrades) {
     if (!upgradesByUser.has(upg.userId)) upgradesByUser.set(upg.userId, [])
@@ -184,17 +193,26 @@ export default async function DashboardPage() {
     robotsByUser.get(robot.userId)!.push(robot)
   }
 
+  // Agrupa codex entries por userId para networkER
+  const codexEntriesByUser = new Map<string, Array<{ collection: string }>>()
+  for (const entry of allCodexEntries) {
+    if (!codexEntriesByUser.has(entry.userId)) codexEntriesByUser.set(entry.userId, [])
+    codexEntriesByUser.get(entry.userId)!.push(entry)
+  }
+
   // groupBy retorna [{ userId, _sum: { erFlat } }] — monta mapa userId → total ER ativo
   const minigameBoostByUser = new Map(
     allMinigameBoosts.map((b) => [b.userId, b._sum.erFlat ?? 0])
   )
 
   // Calcula ER de cada jogador com a mesma fórmula e soma
-  // Inclui boost de minigame para garantir fórmula idêntica ao userShareER
+  // Inclui boost de minigame e codex para garantir fórmula idêntica ao mining engine
   let networkER = 0
   for (const [userId, robots] of robotsByUser.entries()) {
-    const upgrades     = upgradesByUser.get(userId) ?? []
-    const boostER      = minigameBoostByUser.get(userId) ?? 0
+    const upgrades          = upgradesByUser.get(userId) ?? []
+    const boostER           = minigameBoostByUser.get(userId) ?? 0
+    const userEntries       = codexEntriesByUser.get(userId) ?? []
+    const { erPct: userCodexErPct } = computeCodexBonuses(codexCollections, userEntries)
     const { total } = calculateFleetER(
       robots.map((r) => ({
         hashPower:     r.hashPower,
@@ -203,7 +221,8 @@ export default async function DashboardPage() {
         equipments:    (r.equipments ?? []).map((e) => e.equipment),
       })),
       upgrades,
-      boostER
+      boostER,
+      userCodexErPct
     )
     networkER += total
   }

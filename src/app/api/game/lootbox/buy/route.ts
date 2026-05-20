@@ -60,39 +60,46 @@ export async function POST(req: NextRequest) {
     }, { status: 400 })
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.user.update({
-      where: { id: user.id },
-      data: { balanceCrate: { decrement: totalCost } },
-    })
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Debita de forma atômica — o WHERE gte impede saldo negativo em requests concorrentes
+      const deducted = await tx.user.updateMany({
+        where: { id: user.id, balanceCrate: { gte: totalCost } },
+        data:  { balanceCrate: { decrement: totalCost } },
+      })
+      if (deducted.count === 0) throw new Error('INSUFFICIENT_BALANCE')
 
-    const existing = await tx.inventoryLootbox.findUnique({
-      where: { userId_lootboxType: { userId: user.id, lootboxType } },
-    })
-    if (existing) {
-      await tx.inventoryLootbox.update({
+      const existing = await tx.inventoryLootbox.findUnique({
         where: { userId_lootboxType: { userId: user.id, lootboxType } },
-        data: { quantity: { increment: qty } },
       })
-    } else {
-      await tx.inventoryLootbox.create({
-        data: { userId: user.id, lootboxType, quantity: qty, source: 'purchased' },
-      })
-    }
+      if (existing) {
+        await tx.inventoryLootbox.update({
+          where: { userId_lootboxType: { userId: user.id, lootboxType } },
+          data: { quantity: { increment: qty } },
+        })
+      } else {
+        await tx.inventoryLootbox.create({
+          data: { userId: user.id, lootboxType, quantity: qty, source: 'purchased' },
+        })
+      }
 
-    // Uma transação por unidade (para rastrear o limite semanal corretamente)
-    // txHash armazena o tipo de lootbox para filtrar de forma confiável (evita comparação float)
-    await tx.transaction.createMany({
-      data: Array.from({ length: qty }, () => ({
-        userId: user.id,
-        type: 'LOOTBOX_PURCHASE' as const,
-        token: 'CRATE' as const,
-        amount: price,
-        txHash: lootboxType,
-        status: 'CONFIRMED' as const,
-      })),
+      await tx.transaction.createMany({
+        data: Array.from({ length: qty }, () => ({
+          userId: user.id,
+          type: 'LOOTBOX_PURCHASE' as const,
+          token: 'CRATE' as const,
+          amount: price,
+          txHash: lootboxType,
+          status: 'CONFIRMED' as const,
+        })),
+      })
     })
-  })
+  } catch (e) {
+    if (e instanceof Error && e.message === 'INSUFFICIENT_BALANCE') {
+      return NextResponse.json({ error: 'Insufficient balance.' }, { status: 400 })
+    }
+    throw e
+  }
 
   return NextResponse.json({ success: true, purchased: qty, totalCost })
 }

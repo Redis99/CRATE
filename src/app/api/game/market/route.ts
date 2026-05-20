@@ -42,9 +42,9 @@ export async function GET(req: NextRequest) {
   }
 
   if (mode === 'mine') {
-    // Listagens do próprio jogador
+    // Listagens do próprio jogador (filtra expiradas)
     const listings = await prisma.marketListing.findMany({
-      where: { sellerId: user.id, status: 'ACTIVE' },
+      where: { sellerId: user.id, status: 'ACTIVE', expiresAt: { gt: new Date() } },
       include: {
         robot:       ITEM_SELECT.robot,
         equipment:   ITEM_SELECT.equipment,
@@ -55,9 +55,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ listings })
   }
 
-  // Browse — todas as listagens ativas
+  // Browse — todas as listagens ativas e não expiradas
   const listings = await prisma.marketListing.findMany({
-    where: { status: 'ACTIVE' },
+    where: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
     include: {
       seller:      { select: { username: true } },
       robot:       ITEM_SELECT.robot,

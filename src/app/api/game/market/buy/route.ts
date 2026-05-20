@@ -30,9 +30,16 @@ export async function POST(req: NextRequest) {
   const fee            = listing.price * MARKET_FEE
   const sellerReceives = listing.price - fee
 
-  await prisma.$transaction(async (tx) => {
-    // Debita comprador, credita vendedor
-    await tx.user.update({ where: { id: user.id },         data: { balanceCrate: { decrement: listing.price } } })
+  try {
+   await prisma.$transaction(async (tx) => {
+    // Debita comprador de forma atômica — o WHERE gte impede saldo negativo em requests concorrentes
+    const deducted = await tx.user.updateMany({
+      where: { id: user.id, balanceCrate: { gte: listing.price } },
+      data:  { balanceCrate: { decrement: listing.price } },
+    })
+    if (deducted.count === 0) throw new Error('INSUFFICIENT_BALANCE')
+
+    // Credita vendedor
     await tx.user.update({ where: { id: listing.sellerId }, data: { balanceCrate: { increment: sellerReceives } } })
 
     // Transfere o item para o comprador
@@ -49,8 +56,11 @@ export async function POST(req: NextRequest) {
     if (listing.equipmentId)   await tx.equipment.update({   where: { id: listing.equipmentId },   data: { userId: user.id } })
     if (listing.baseUpgradeId) await tx.baseUpgrade.update({ where: { id: listing.baseUpgradeId }, data: { userId: user.id, isApplied: false, appliedSlot: null } })
 
-    // Marca a listagem como vendida
-    await tx.marketListing.update({ where: { id: listingId }, data: { status: 'SOLD' } })
+    // Marca a listagem como vendida e desvincula o item (libera re-listagem)
+    await tx.marketListing.update({
+      where: { id: listingId },
+      data:  { status: 'SOLD', robotId: null, equipmentId: null, baseUpgradeId: null },
+    })
 
     // Cria registro de compra
     await tx.marketPurchase.create({ data: { listingId, buyerId: user.id, pricePaid: listing.price, fee } })
@@ -72,6 +82,12 @@ export async function POST(req: NextRequest) {
       },
     })
   })
+  } catch (e) {
+    if (e instanceof Error && e.message === 'INSUFFICIENT_BALANCE') {
+      return NextResponse.json({ error: 'Insufficient balance.' }, { status: 400 })
+    }
+    throw e
+  }
 
   void incrementMission(user.id,          'MARKET', 1)
   void incrementMission(listing.sellerId, 'MARKET', 1)

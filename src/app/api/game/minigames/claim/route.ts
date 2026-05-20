@@ -20,7 +20,15 @@ export async function POST(req: NextRequest) {
 
   const now = new Date()
 
-  await prisma.$transaction(async (tx) => {
+  try {
+   await prisma.$transaction(async (tx) => {
+    // ── 0. Marca como claimed atomicamente — previne double-claim concorrente ──
+    const claim = await tx.minigameSession.updateMany({
+      where: { id: sessionId, userId: user.id, claimed: false },
+      data:  { claimed: true, claimedAt: now },
+    })
+    if (claim.count === 0) throw new Error('ALREADY_CLAIMED')
+
     // ── 1. Cria entrada de boost INDEPENDENTE ─────────────────────────────
     //   Duração baseada no streak atual (reseta se ficou 24h sem vencer)
     if (session.erBoost && session.erBoost > 0) {
@@ -76,9 +84,17 @@ export async function POST(req: NextRequest) {
             data:  { quantity: { increment: 1 } },
           })
         } else {
-          await tx.inventoryPart.create({
-            data: { userId: user.id, partType: drop.partType, category: 'SPECIAL', rarity: drop.rarity as never, quantity: 1 },
-          })
+          // Verifica espaço antes de criar novo slot de peça
+          const [partCount, userSlots] = await Promise.all([
+            tx.inventoryPart.count({ where: { userId: user.id } }),
+            tx.user.findUnique({ where: { id: user.id }, select: { slotsParts: true } }),
+          ])
+          if (partCount < (userSlots?.slotsParts ?? 50)) {
+            await tx.inventoryPart.create({
+              data: { userId: user.id, partType: drop.partType, category: 'SPECIAL', rarity: drop.rarity as never, quantity: 1 },
+            })
+          }
+          // Inventário cheio: drop descartado silenciosamente (recompensa não crítica)
         }
       } else if (drop.dropType === 'consumable' && drop.kitValue != null) {
         const existingKit = await tx.consumable.findUnique({
@@ -90,19 +106,28 @@ export async function POST(req: NextRequest) {
             data:  { quantity: { increment: 1 } },
           })
         } else {
-          await tx.consumable.create({
-            data: { userId: user.id, consumableType: 'REPAIR_KIT', value: drop.kitValue, quantity: 1 },
-          })
+          // Verifica espaço antes de criar novo slot de consumível
+          const [kitCount, userSlots] = await Promise.all([
+            tx.consumable.count({ where: { userId: user.id } }),
+            tx.user.findUnique({ where: { id: user.id }, select: { slotsConsumables: true } }),
+          ])
+          if (kitCount < (userSlots?.slotsConsumables ?? 20)) {
+            await tx.consumable.create({
+              data: { userId: user.id, consumableType: 'REPAIR_KIT', value: drop.kitValue, quantity: 1 },
+            })
+          }
+          // Inventário cheio: drop descartado silenciosamente
         }
       }
     }
 
-    // ── 3. Marca sessão como claimed ──────────────────────────────────────
-    await tx.minigameSession.update({
-      where: { id: sessionId },
-      data:  { claimed: true, claimedAt: now },
-    })
   })
+  } catch (e) {
+    if (e instanceof Error && e.message === 'ALREADY_CLAIMED') {
+      return NextResponse.json({ error: 'Reward already claimed.' }, { status: 400 })
+    }
+    throw e
+  }
 
   return NextResponse.json({ success: true })
 }

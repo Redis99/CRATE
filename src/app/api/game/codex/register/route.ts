@@ -78,29 +78,57 @@ export async function POST(req: NextRequest) {
       data: { inCodex: true, isActive: false, outpostSlot: null },
     })
 
-    // Concede slots de outpost se a coleção foi completada agora (one-time grant)
-    if (isNowComplete && collection.completionSlots > 0) {
+    // Concede recompensas de completude (slots, título, notificação) — one-time grant
+    if (isNowComplete) {
       // Verifica se já foi concedido antes (guard de idempotência)
       const alreadyGranted = await tx.codexCompletionReward.findUnique({
         where: { userId_collectionName: { userId: user.id, collectionName: collection.name } },
       })
       if (!alreadyGranted) {
-        await Promise.all([
-          tx.user.update({
-            where: { id: user.id },
-            data: { outpostSlots: { increment: collection.completionSlots } },
-          }),
+        const ops: Promise<unknown>[] = [
           tx.codexCompletionReward.create({
             data: { userId: user.id, collectionName: collection.name },
           }),
+        ]
+
+        if (collection.completionSlots > 0) {
+          ops.push(
+            tx.user.update({
+              where: { id: user.id },
+              data: { outpostSlots: { increment: collection.completionSlots } },
+            }),
+          )
+        }
+
+        // Concede título se a coleção tiver um definido
+        if (collection.completionTitle) {
+          ops.push(
+            tx.userTitle.upsert({
+              where:  { userId_title: { userId: user.id, title: collection.completionTitle } },
+              create: { userId: user.id, title: collection.completionTitle, source: 'CODEX' },
+              update: {},
+            }),
+          )
+        }
+
+        const slotMsg  = collection.completionSlots > 0
+          ? ` and ${collection.completionSlots} extra Outpost slot(s)`
+          : ''
+        const titleMsg = collection.completionTitle
+          ? ` You also earned the title "${collection.completionTitle}"!`
+          : ''
+
+        ops.push(
           tx.notification.create({
             data: {
               userId:  user.id,
               title:   `Collection complete: ${collection.name}`,
-              message: `You've completed the collection and earned ${collection.completionSlots} extra Outpost slot(s) and a permanent +${collection.completionErPct}% ER bonus!`,
+              message: `You've completed the collection and earned a permanent +${collection.completionErPct}% ER bonus${slotMsg}!${titleMsg}`,
             },
           }),
-        ])
+        )
+
+        await Promise.all(ops)
       }
     }
 
