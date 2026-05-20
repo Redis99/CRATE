@@ -79,7 +79,7 @@ const ROADMAP_PHASES = [
 ]
 
 const EARN_SOURCES = [
-  { label: 'Idle Mining', desc: 'Share of reward pool based on your fleet's ER' },
+  { label: 'Idle Mining', desc: "Share of reward pool based on your fleet's ER" },
   { label: 'Weekly Ranking', desc: 'Top 10 miners earn Supply & Parts Crates' },
   { label: 'Minigames', desc: '5 games — win to get drops and ER boosts' },
   { label: 'Missions', desc: 'Complete objectives for crates, robots and items' },
