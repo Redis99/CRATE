@@ -6,108 +6,150 @@ import { LootboxDropModal } from '@/components/game/LootboxDropModal'
 import { QuantityStepper } from '@/components/ui/QuantityStepper'
 import { ActionButton } from '@/components/ui/ActionButton'
 
-interface LootboxData {
-  balance: number
-  partsCrates:  { owned: number }
-  supplyCrates: { owned: number }
-  weeklyPartsPurchased: number
-  weeklyPartsLimit: number
-  prices: { partsCrate: number; supplyCrate: number }
+// ─── Types (espelham a resposta da API) ───────────────────────────────────────
+
+interface CrateInfo {
+  lootboxType: string
+  name: string
+  description: string
+  price: number
+  weeklyLimit: number | null
+  owned: number
+  dropEntries: { label: string; chance: string }[]
 }
 
-// ─── Drop tables (display only) ───────────────────────────────────────────────
+interface LootboxData {
+  balance: number
+  weeklyPartsPurchased: number
+  weeklyPartsLimit: number
+  crates: CrateInfo[]
+}
 
-const PARTS_DROPS = [
-  { label: 'Common Parts ×4',    chance: '35%'  },
-  { label: 'Common Parts ×8',    chance: '25%'  },
-  { label: 'Uncommon Parts ×2',  chance: '18%'  },
-  { label: 'Uncommon Parts ×4',  chance: '12%'  },
-  { label: 'Rare Part ×1',       chance: '5%'   },
-  { label: 'Rare Parts ×2',      chance: '3%'   },
-  { label: 'Epic Part ×1',       chance: '2%'   },
-]
+// ─── Rarity color map ─────────────────────────────────────────────────────────
 
-const SUPPLY_DROPS = [
-  { label: 'Common Equipment',        chance: '18%'  },
-  { label: 'Common Base Upgrade',     chance: '15%'  },
-  { label: 'Repair Kit ×5',           chance: '12%'  },
-  { label: 'Common Robot',            chance: '12%'  },
-  { label: 'Uncommon Equipment',      chance: '9%'   },
-  { label: 'Uncommon Base Upgrade',   chance: '8%'   },
-  { label: 'Uncommon Robot',          chance: '7%'   },
-  { label: 'Rare Equipment',          chance: '5%'   },
-  { label: 'Rare Base Upgrade',       chance: '4%'   },
-  { label: 'Rare Robot',              chance: '4%'   },
-  { label: 'Epic Equipment',          chance: '2%'   },
-  { label: 'Epic Base Upgrade',       chance: '2%'   },
-  { label: 'Epic Robot',              chance: '1%'   },
-  { label: 'Legendary Equipment',     chance: '0.5%' },
-  { label: 'Legendary Base Upgrade',  chance: '0.3%' },
-  { label: 'Legendary Robot',         chance: '0.2%' },
-]
+const RARITY_BADGE: Record<string, string> = {
+  ROBOT_CRATE_COMMON:   'text-gray-300 border-gray-600',
+  ROBOT_CRATE_UNCOMMON: 'text-green-400 border-green-600/40',
+  ROBOT_CRATE_RARE:     'text-blue-400 border-blue-600/40',
+  ROBOT_CRATE_EPIC:     'text-purple-400 border-purple-600/40',
+}
+
+const RARITY_OPEN_BTN: Record<string, string> = {
+  ROBOT_CRATE_COMMON:   'bg-gray-600 hover:bg-gray-500',
+  ROBOT_CRATE_UNCOMMON: 'bg-green-700 hover:bg-green-600',
+  ROBOT_CRATE_RARE:     'bg-blue-600 hover:bg-blue-500',
+  ROBOT_CRATE_EPIC:     'bg-purple-600 hover:bg-purple-500',
+}
 
 // ─── Crate Card ───────────────────────────────────────────────────────────────
 
 function CrateCard({
-  title, description, price, owned,
-  buyQty, openQty, maxBuy, maxOpen,
-  badge, badgeColor, dropTableRows,
-  canBuy, onBuyQtyChange, onOpenQtyChange,
-  onBuy, onOpen, loading,
+  crate,
+  weeklyPartsPurchased,
+  weeklyPartsLimit,
+  balance,
+  buyQty, openQty,
+  onBuyQtyChange, onOpenQtyChange,
+  onBuy, onOpen,
+  loading,
 }: {
-  title: string; description: string; price: number; owned: number
-  buyQty: number; openQty: number; maxBuy: number; maxOpen: number
-  badge?: string; badgeColor?: string
-  dropTableRows: { label: string; chance: string }[]
-  canBuy: boolean
-  onBuyQtyChange: (v: number) => void; onOpenQtyChange: (v: number) => void
-  onBuy: () => void; onOpen: () => void; loading: boolean
+  crate: CrateInfo
+  weeklyPartsPurchased: number
+  weeklyPartsLimit: number
+  balance: number
+  buyQty: number
+  openQty: number
+  onBuyQtyChange: (v: number) => void
+  onOpenQtyChange: (v: number) => void
+  onBuy: () => void
+  onOpen: () => void
+  loading: boolean
 }) {
   const [showDrops, setShowDrops] = useState(false)
-  const totalBuyCost = price * buyQty
+  const { lootboxType, name, description, price, weeklyLimit, owned, dropEntries } = crate
+
+  const isPartsCrate   = lootboxType === 'PARTS_CRATE'
+  const isRobotCrate   = lootboxType.startsWith('ROBOT_CRATE_')
+  const partsRemaining = weeklyPartsLimit - weeklyPartsPurchased
+  const limitReached   = isPartsCrate && partsRemaining <= 0
+
+  const maxBuy = isPartsCrate
+    ? Math.min(partsRemaining, weeklyPartsLimit)
+    : 10
+
+  const canBuy = !limitReached && balance >= price
+
+  const totalBuyCost = Math.round(price * buyQty * 100) / 100
+
+  // Badge de limite semanal
+  const badge = isPartsCrate
+    ? (limitReached
+        ? { text: 'Limit reached',       color: 'text-red-400 border-red-500/30' }
+        : { text: `${partsRemaining} left this week`, color: 'text-gray-500 border-gray-700' })
+    : weeklyLimit
+    ? { text: `Max ${weeklyLimit}/week`, color: 'text-gray-500 border-gray-700' }
+    : null
+
+  // Botão de abertura: cor por tipo
+  const openBtnClass = RARITY_OPEN_BTN[lootboxType] ?? 'bg-purple-600 hover:bg-purple-500'
+  const rarityBadgeClass = RARITY_BADGE[lootboxType]
 
   return (
-    <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-5">
+    <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-5 flex flex-col">
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-white font-semibold">{title}</h3>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <h3 className="text-white font-semibold text-sm">{name}</h3>
             {badge && (
-              <span className={`text-xs px-1.5 py-0.5 rounded border ${badgeColor}`}>{badge}</span>
+              <span className={`text-xs px-1.5 py-0.5 rounded border shrink-0 ${badge.color}`}>
+                {badge.text}
+              </span>
+            )}
+            {isRobotCrate && rarityBadgeClass && (
+              <span className={`text-xs px-1.5 py-0.5 rounded border shrink-0 ${rarityBadgeClass}`}>
+                Guaranteed
+              </span>
             )}
           </div>
           <p className="text-gray-500 text-xs leading-relaxed">{description}</p>
         </div>
         <div className="text-right ml-3 shrink-0">
           <p className="text-gray-500 text-xs">per crate</p>
-          <p className="text-white font-bold font-mono">{price} CRATE</p>
+          <p className="text-white font-bold font-mono text-sm">{price} CRATE</p>
           {owned > 0 && <p className="text-green-400 text-xs mt-0.5">Owned: {owned}</p>}
         </div>
       </div>
 
-      {/* Drop table */}
-      <button
-        onClick={() => setShowDrops((v) => !v)}
-        className="text-xs text-gray-600 hover:text-gray-400 transition-colors mb-3 flex items-center gap-1"
-      >
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-          className={`transition-transform ${showDrops ? 'rotate-180' : ''}`}>
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-        {showDrops ? 'Hide' : 'View'} drop table
-      </button>
+      {/* Drop table toggle */}
+      {dropEntries.length > 0 && (
+        <>
+          <button
+            onClick={() => setShowDrops((v) => !v)}
+            className="text-xs text-gray-600 hover:text-gray-400 transition-colors mb-3 flex items-center gap-1 self-start"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              className={`transition-transform ${showDrops ? 'rotate-180' : ''}`}>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+            {showDrops ? 'Hide' : 'View'} drop table
+          </button>
 
-      {showDrops && (
-        <div className="mb-3 bg-[#0d0d15] rounded-lg p-3 space-y-1 max-h-40 overflow-y-auto">
-          {dropTableRows.map((row, i) => (
-            <div key={i} className="flex justify-between text-xs">
-              <span className="text-gray-400">{row.label}</span>
-              <span className="text-gray-600 font-mono">{row.chance}</span>
+          {showDrops && (
+            <div className="mb-3 bg-[#0d0d15] rounded-lg p-3 space-y-1 max-h-40 overflow-y-auto">
+              {dropEntries.map((row, i) => (
+                <div key={i} className="flex justify-between text-xs">
+                  <span className="text-gray-400">{row.label}</span>
+                  <span className="text-gray-600 font-mono">{row.chance}</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
+
+      {/* Espaço restante empurra ações para o fundo */}
+      <div className="flex-1" />
 
       {/* Buy section */}
       <div className="border-t border-gray-800/40 pt-3 mb-3">
@@ -131,14 +173,14 @@ function CrateCard({
         <div className="border-t border-gray-800/40 pt-3">
           <div className="flex items-center justify-between mb-2">
             <span className="text-gray-500 text-xs">Open quantity</span>
-            <QuantityStepper value={openQty} min={1} max={Math.min(maxOpen, owned)} onChange={onOpenQtyChange} />
+            <QuantityStepper value={openQty} min={1} max={Math.min(10, owned)} onChange={onOpenQtyChange} />
           </div>
           <button
             onClick={onOpen}
             disabled={loading}
-            className="w-full py-2 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+            className={`w-full py-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors ${openBtnClass}`}
           >
-            {loading ? 'Opening...' : `Open ${openQty}× ${title}`}
+            {loading ? 'Opening...' : `Open ${openQty}× ${isRobotCrate ? name : name.split(' ')[0] + ' Crate'}`}
           </button>
         </div>
       )}
@@ -149,18 +191,24 @@ function CrateCard({
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export function LootboxManager() {
-  const [data, setData]     = useState<LootboxData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [busy, setBusy]     = useState(false)
-  const [error,   setError]   = useState('')
-  const [success, setSuccess] = useState('')
-  const [drops, setDrops]   = useState<DropResultType[] | null>(null)
+  const [data, setData]         = useState<LootboxData | null>(null)
+  const [loading, setLoading]   = useState(true)
+  const [busy, setBusy]         = useState(false)
+  const [error, setError]       = useState('')
+  const [success, setSuccess]   = useState('')
+  const [drops, setDrops]       = useState<DropResultType[] | null>(null)
   const [stoppedEarly, setStoppedEarly] = useState(false)
 
-  const [partsBuyQty,   setPartsBuyQty]   = useState(1)
-  const [supplyBuyQty,  setSupplyBuyQty]  = useState(1)
-  const [partsOpenQty,  setPartsOpenQty]  = useState(1)
-  const [supplyOpenQty, setSupplyOpenQty] = useState(1)
+  // Quantidades por tipo de crate: buy + open
+  const [buyQtys,  setBuyQtys]  = useState<Record<string, number>>({})
+  const [openQtys, setOpenQtys] = useState<Record<string, number>>({})
+
+  const getQty = (map: Record<string, number>, type: string) => map[type] ?? 1
+  const setQty = (
+    setter: React.Dispatch<React.SetStateAction<Record<string, number>>>,
+    type: string,
+    val: number,
+  ) => setter((prev) => ({ ...prev, [type]: val }))
 
   const fetchData = useCallback(async () => {
     const res = await fetch('/api/game/lootbox')
@@ -170,7 +218,7 @@ export function LootboxManager() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  async function handleBuy(lootboxType: 'PARTS_CRATE' | 'SUPPLY_CRATE', quantity: number) {
+  async function handleBuy(lootboxType: string, quantity: number) {
     setBusy(true); setError(''); setSuccess('')
     const res  = await fetch('/api/game/lootbox/buy', {
       method: 'POST',
@@ -181,14 +229,14 @@ export function LootboxManager() {
     if (!res.ok) {
       setError(json.error ?? 'Failed to buy.')
     } else {
-      const name = lootboxType === 'PARTS_CRATE' ? 'Parts Crate' : 'Supply Crate'
-      setSuccess(`${json.purchased}× ${name} added to your inventory!`)
+      const crate = data?.crates.find((c) => c.lootboxType === lootboxType)
+      setSuccess(`${json.purchased}× ${crate?.name ?? lootboxType} added to your inventory!`)
       await fetchData()
     }
     setBusy(false)
   }
 
-  async function handleOpen(lootboxType: 'PARTS_CRATE' | 'SUPPLY_CRATE', quantity: number) {
+  async function handleOpen(lootboxType: string, quantity: number) {
     setBusy(true); setError(''); setSuccess('')
     const res  = await fetch('/api/game/lootbox/open', {
       method: 'POST',
@@ -202,7 +250,6 @@ export function LootboxManager() {
       setDrops(json.drops)
       setStoppedEarly(json.stoppedEarly)
     } else {
-      // Inventário cheio — nenhum item foi obtido
       setError('Inventory is full. Free up some space before opening lootboxes.')
     }
 
@@ -213,9 +260,8 @@ export function LootboxManager() {
   if (loading) return <div className="text-gray-500 text-sm py-8">Loading...</div>
   if (!data)   return <div className="text-red-400 text-sm py-8">Failed to load.</div>
 
-  const partsRemaining    = data.weeklyPartsLimit - data.weeklyPartsPurchased
-  const partsLimitReached = partsRemaining <= 0
-  const maxPartsBuy       = Math.min(partsRemaining, data.weeklyPartsLimit)
+  const standardCrates = data.crates.filter((c) => !c.lootboxType.startsWith('ROBOT_CRATE_'))
+  const robotCrates    = data.crates.filter((c) => c.lootboxType.startsWith('ROBOT_CRATE_'))
 
   return (
     <>
@@ -248,57 +294,77 @@ export function LootboxManager() {
         </span>
       </div>
 
-      {/* Limite semanal */}
-      <div className="flex items-center gap-2 mb-5 text-xs text-gray-600">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-        Parts Crate weekly limit:
-        <span className={partsLimitReached ? 'text-red-400' : 'text-gray-400'}>
-          {data.weeklyPartsPurchased} / {data.weeklyPartsLimit} used
-          {!partsLimitReached && ` — ${partsRemaining} remaining this week`}
-        </span>
-      </div>
+      {/* Limite semanal Parts Crate */}
+      {(() => {
+        const partsCrate = data.crates.find((c) => c.lootboxType === 'PARTS_CRATE')
+        if (!partsCrate) return null
+        const remaining    = data.weeklyPartsLimit - data.weeklyPartsPurchased
+        const limitReached = remaining <= 0
+        return (
+          <div className="flex items-center gap-2 mb-5 text-xs text-gray-600">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            Parts Crate weekly limit:
+            <span className={limitReached ? 'text-red-400' : 'text-gray-400'}>
+              {data.weeklyPartsPurchased} / {data.weeklyPartsLimit} used
+              {!limitReached && ` — ${remaining} remaining this week`}
+            </span>
+          </div>
+        )
+      })()}
 
-      {/* Cards */}
-      <div className="grid grid-cols-2 gap-4">
-        <CrateCard
-          title="Parts Crate"
-          description="Crafting parts of various rarities. Limited to 5 purchases per week."
-          price={data.prices.partsCrate}
-          owned={data.partsCrates.owned}
-          buyQty={partsBuyQty}
-          openQty={partsOpenQty}
-          maxBuy={maxPartsBuy}
-          maxOpen={10}
-          badge={partsLimitReached ? 'Limit reached' : `${partsRemaining} left this week`}
-          badgeColor={partsLimitReached ? 'text-red-400 border-red-500/30' : 'text-gray-500 border-gray-700'}
-          dropTableRows={PARTS_DROPS}
-          canBuy={!partsLimitReached && data.balance >= data.prices.partsCrate}
-          onBuyQtyChange={setPartsBuyQty}
-          onOpenQtyChange={setPartsOpenQty}
-          onBuy={() => handleBuy('PARTS_CRATE', partsBuyQty)}
-          onOpen={() => handleOpen('PARTS_CRATE', partsOpenQty)}
-          loading={busy}
-        />
-        <CrateCard
-          title="Supply Crate"
-          description="Robots, equipment, base upgrades and consumables. Legendary drops possible."
-          price={data.prices.supplyCrate}
-          owned={data.supplyCrates.owned}
-          buyQty={supplyBuyQty}
-          openQty={supplyOpenQty}
-          maxBuy={10}
-          maxOpen={10}
-          dropTableRows={SUPPLY_DROPS}
-          canBuy={data.balance >= data.prices.supplyCrate}
-          onBuyQtyChange={setSupplyBuyQty}
-          onOpenQtyChange={setSupplyOpenQty}
-          onBuy={() => handleBuy('SUPPLY_CRATE', supplyBuyQty)}
-          onOpen={() => handleOpen('SUPPLY_CRATE', supplyOpenQty)}
-          loading={busy}
-        />
-      </div>
+      {/* Standard Crates (Parts + Supply + quaisquer outros não-robot) */}
+      {standardCrates.length > 0 && (
+        <div className={`grid gap-4 mb-8 ${standardCrates.length === 1 ? 'grid-cols-1 max-w-md' : 'grid-cols-2'}`}>
+          {standardCrates.map((crate) => (
+            <CrateCard
+              key={crate.lootboxType}
+              crate={crate}
+              weeklyPartsPurchased={data.weeklyPartsPurchased}
+              weeklyPartsLimit={data.weeklyPartsLimit}
+              balance={data.balance}
+              buyQty={getQty(buyQtys,  crate.lootboxType)}
+              openQty={getQty(openQtys, crate.lootboxType)}
+              onBuyQtyChange={(v) => setQty(setBuyQtys,  crate.lootboxType, v)}
+              onOpenQtyChange={(v) => setQty(setOpenQtys, crate.lootboxType, v)}
+              onBuy={() => handleBuy(crate.lootboxType, getQty(buyQtys, crate.lootboxType))}
+              onOpen={() => handleOpen(crate.lootboxType, getQty(openQtys, crate.lootboxType))}
+              loading={busy}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Robot Crates */}
+      {robotCrates.length > 0 && (
+        <>
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-gray-400 text-sm font-medium">Robot Crates</h2>
+            <div className="flex-1 h-px bg-gray-800/60" />
+            <span className="text-xs text-gray-600">Guaranteed robot by rarity</span>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            {robotCrates.map((crate) => (
+              <CrateCard
+                key={crate.lootboxType}
+                crate={crate}
+                weeklyPartsPurchased={data.weeklyPartsPurchased}
+                weeklyPartsLimit={data.weeklyPartsLimit}
+                balance={data.balance}
+                buyQty={getQty(buyQtys,  crate.lootboxType)}
+                openQty={getQty(openQtys, crate.lootboxType)}
+                onBuyQtyChange={(v) => setQty(setBuyQtys,  crate.lootboxType, v)}
+                onOpenQtyChange={(v) => setQty(setOpenQtys, crate.lootboxType, v)}
+                onBuy={() => handleBuy(crate.lootboxType, getQty(buyQtys, crate.lootboxType))}
+                onOpen={() => handleOpen(crate.lootboxType, getQty(openQtys, crate.lootboxType))}
+                loading={busy}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </>
   )
 }

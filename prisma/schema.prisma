@@ -746,6 +746,10 @@ enum ConsumableType {
 enum LootboxType {
   PARTS_CRATE
   SUPPLY_CRATE
+  ROBOT_CRATE_COMMON
+  ROBOT_CRATE_UNCOMMON
+  ROBOT_CRATE_RARE
+  ROBOT_CRATE_EPIC
 }
 
 enum Token {

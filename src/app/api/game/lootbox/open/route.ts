@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { LootboxType } from '@prisma/client'
 import {
-  rollPartsCrate, rollSupplyCrate, rollSupplyCrateAsync,
+  generateRobotDrop, generateEquipmentDrop, generateBaseUpgradeDrop,
+  rollPartsCrate, rollSupplyCrateAsync,
   saveDropToInventory, checkInventorySpace,
   type DropResultType,
 } from '@/lib/lootbox'
@@ -10,18 +12,43 @@ import { incrementMission } from '@/lib/mission-progress'
 
 const MAX_OPEN_AT_ONCE = 10
 
-// ─── Roll a drop from the DB config (falls back to hardcoded if not found) ────
+const VALID_TYPES = [
+  'PARTS_CRATE',
+  'SUPPLY_CRATE',
+  'ROBOT_CRATE_COMMON',
+  'ROBOT_CRATE_UNCOMMON',
+  'ROBOT_CRATE_RARE',
+  'ROBOT_CRATE_EPIC',
+] as const
 
-async function rollFromConfig(lootboxType: string): Promise<DropResultType | null> {
-  const config = await prisma.lootboxConfig.findFirst({
-    where:   { lootboxType, active: true },
-    include: { dropEntries: true },
-  })
+// Mapa de robot crate → raridade garantida
+const ROBOT_CRATE_RARITY: Record<string, 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC'> = {
+  ROBOT_CRATE_COMMON:   'COMMON',
+  ROBOT_CRATE_UNCOMMON: 'UNCOMMON',
+  ROBOT_CRATE_RARE:     'RARE',
+  ROBOT_CRATE_EPIC:     'EPIC',
+}
 
-  // Fallback: sem config no banco → usa lógica hardcoded original
-  if (!config || config.dropEntries.length === 0) return null
+// ─── Config pré-carregada do banco ────────────────────────────────────────────
 
-  // Escolhe entrada pelo peso relativo
+type LoadedConfig = NonNullable<Awaited<ReturnType<typeof prisma.lootboxConfig.findFirst>>> & {
+  dropEntries: {
+    dropType: string; rarity: string | null
+    minQuantity: number; maxQuantity: number
+    weight: number; specificName: string | null
+  }[]
+}
+
+/**
+ * Roll a partir de config do banco — agora lida com TODOS os dropTypes:
+ * PART, CONSUMABLE, ROBOT, EQUIPMENT, BASE_UPGRADE
+ */
+function rollFromConfigSync(
+  config: LoadedConfig,
+  robotTemplates: { id: string; name: string; rarity: string | null; metadata: unknown }[],
+): DropResultType | null {
+  if (!config.dropEntries.length) return null
+
   const totalWeight = config.dropEntries.reduce((s, e) => s + e.weight, 0)
   let rand = Math.random() * totalWeight
   let chosen = config.dropEntries[config.dropEntries.length - 1]
@@ -30,78 +57,53 @@ async function rollFromConfig(lootboxType: string): Promise<DropResultType | nul
     if (rand <= 0) { chosen = entry; break }
   }
 
-  const qty = chosen.minQuantity === chosen.maxQuantity
+  const qty    = chosen.minQuantity === chosen.maxQuantity
     ? chosen.minQuantity
     : chosen.minQuantity + Math.floor(Math.random() * (chosen.maxQuantity - chosen.minQuantity + 1))
-
   const rarity = (chosen.rarity ?? 'COMMON') as 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY'
 
-  // Gera o item baseado no tipo — reutiliza a lógica de nomes/efeitos do lootbox.ts
-  // via rollPartsCrate/rollSupplyCrate para consistência, mas filtra pelo rarity do banco
-  // Para simplicidade de migração: delega ao roll hardcoded e filtra pelo rarity esperado
-  // (em produção completo, cada entry geraria o item diretamente)
   switch (chosen.dropType) {
     case 'PART': {
-      const PART_NAMES: Record<string, string[]> = {
-        COMMON:   ['Energy Core', 'Servo Pack', 'Circuit Board', 'Power Relay', 'Signal Node'],
-        UNCOMMON: ['Mining Core', 'AI Chip', 'Charge Crystal', 'Thruster Pack', 'Sensor Array'],
-        RARE:     ['Void Crystal', 'Logic Core', 'Genesis Fragment', 'Terrain Scanner', 'Quantum Cell'],
-        EPIC:     ['Nexus Shard', 'Plasma Core', 'Singularity Chip', 'Warp Conduit'],
-        LEGENDARY:['Omega Crystal', 'Stellar Core'],
+      const NAMES: Record<string, string[]> = {
+        COMMON:    ['Energy Core', 'Servo Pack', 'Circuit Board', 'Power Relay', 'Signal Node'],
+        UNCOMMON:  ['Mining Core', 'AI Chip', 'Charge Crystal', 'Thruster Pack', 'Sensor Array'],
+        RARE:      ['Void Crystal', 'Logic Core', 'Genesis Fragment', 'Terrain Scanner', 'Quantum Cell'],
+        EPIC:      ['Nexus Shard', 'Plasma Core', 'Singularity Chip', 'Warp Conduit'],
+        LEGENDARY: ['Omega Crystal', 'Stellar Core'],
       }
       type PartCat = 'ENERGY' | 'MINING' | 'MAINTENANCE' | 'TERRAIN' | 'AI_SOFTWARE' | 'SPECIAL'
       const CAT: Record<string, PartCat> = {
-        COMMON:'ENERGY', UNCOMMON:'MINING', RARE:'SPECIAL', EPIC:'SPECIAL', LEGENDARY:'SPECIAL',
+        COMMON: 'ENERGY', UNCOMMON: 'MINING', RARE: 'SPECIAL', EPIC: 'SPECIAL', LEGENDARY: 'SPECIAL',
       }
-      const names = PART_NAMES[rarity] ?? PART_NAMES.COMMON
+      const names = NAMES[rarity] ?? NAMES.COMMON
       return {
-        kind:     'part',
+        kind: 'part',
         partType: names[Math.floor(Math.random() * names.length)],
         category: CAT[rarity] ?? 'ENERGY',
         rarity,
         quantity: qty,
       }
     }
+
     case 'CONSUMABLE': {
-      // specificName encodes kit value: 'REPAIR_KIT_5', 'REPAIR_KIT_25', etc.
       const val = chosen.specificName
         ? parseInt(chosen.specificName.replace('REPAIR_KIT_', ''), 10)
         : 5
       return { kind: 'consumable', consumableType: 'REPAIR_KIT', value: isNaN(val) ? 5 : val, quantity: qty }
     }
+
+    case 'ROBOT':
+      return generateRobotDrop(rarity, robotTemplates)
+
+    case 'EQUIPMENT':
+      return generateEquipmentDrop(rarity)
+
+    case 'BASE_UPGRADE':
+      return generateBaseUpgradeDrop(rarity)
+
     default:
-      // Para ROBOT, EQUIPMENT, BASE_UPGRADE: delega ao roll original com rarity alvo
-      // (lógica completa de geração de stats está em lootbox.ts)
       return null
   }
-}
-
-// ─── Sync roll usando config já carregada (sem query) ────────────────────────
-
-type LoadedConfig = NonNullable<Awaited<ReturnType<typeof prisma.lootboxConfig.findFirst>>> & {
-  dropEntries: { dropType: string; rarity: string | null; minQuantity: number; maxQuantity: number; weight: number; specificName: string | null }[]
-}
-
-function rollFromConfigSync(config: LoadedConfig): DropResultType | null {
-  if (!config.dropEntries.length) return null
-  const totalWeight = config.dropEntries.reduce((s, e) => s + e.weight, 0)
-  let rand = Math.random() * totalWeight
-  let chosen = config.dropEntries[config.dropEntries.length - 1]
-  for (const entry of config.dropEntries) { rand -= entry.weight; if (rand <= 0) { chosen = entry; break } }
-  const qty    = chosen.minQuantity === chosen.maxQuantity ? chosen.minQuantity : chosen.minQuantity + Math.floor(Math.random() * (chosen.maxQuantity - chosen.minQuantity + 1))
-  const rarity = (chosen.rarity ?? 'COMMON') as 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY'
-  if (chosen.dropType === 'PART') {
-    const NAMES: Record<string, string[]> = { COMMON:['Energy Core','Servo Pack','Circuit Board','Power Relay','Signal Node'], UNCOMMON:['Mining Core','AI Chip','Charge Crystal','Thruster Pack','Sensor Array'], RARE:['Void Crystal','Logic Core','Genesis Fragment','Terrain Scanner','Quantum Cell'], EPIC:['Nexus Shard','Plasma Core','Singularity Chip','Warp Conduit'], LEGENDARY:['Omega Crystal','Stellar Core'] }
-    type PartCat = 'ENERGY'|'MINING'|'MAINTENANCE'|'TERRAIN'|'AI_SOFTWARE'|'SPECIAL'
-    const CAT: Record<string, PartCat> = { COMMON:'ENERGY', UNCOMMON:'MINING', RARE:'SPECIAL', EPIC:'SPECIAL', LEGENDARY:'SPECIAL' }
-    const names = NAMES[rarity] ?? NAMES.COMMON
-    return { kind: 'part', partType: names[Math.floor(Math.random()*names.length)], category: CAT[rarity]??'ENERGY', rarity, quantity: qty }
-  }
-  if (chosen.dropType === 'CONSUMABLE') {
-    const val = chosen.specificName ? parseInt(chosen.specificName.replace('REPAIR_KIT_',''),10) : 5
-    return { kind: 'consumable', consumableType: 'REPAIR_KIT', value: isNaN(val)?5:val, quantity: qty }
-  }
-  return null  // ROBOT/EQUIPMENT/BASE_UPGRADE → fallback hardcoded
 }
 
 // ─── Main route ───────────────────────────────────────────────────────────────
@@ -111,18 +113,19 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { lootboxType, quantity = 1 } = await req.json() as {
-    lootboxType: 'PARTS_CRATE' | 'SUPPLY_CRATE'
+    lootboxType: string
     quantity: number
   }
 
-  if (!['PARTS_CRATE', 'SUPPLY_CRATE'].includes(lootboxType)) {
+  if (!VALID_TYPES.includes(lootboxType as typeof VALID_TYPES[number])) {
     return NextResponse.json({ error: 'Invalid lootbox type.' }, { status: 400 })
   }
 
-  const qty = Math.min(Math.max(1, quantity), MAX_OPEN_AT_ONCE)
+  const qty    = Math.min(Math.max(1, quantity), MAX_OPEN_AT_ONCE)
+  const ltEnum = lootboxType as LootboxType
 
   const lootbox = await prisma.inventoryLootbox.findUnique({
-    where: { userId_lootboxType: { userId: user.id, lootboxType } },
+    where: { userId_lootboxType: { userId: user.id, lootboxType: ltEnum } },
   })
 
   if (!lootbox || lootbox.quantity < 1) {
@@ -133,56 +136,72 @@ export async function POST(req: NextRequest) {
   const drops: DropResultType[] = []
   let stopped = false
 
-  // Busca config do banco UMA vez fora do loop (evita N+1)
-  const dbConfig = await prisma.lootboxConfig.findFirst({
-    where:   { lootboxType, active: true },
-    include: { dropEntries: true },
-  })
-  // Verifica espaço no inventário UMA vez antes do loop
-  const sampleDrop = dbConfig ? null : (lootboxType === 'PARTS_CRATE' ? rollPartsCrate() : rollSupplyCrate())
-  if (sampleDrop) {
-    const spaceCheck = await checkInventorySpace(user.id, sampleDrop)
-    if (spaceCheck) { stopped = true }
-  }
+  // ── Robot Crates: lógica simplificada (drop garantido) ────────────────────
+  if (lootboxType in ROBOT_CRATE_RARITY) {
+    const rarity = ROBOT_CRATE_RARITY[lootboxType]
 
-  for (let i = 0; i < toOpen && !stopped; i++) {
-    // Usa config pré-carregado ou fallback hardcoded
-    let drop = dbConfig ? rollFromConfigSync(dbConfig) : null
-    if (!drop) {
-      drop = lootboxType === 'PARTS_CRATE'
-        ? rollPartsCrate()
-        : await rollSupplyCrateAsync()  // usa templates do banco para robôs
+    for (let i = 0; i < toOpen && !stopped; i++) {
+      const drop = generateRobotDrop(rarity)
+      const spaceError = await checkInventorySpace(user.id, drop)
+      if (spaceError) { stopped = true; break }
+      await saveDropToInventory(user.id, drop)
+      drops.push(drop)
     }
+  } else {
+    // ── Parts Crate / Supply Crate: usa config do banco ou fallback ──────────
 
-    const spaceError = await checkInventorySpace(user.id, drop)
-    if (spaceError) { stopped = true; break }
+    // Pré-carrega config e templates de robô UMA vez antes do loop
+    const [dbConfig, robotTemplates] = await Promise.all([
+      prisma.lootboxConfig.findFirst({
+        where:   { lootboxType, active: true },
+        include: { dropEntries: true },
+      }),
+      prisma.shopItem.findMany({ where: { category: 'robot-specific', active: true } }),
+    ])
 
-    await saveDropToInventory(user.id, drop)
-    drops.push(drop)
+    for (let i = 0; i < toOpen && !stopped; i++) {
+      let drop: DropResultType | null = null
+
+      if (dbConfig && dbConfig.dropEntries.length > 0) {
+        drop = rollFromConfigSync(dbConfig, robotTemplates)
+      }
+
+      // Fallback hardcoded quando config do banco não cobriu o tipo
+      if (!drop) {
+        drop = lootboxType === 'PARTS_CRATE'
+          ? rollPartsCrate()
+          : await rollSupplyCrateAsync()
+      }
+
+      const spaceError = await checkInventorySpace(user.id, drop)
+      if (spaceError) { stopped = true; break }
+
+      await saveDropToInventory(user.id, drop)
+      drops.push(drop)
+    }
   }
 
+  // ── Atualiza inventário de lootboxes ──────────────────────────────────────
   if (drops.length > 0) {
     const newQty = lootbox.quantity - drops.length
     if (newQty <= 0) {
       await prisma.inventoryLootbox.delete({
-        where: { userId_lootboxType: { userId: user.id, lootboxType } },
+        where: { userId_lootboxType: { userId: user.id, lootboxType: ltEnum } },
       })
     } else {
       await prisma.inventoryLootbox.update({
-        where: { userId_lootboxType: { userId: user.id, lootboxType } },
+        where: { userId_lootboxType: { userId: user.id, lootboxType: ltEnum } },
         data:  { quantity: newQty },
       })
     }
-  }
 
-  if (drops.length > 0) {
     void incrementMission(user.id, 'LOOTBOX', drops.length)
   }
 
   return NextResponse.json({
-    success: drops.length > 0,
+    success:     drops.length > 0,
     drops,
-    opened: drops.length,
+    opened:      drops.length,
     stoppedEarly: stopped,
   })
 }
