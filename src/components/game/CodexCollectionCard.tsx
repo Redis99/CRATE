@@ -188,7 +188,7 @@ export function CodexCollectionCard({ collection, onRegister, onEdit }: CodexCol
       <div className="flex flex-col gap-2 mt-auto">
         {canRegister && (
           <ActionButton variant="outline" size="sm" fullWidth onClick={() => onRegister!(collection)}>
-            Register Item ({availCount} available)
+            Register Item
           </ActionButton>
         )}
         {!canRegister && !isComplete && onRegister && (
