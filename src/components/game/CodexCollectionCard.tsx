@@ -19,12 +19,19 @@ export interface CodexAvailableRobot {
   hashPower: number
 }
 
+export interface CodexCollectionSlot {
+  name:   string
+  filled: boolean
+  entry:  CodexCollectionEntry | null
+}
+
 export interface CodexCollectionData {
   id:                string
   name:              string
   description:       string
   itemType:          string
   totalRequired:     number
+  requiredItems:     string[]       // nomes específicos (álbum de figurinhas). [] = modo genérico
   bonusPerItemErPct: number
   completionErPct:   number
   completionPdPct:   number
@@ -36,6 +43,7 @@ export interface CodexCollectionData {
   registeredItems?:  CodexCollectionEntry[]
   availableRobots?:  CodexAvailableRobot[]
   isComplete?:       boolean
+  slots?:            CodexCollectionSlot[] | null  // null = modo genérico
 }
 
 interface CodexCollectionCardProps {
@@ -122,8 +130,28 @@ export function CodexCollectionCard({ collection, onRegister, onEdit }: CodexCol
         </div>
       </div>
 
-      {/* Progress bar — apenas na view do jogador */}
-      {hasProgress && (
+      {/* Slots nominais (álbum de figurinhas) ou progress bar genérico */}
+      {hasProgress && collection.slots ? (
+        <div className="grid grid-cols-2 gap-1.5">
+          {collection.slots.map((slot) => (
+            <div
+              key={slot.name}
+              className={`flex items-center gap-2 rounded-lg px-2.5 py-2 border text-xs transition-all ${
+                slot.filled
+                  ? `${RARITY_BORDER[slot.entry?.rarity ?? ''] ?? 'border-green-500/30'} bg-green-500/5`
+                  : 'border-gray-700/30 bg-gray-900/30'
+              }`}
+            >
+              <span className={`shrink-0 text-[10px] font-bold ${slot.filled ? 'text-green-400' : 'text-gray-600'}`}>
+                {slot.filled ? '✓' : '○'}
+              </span>
+              <span className={`truncate ${slot.filled ? 'text-white' : 'text-gray-600'}`}>
+                {slot.name}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : hasProgress && (
         <ProgressBar current={registered} total={collection.totalRequired} complete={isComplete} />
       )}
 
@@ -150,23 +178,6 @@ export function CodexCollectionCard({ collection, onRegister, onEdit }: CodexCol
           </div>
         )}
       </div>
-
-      {/* Registered items — apenas na view do jogador */}
-      {(collection.registeredItems?.length ?? 0) > 0 && (
-        <div className="space-y-1.5">
-          <p className="text-gray-600 text-xs font-medium uppercase tracking-wider">Registered</p>
-          <div className="flex flex-wrap gap-1.5">
-            {collection.registeredItems!.map((item) => (
-              <span
-                key={item.id}
-                className={`text-xs px-2.5 py-1 rounded-lg bg-gray-900/60 border ${RARITY_BORDER[item.rarity] ?? 'border-gray-700/40'} ${RARITY_COLORS[item.rarity] ?? 'text-gray-300'}`}
-              >
-                {item.itemName}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Actions */}
       <div className="flex flex-col gap-2 mt-auto">

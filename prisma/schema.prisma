@@ -390,6 +390,8 @@ model CodexEntry {
   equipment     Equipment?  @relation(fields: [equipmentId], references: [id])
   baseUpgrade   BaseUpgrade? @relation(fields: [baseUpgradeId], references: [id])
 
+  // Impede o mesmo slot (nome) ser preenchido duas vezes na mesma coleção
+  @@unique([userId, collection, itemName])
   @@map("codex_entries")
 }
 
@@ -398,7 +400,11 @@ model CodexCollection {
   name          String        @unique   // deve corresponder ao campo collection dos robôs
   description   String
   itemType      CodexItemType @default(ROBOT)
-  totalRequired Int           // quantidade de itens para completar a coleção
+  totalRequired Int           // quantidade de itens para completar (derivado de requiredItems.length quando preenchido)
+
+  // Álbum de figurinhas — nomes exatos dos robôs necessários
+  // string[] — cada nome é um slot único. [] = aceita qualquer N robôs da coleção (modo legado)
+  requiredItems  Json         @default("[]")
 
   // Bônus individual (por item registrado)
   bonusPerItemErPct  Float    @default(0)   // % ER global por item registrado

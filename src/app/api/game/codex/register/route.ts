@@ -42,22 +42,46 @@ export async function POST(req: NextRequest) {
   }
 
   // 3. Verifica se já existe entry para este robô (double-submission guard)
-  const existing = await prisma.codexEntry.findUnique({ where: { robotId } })
-  if (existing) {
+  const existingByRobot = await prisma.codexEntry.findUnique({ where: { robotId } })
+  if (existingByRobot) {
     return NextResponse.json({ error: 'Robot is already in the Codex' }, { status: 400 })
   }
 
-  // 4. Verifica quantos itens desta coleção já estão registrados
-  const currentCount = await prisma.codexEntry.count({
-    where: { userId: user.id, collection: collection.name },
-  })
-  if (currentCount >= collection.totalRequired) {
+  // 4. Valida mecânica de álbum de figurinhas
+  const requiredItems = (collection.requiredItems as string[]) ?? []
+  const hasSpecificItems = requiredItems.length > 0
+  const totalRequired = hasSpecificItems ? requiredItems.length : collection.totalRequired
+
+  if (hasSpecificItems) {
+    // O robô precisa ter um nome que pertença à lista de itens requeridos
+    if (!requiredItems.includes(robot.name)) {
+      return NextResponse.json({ error: 'This robot is not one of the required items for this collection' }, { status: 400 })
+    }
+    // O slot deste nome já foi preenchido?
+    const slotTaken = await prisma.codexEntry.findUnique({
+      where: { userId_collection_itemName: { userId: user.id, collection: collection.name, itemName: robot.name } },
+    })
+    if (slotTaken) {
+      return NextResponse.json({ error: `The slot for "${robot.name}" is already filled in this collection` }, { status: 400 })
+    }
+  }
+
+  // 5. Verifica quantos slots já estão preenchidos
+  const currentCount = hasSpecificItems
+    ? await prisma.codexEntry.count({
+        where: { userId: user.id, collection: collection.name, itemName: { in: requiredItems } },
+      })
+    : await prisma.codexEntry.count({
+        where: { userId: user.id, collection: collection.name },
+      })
+
+  if (currentCount >= totalRequired) {
     return NextResponse.json({ error: 'This collection is already complete' }, { status: 400 })
   }
 
-  // 5. Executa o registro em transação
+  // 6. Executa o registro em transação
   const newCount = currentCount + 1
-  const isNowComplete = newCount >= collection.totalRequired
+  const isNowComplete = newCount >= totalRequired
 
   const [entry] = await prisma.$transaction(async (tx) => {
     // Cria a CodexEntry

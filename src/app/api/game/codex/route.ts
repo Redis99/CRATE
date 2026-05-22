@@ -26,17 +26,44 @@ export async function GET(_req: NextRequest) {
 
   const bonuses = computeCodexBonuses(collections, entries)
 
-  // Monta as coleções com progresso do jogador
+  // Monta as coleções com progresso e slots específicos
   const collectionsWithProgress = collections.map((col) => {
+    const requiredItems = (col.requiredItems as string[]) ?? []
+    const hasSpecificItems = requiredItems.length > 0
+    const totalRequired = hasSpecificItems ? requiredItems.length : col.totalRequired
+
     const registered = entries.filter((e) => e.collection === col.name)
-    const available  = availableRobots.filter((r) => r.collection === col.name)
-    const isComplete = registered.length >= col.totalRequired
+    const registeredNames = new Set(registered.map((e) => e.itemName))
+
+    // Disponíveis: filtra por nome específico se a coleção tiver requiredItems
+    const available = hasSpecificItems
+      ? availableRobots.filter(
+          (r) => r.collection === col.name &&
+                 requiredItems.includes(r.name) &&
+                 !registeredNames.has(r.name)
+        )
+      : availableRobots.filter((r) => r.collection === col.name)
+
+    const isComplete = registered.length >= totalRequired
+
+    // Slots nomeados para a UI de álbum de figurinhas
+    const slots = hasSpecificItems
+      ? requiredItems.map((name) => ({
+          name,
+          filled: registeredNames.has(name),
+          entry:  registered.find((e) => e.itemName === name) ?? null,
+        }))
+      : null  // sem slots específicos: usa progresso genérico
+
     return {
       ...col,
+      requiredItems,
+      totalRequired,
       registeredCount: registered.length,
       registeredItems: registered,
       availableRobots: available,
       isComplete,
+      slots,
     }
   })
 
