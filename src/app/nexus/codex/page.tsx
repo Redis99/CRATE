@@ -2,12 +2,18 @@
 
 import { useEffect, useState } from 'react'
 
+// Formato novo: cada item carrega seu próprio tipo
+interface RequiredItem {
+  name: string
+  itemType: 'ROBOT' | 'EQUIPMENT' | 'BASE_UPGRADE'
+}
+
 interface CodexCollection {
   id: string
   name: string
   description: string
   totalRequired: number
-  requiredItems: string[]
+  requiredItems: RequiredItem[]   // { name, itemType }[]
   bonusPerItemErPct: number
   completionErPct: number
   completionPdPct: number
@@ -59,7 +65,14 @@ export default function CodexAdminPage() {
     const data = await r.json()
     setCollections(data.map((c: CodexCollection & { requiredItems: unknown }) => ({
       ...c,
-      requiredItems: Array.isArray(c.requiredItems) ? c.requiredItems : [],
+      // Normaliza tanto o formato novo { name, itemType }[] como o legado string[]
+      requiredItems: Array.isArray(c.requiredItems)
+        ? (c.requiredItems as unknown[]).map((i) =>
+            typeof i === 'string'
+              ? { name: i, itemType: 'ROBOT' as const }
+              : (i as RequiredItem)
+          )
+        : [],
     })))
     setLoading(false)
   }
@@ -82,7 +95,10 @@ export default function CodexAdminPage() {
   useEffect(() => { load() }, [])
 
   function openNew() { setEditing({ ...EMPTY, requiredItems: [] }); setIsNew(true) }
-  function openEdit(c: CodexCollection) { setEditing({ ...c, requiredItems: Array.isArray(c.requiredItems) ? c.requiredItems : [] }); setIsNew(false) }
+  function openEdit(c: CodexCollection) {
+    setEditing({ ...c, requiredItems: Array.isArray(c.requiredItems) ? c.requiredItems : [] })
+    setIsNew(false)
+  }
 
   function openPicker() {
     setPickerOpen(true)
@@ -91,12 +107,18 @@ export default function CodexAdminPage() {
     loadItems()
   }
 
-  function toggleItem(name: string) {
+  function toggleItem(availableItem: AvailableItem) {
     if (!editing) return
-    const has = editing.requiredItems.includes(name)
-    const items = has
-      ? editing.requiredItems.filter(i => i !== name)
-      : [...editing.requiredItems, name]
+    const has = editing.requiredItems.some(i => i.name === availableItem.name)
+    const items: RequiredItem[] = has
+      ? editing.requiredItems.filter(i => i.name !== availableItem.name)
+      : [...editing.requiredItems, { name: availableItem.name, itemType: availableItem.type }]
+    setEditing(p => p ? { ...p, requiredItems: items, totalRequired: items.length > 0 ? items.length : p.totalRequired } : p)
+  }
+
+  function removeItem(name: string) {
+    if (!editing) return
+    const items = editing.requiredItems.filter(i => i.name !== name)
     setEditing(p => p ? { ...p, requiredItems: items, totalRequired: items.length > 0 ? items.length : p.totalRequired } : p)
   }
 
@@ -199,10 +221,11 @@ export default function CodexAdminPage() {
                 <p className="text-xs text-gray-600 italic py-1">No specific items — any {editing.totalRequired} items from this collection will count.</p>
               ) : (
                 <div className="flex flex-wrap gap-1.5 p-2 bg-gray-900/30 rounded-lg border border-gray-800 min-h-[36px]">
-                  {editing.requiredItems.map((name) => (
-                    <span key={name} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-900/40 border border-purple-700/40 text-purple-200">
-                      {name}
-                      <button onClick={() => toggleItem(name)}
+                  {editing.requiredItems.map((item) => (
+                    <span key={item.name} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs bg-purple-900/40 border border-purple-700/40 text-purple-200">
+                      <span className="text-purple-500 text-xs">{item.itemType === 'BASE_UPGRADE' ? 'UPG' : item.itemType.slice(0,3)}</span>
+                      {item.name}
+                      <button onClick={() => removeItem(item.name)}
                         className="text-purple-400 hover:text-red-400 ml-0.5 transition-colors leading-none">×</button>
                     </span>
                   ))}
@@ -318,10 +341,10 @@ export default function CodexAdminPage() {
                 <p className="text-gray-600 text-xs p-3">No items found.</p>
               ) : (
                 pickerItems.map(item => {
-                  const selected = editing?.requiredItems.includes(item.name) ?? false
+                  const selected = editing?.requiredItems.some(i => i.name === item.name) ?? false
                   return (
                     <button key={`${item.type}-${item.name}`}
-                      onClick={() => toggleItem(item.name)}
+                      onClick={() => toggleItem(item)}
                       className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg mb-1 text-left transition-colors ${
                         selected
                           ? 'bg-purple-900/40 border border-purple-700/40'
@@ -387,7 +410,10 @@ export default function CodexAdminPage() {
                   {c.requiredItems.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {c.requiredItems.map((item, i) => (
-                        <span key={i} className="text-xs bg-gray-800 text-gray-300 px-1.5 py-0.5 rounded">{item}</span>
+                        <span key={i} className="inline-flex items-center gap-1 text-xs bg-gray-800 text-gray-300 px-1.5 py-0.5 rounded">
+                          <span className="text-gray-600">{item.itemType === 'BASE_UPGRADE' ? 'UPG' : item.itemType.slice(0,3)}</span>
+                          {item.name}
+                        </span>
                       ))}
                     </div>
                   )}

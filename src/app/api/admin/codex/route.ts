@@ -25,14 +25,15 @@ export async function POST(req: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await req.json()
-  // Ensure requiredItems is always stored as a valid JSON array
+  // requiredItems is now { name, itemType }[] — itemType lives per-item, not on the collection
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { itemType: _unused, ...rest } = body  // strip legacy top-level itemType if present
   const data = {
-    ...body,
-    requiredItems: Array.isArray(body.requiredItems) ? body.requiredItems : [],
-    // totalRequired derived from requiredItems when not empty
-    totalRequired: Array.isArray(body.requiredItems) && body.requiredItems.length > 0
-      ? body.requiredItems.length
-      : body.totalRequired ?? 1,
+    ...rest,
+    requiredItems: Array.isArray(rest.requiredItems) ? rest.requiredItems : [],
+    totalRequired: Array.isArray(rest.requiredItems) && rest.requiredItems.length > 0
+      ? rest.requiredItems.length
+      : rest.totalRequired ?? 1,
   }
   const collection = await prisma.codexCollection.create({ data })
   return NextResponse.json(collection)
@@ -42,7 +43,7 @@ export async function PUT(req: NextRequest) {
   const admin = await getAdminUser()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { id, ...body } = await req.json()
+  const { id, itemType: _unused2, ...body } = await req.json()
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
   const data = {
