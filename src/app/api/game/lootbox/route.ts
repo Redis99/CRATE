@@ -6,12 +6,22 @@ import { prisma } from '@/lib/prisma'
 
 export const PARTS_CRATE_PRICE        = 0.01
 export const SUPPLY_CRATE_PRICE       = 0.1
-export const ROBOT_CRATE_PRICES: Record<string, number> = {
-  ROBOT_CRATE_COMMON:   5,
-  ROBOT_CRATE_UNCOMMON: 15,
-  ROBOT_CRATE_RARE:     50,
-  ROBOT_CRATE_EPIC:     150,
+export const SPECIFIC_CRATE_PRICES: Record<string, number> = {
+  ROBOT_CRATE_COMMON:          5,
+  ROBOT_CRATE_UNCOMMON:        15,
+  ROBOT_CRATE_RARE:            50,
+  ROBOT_CRATE_EPIC:            150,
+  EQUIPMENT_CRATE_COMMON:      3,
+  EQUIPMENT_CRATE_UNCOMMON:    10,
+  EQUIPMENT_CRATE_RARE:        30,
+  EQUIPMENT_CRATE_EPIC:        90,
+  BASE_UPGRADE_CRATE_COMMON:   3,
+  BASE_UPGRADE_CRATE_UNCOMMON: 10,
+  BASE_UPGRADE_CRATE_RARE:     30,
+  BASE_UPGRADE_CRATE_EPIC:     90,
 }
+/** @deprecated use SPECIFIC_CRATE_PRICES */
+export const ROBOT_CRATE_PRICES = SPECIFIC_CRATE_PRICES
 export const PARTS_CRATE_WEEKLY_LIMIT = 5
 
 export function getLastMonday(): Date {
@@ -106,30 +116,86 @@ const FALLBACK_CONFIGS: Record<string, {
   ROBOT_CRATE_COMMON: {
     name: 'Robot Crate — Common',
     description: 'Guaranteed Common robot. Reliable and energy efficient.',
-    price: ROBOT_CRATE_PRICES.ROBOT_CRATE_COMMON,
+    price: SPECIFIC_CRATE_PRICES.ROBOT_CRATE_COMMON,
     weeklyLimit: null,
     drops: [{ label: 'Common Robot ×1', chance: '100%' }],
   },
   ROBOT_CRATE_UNCOMMON: {
     name: 'Robot Crate — Uncommon',
     description: 'Guaranteed Uncommon robot with improved extraction capabilities.',
-    price: ROBOT_CRATE_PRICES.ROBOT_CRATE_UNCOMMON,
+    price: SPECIFIC_CRATE_PRICES.ROBOT_CRATE_UNCOMMON,
     weeklyLimit: null,
     drops: [{ label: 'Uncommon Robot ×1', chance: '100%' }],
   },
   ROBOT_CRATE_RARE: {
     name: 'Robot Crate — Rare',
     description: 'Guaranteed Rare robot. High-performance unit with significant ER output.',
-    price: ROBOT_CRATE_PRICES.ROBOT_CRATE_RARE,
+    price: SPECIFIC_CRATE_PRICES.ROBOT_CRATE_RARE,
     weeklyLimit: null,
     drops: [{ label: 'Rare Robot ×1', chance: '100%' }],
   },
   ROBOT_CRATE_EPIC: {
     name: 'Robot Crate — Epic',
     description: 'Guaranteed Epic robot. Top-tier unit. Maximum ER, higher power draw.',
-    price: ROBOT_CRATE_PRICES.ROBOT_CRATE_EPIC,
+    price: SPECIFIC_CRATE_PRICES.ROBOT_CRATE_EPIC,
     weeklyLimit: null,
     drops: [{ label: 'Epic Robot ×1', chance: '100%' }],
+  },
+  EQUIPMENT_CRATE_COMMON: {
+    name: 'Equipment Crate — Common',
+    description: 'Guaranteed Common equipment. Basic module with minor ER or PD improvement.',
+    price: SPECIFIC_CRATE_PRICES.EQUIPMENT_CRATE_COMMON,
+    weeklyLimit: null,
+    drops: [{ label: 'Common Equipment ×1', chance: '100%' }],
+  },
+  EQUIPMENT_CRATE_UNCOMMON: {
+    name: 'Equipment Crate — Uncommon',
+    description: 'Guaranteed Uncommon equipment with noticeable stat gains.',
+    price: SPECIFIC_CRATE_PRICES.EQUIPMENT_CRATE_UNCOMMON,
+    weeklyLimit: null,
+    drops: [{ label: 'Uncommon Equipment ×1', chance: '100%' }],
+  },
+  EQUIPMENT_CRATE_RARE: {
+    name: 'Equipment Crate — Rare',
+    description: 'Guaranteed Rare equipment. Significant ER or PD boost.',
+    price: SPECIFIC_CRATE_PRICES.EQUIPMENT_CRATE_RARE,
+    weeklyLimit: null,
+    drops: [{ label: 'Rare Equipment ×1', chance: '100%' }],
+  },
+  EQUIPMENT_CRATE_EPIC: {
+    name: 'Equipment Crate — Epic',
+    description: 'Guaranteed Epic equipment. May carry dual ER + PD benefits.',
+    price: SPECIFIC_CRATE_PRICES.EQUIPMENT_CRATE_EPIC,
+    weeklyLimit: null,
+    drops: [{ label: 'Epic Equipment ×1', chance: '100%' }],
+  },
+  BASE_UPGRADE_CRATE_COMMON: {
+    name: 'Base Upgrade Crate — Common',
+    description: 'Guaranteed Common base upgrade. Basic fleet-wide efficiency improvement.',
+    price: SPECIFIC_CRATE_PRICES.BASE_UPGRADE_CRATE_COMMON,
+    weeklyLimit: null,
+    drops: [{ label: 'Common Base Upgrade ×1', chance: '100%' }],
+  },
+  BASE_UPGRADE_CRATE_UNCOMMON: {
+    name: 'Base Upgrade Crate — Uncommon',
+    description: 'Guaranteed Uncommon base upgrade. Moderate global bonus for all deployed robots.',
+    price: SPECIFIC_CRATE_PRICES.BASE_UPGRADE_CRATE_UNCOMMON,
+    weeklyLimit: null,
+    drops: [{ label: 'Uncommon Base Upgrade ×1', chance: '100%' }],
+  },
+  BASE_UPGRADE_CRATE_RARE: {
+    name: 'Base Upgrade Crate — Rare',
+    description: 'Guaranteed Rare base upgrade. Strong fleet enhancement.',
+    price: SPECIFIC_CRATE_PRICES.BASE_UPGRADE_CRATE_RARE,
+    weeklyLimit: null,
+    drops: [{ label: 'Rare Base Upgrade ×1', chance: '100%' }],
+  },
+  BASE_UPGRADE_CRATE_EPIC: {
+    name: 'Base Upgrade Crate — Epic',
+    description: 'Guaranteed Epic base upgrade. Maximum global benefit.',
+    price: SPECIFIC_CRATE_PRICES.BASE_UPGRADE_CRATE_EPIC,
+    weeklyLimit: null,
+    drops: [{ label: 'Epic Base Upgrade ×1', chance: '100%' }],
   },
 }
 
@@ -142,6 +208,14 @@ const CRATE_ORDER = [
   'ROBOT_CRATE_UNCOMMON',
   'ROBOT_CRATE_RARE',
   'ROBOT_CRATE_EPIC',
+  'EQUIPMENT_CRATE_COMMON',
+  'EQUIPMENT_CRATE_UNCOMMON',
+  'EQUIPMENT_CRATE_RARE',
+  'EQUIPMENT_CRATE_EPIC',
+  'BASE_UPGRADE_CRATE_COMMON',
+  'BASE_UPGRADE_CRATE_UNCOMMON',
+  'BASE_UPGRADE_CRATE_RARE',
+  'BASE_UPGRADE_CRATE_EPIC',
 ]
 
 // ─── Route ────────────────────────────────────────────────────────────────────

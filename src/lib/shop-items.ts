@@ -99,8 +99,8 @@ export const SHOP_INVENTORY: ShopItem[] = [
 
 export const ALL_SHOP_ITEMS: ShopItem[] = [
   // SHOP_ROBOTS removido — robots agora são Robot Crates na área de Lootboxes
-  ...SHOP_EQUIPMENT,
-  ...SHOP_BASE_UPGRADES,
+  // SHOP_EQUIPMENT removido — equipamentos agora são Equipment Crates na área de Lootboxes
+  // SHOP_BASE_UPGRADES removido — melhorias agora são Base Upgrade Crates na área de Lootboxes
   ...SHOP_BATTERIES,
   ...SHOP_OUTPOST_SLOTS,
   ...SHOP_INVENTORY,

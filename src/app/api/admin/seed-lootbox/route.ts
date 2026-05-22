@@ -100,6 +100,98 @@ const CONFIGS = [
       { dropType: 'ROBOT' as const, rarity: 'EPIC' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
     ],
   },
+
+  // ─── Equipment Crates (drop garantido por raridade) ───────────────────────
+  {
+    lootboxType: 'EQUIPMENT_CRATE_COMMON',
+    name:        'Equipment Crate — Common',
+    description: 'Guaranteed Common equipment. Basic module with minor ER or PD improvement.',
+    priceCrate:  3,
+    weeklyLimit: null,
+    seasonal:    false,
+    dropEntries: [
+      { dropType: 'EQUIPMENT' as const, rarity: 'COMMON' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
+    ],
+  },
+  {
+    lootboxType: 'EQUIPMENT_CRATE_UNCOMMON',
+    name:        'Equipment Crate — Uncommon',
+    description: 'Guaranteed Uncommon equipment with noticeable stat gains.',
+    priceCrate:  10,
+    weeklyLimit: null,
+    seasonal:    false,
+    dropEntries: [
+      { dropType: 'EQUIPMENT' as const, rarity: 'UNCOMMON' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
+    ],
+  },
+  {
+    lootboxType: 'EQUIPMENT_CRATE_RARE',
+    name:        'Equipment Crate — Rare',
+    description: 'Guaranteed Rare equipment. Significant ER or PD boost.',
+    priceCrate:  30,
+    weeklyLimit: null,
+    seasonal:    false,
+    dropEntries: [
+      { dropType: 'EQUIPMENT' as const, rarity: 'RARE' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
+    ],
+  },
+  {
+    lootboxType: 'EQUIPMENT_CRATE_EPIC',
+    name:        'Equipment Crate — Epic',
+    description: 'Guaranteed Epic equipment. May carry dual ER + PD benefits.',
+    priceCrate:  90,
+    weeklyLimit: null,
+    seasonal:    false,
+    dropEntries: [
+      { dropType: 'EQUIPMENT' as const, rarity: 'EPIC' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
+    ],
+  },
+
+  // ─── Base Upgrade Crates (drop garantido por raridade) ────────────────────
+  {
+    lootboxType: 'BASE_UPGRADE_CRATE_COMMON',
+    name:        'Base Upgrade Crate — Common',
+    description: 'Guaranteed Common base upgrade. Basic fleet-wide efficiency improvement.',
+    priceCrate:  3,
+    weeklyLimit: null,
+    seasonal:    false,
+    dropEntries: [
+      { dropType: 'BASE_UPGRADE' as const, rarity: 'COMMON' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
+    ],
+  },
+  {
+    lootboxType: 'BASE_UPGRADE_CRATE_UNCOMMON',
+    name:        'Base Upgrade Crate — Uncommon',
+    description: 'Guaranteed Uncommon base upgrade. Moderate global bonus for all deployed robots.',
+    priceCrate:  10,
+    weeklyLimit: null,
+    seasonal:    false,
+    dropEntries: [
+      { dropType: 'BASE_UPGRADE' as const, rarity: 'UNCOMMON' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
+    ],
+  },
+  {
+    lootboxType: 'BASE_UPGRADE_CRATE_RARE',
+    name:        'Base Upgrade Crate — Rare',
+    description: 'Guaranteed Rare base upgrade. Strong fleet enhancement.',
+    priceCrate:  30,
+    weeklyLimit: null,
+    seasonal:    false,
+    dropEntries: [
+      { dropType: 'BASE_UPGRADE' as const, rarity: 'RARE' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
+    ],
+  },
+  {
+    lootboxType: 'BASE_UPGRADE_CRATE_EPIC',
+    name:        'Base Upgrade Crate — Epic',
+    description: 'Guaranteed Epic base upgrade. Maximum global benefit.',
+    priceCrate:  90,
+    weeklyLimit: null,
+    seasonal:    false,
+    dropEntries: [
+      { dropType: 'BASE_UPGRADE' as const, rarity: 'EPIC' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
+    ],
+  },
 ]
 
 export async function POST(req: NextRequest) {

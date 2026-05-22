@@ -19,14 +19,30 @@ const VALID_TYPES = [
   'ROBOT_CRATE_UNCOMMON',
   'ROBOT_CRATE_RARE',
   'ROBOT_CRATE_EPIC',
+  'EQUIPMENT_CRATE_COMMON',
+  'EQUIPMENT_CRATE_UNCOMMON',
+  'EQUIPMENT_CRATE_RARE',
+  'EQUIPMENT_CRATE_EPIC',
+  'BASE_UPGRADE_CRATE_COMMON',
+  'BASE_UPGRADE_CRATE_UNCOMMON',
+  'BASE_UPGRADE_CRATE_RARE',
+  'BASE_UPGRADE_CRATE_EPIC',
 ] as const
 
-// Mapa de robot crate → raridade garantida
-const ROBOT_CRATE_RARITY: Record<string, 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC'> = {
-  ROBOT_CRATE_COMMON:   'COMMON',
-  ROBOT_CRATE_UNCOMMON: 'UNCOMMON',
-  ROBOT_CRATE_RARE:     'RARE',
-  ROBOT_CRATE_EPIC:     'EPIC',
+// Mapa de crates específicas → função geradora de drop garantido
+const SPECIFIC_CRATE_DROP: Record<string, () => DropResultType> = {
+  ROBOT_CRATE_COMMON:          () => generateRobotDrop('COMMON'),
+  ROBOT_CRATE_UNCOMMON:        () => generateRobotDrop('UNCOMMON'),
+  ROBOT_CRATE_RARE:            () => generateRobotDrop('RARE'),
+  ROBOT_CRATE_EPIC:            () => generateRobotDrop('EPIC'),
+  EQUIPMENT_CRATE_COMMON:      () => generateEquipmentDrop('COMMON'),
+  EQUIPMENT_CRATE_UNCOMMON:    () => generateEquipmentDrop('UNCOMMON'),
+  EQUIPMENT_CRATE_RARE:        () => generateEquipmentDrop('RARE'),
+  EQUIPMENT_CRATE_EPIC:        () => generateEquipmentDrop('EPIC'),
+  BASE_UPGRADE_CRATE_COMMON:   () => generateBaseUpgradeDrop('COMMON'),
+  BASE_UPGRADE_CRATE_UNCOMMON: () => generateBaseUpgradeDrop('UNCOMMON'),
+  BASE_UPGRADE_CRATE_RARE:     () => generateBaseUpgradeDrop('RARE'),
+  BASE_UPGRADE_CRATE_EPIC:     () => generateBaseUpgradeDrop('EPIC'),
 }
 
 // ─── Config pré-carregada do banco ────────────────────────────────────────────
@@ -136,12 +152,12 @@ export async function POST(req: NextRequest) {
   const drops: DropResultType[] = []
   let stopped = false
 
-  // ── Robot Crates: lógica simplificada (drop garantido) ────────────────────
-  if (lootboxType in ROBOT_CRATE_RARITY) {
-    const rarity = ROBOT_CRATE_RARITY[lootboxType]
+  // ── Crates específicas: drop garantido via mapa ───────────────────────────
+  if (lootboxType in SPECIFIC_CRATE_DROP) {
+    const generate = SPECIFIC_CRATE_DROP[lootboxType]
 
     for (let i = 0; i < toOpen && !stopped; i++) {
-      const drop = generateRobotDrop(rarity)
+      const drop = generate()
       const spaceError = await checkInventorySpace(user.id, drop)
       if (spaceError) { stopped = true; break }
       await saveDropToInventory(user.id, drop)

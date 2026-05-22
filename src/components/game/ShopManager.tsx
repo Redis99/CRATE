@@ -23,9 +23,7 @@ interface ShopData {
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
 const TABS: { key: ShopCategory; label: string; icon: string }[] = [
-  // 'robots' removido — robots agora são Robot Crates na área de Lootboxes
-  { key: 'equipment',    label: 'Equipment',     icon: '⚙️' },
-  { key: 'baseUpgrades', label: 'Base Upgrades', icon: '🏗️' },
+  // 'robots', 'equipment', 'baseUpgrades' removidos — agora são Crates na área de Lootboxes
   { key: 'batteries',    label: 'Batteries',     icon: '🔋' },
   { key: 'outpostSlots', label: 'Outpost',       icon: '🚀' },
   { key: 'inventory',    label: 'Storage',       icon: '📦' },
@@ -45,7 +43,7 @@ function getMaxQty(price: number, balance: number): number {
 export function ShopManager() {
   const [data, setData]             = useState<ShopData | null>(null)
   const [loading, setLoading]       = useState(true)
-  const [activeTab, setActiveTab]   = useState<ShopCategory>('equipment')
+  const [activeTab, setActiveTab]   = useState<ShopCategory>('batteries')
   const [buying, setBuying]         = useState<string | null>(null)
   const [error, setError]           = useState('')
   const [success, setSuccess]       = useState('')

@@ -3,7 +3,7 @@ import { getServerUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { LootboxType } from '@prisma/client'
 import {
-  PARTS_CRATE_PRICE, SUPPLY_CRATE_PRICE, ROBOT_CRATE_PRICES,
+  PARTS_CRATE_PRICE, SUPPLY_CRATE_PRICE, SPECIFIC_CRATE_PRICES,
   PARTS_CRATE_WEEKLY_LIMIT, getLastMonday,
 } from '@/app/api/game/lootbox/route'
 
@@ -14,17 +14,33 @@ const VALID_TYPES = [
   'ROBOT_CRATE_UNCOMMON',
   'ROBOT_CRATE_RARE',
   'ROBOT_CRATE_EPIC',
+  'EQUIPMENT_CRATE_COMMON',
+  'EQUIPMENT_CRATE_UNCOMMON',
+  'EQUIPMENT_CRATE_RARE',
+  'EQUIPMENT_CRATE_EPIC',
+  'BASE_UPGRADE_CRATE_COMMON',
+  'BASE_UPGRADE_CRATE_UNCOMMON',
+  'BASE_UPGRADE_CRATE_RARE',
+  'BASE_UPGRADE_CRATE_EPIC',
 ] as const
 
 type ValidLootboxType = typeof VALID_TYPES[number]
 
 const MAX_PURCHASE: Record<ValidLootboxType, number> = {
-  PARTS_CRATE:          5,   // controlado pelo limite semanal
-  SUPPLY_CRATE:         10,
-  ROBOT_CRATE_COMMON:   10,
-  ROBOT_CRATE_UNCOMMON: 10,
-  ROBOT_CRATE_RARE:     10,
-  ROBOT_CRATE_EPIC:     10,
+  PARTS_CRATE:                5,   // controlado pelo limite semanal
+  SUPPLY_CRATE:               10,
+  ROBOT_CRATE_COMMON:         10,
+  ROBOT_CRATE_UNCOMMON:       10,
+  ROBOT_CRATE_RARE:           10,
+  ROBOT_CRATE_EPIC:           10,
+  EQUIPMENT_CRATE_COMMON:     10,
+  EQUIPMENT_CRATE_UNCOMMON:   10,
+  EQUIPMENT_CRATE_RARE:       10,
+  EQUIPMENT_CRATE_EPIC:       10,
+  BASE_UPGRADE_CRATE_COMMON:  10,
+  BASE_UPGRADE_CRATE_UNCOMMON:10,
+  BASE_UPGRADE_CRATE_RARE:    10,
+  BASE_UPGRADE_CRATE_EPIC:    10,
 }
 
 /** Retorna o preço da lootbox: banco tem prioridade, fallback hardcoded */
@@ -38,7 +54,7 @@ async function getPrice(lootboxType: string): Promise<number> {
   // Fallback hardcoded
   if (lootboxType === 'PARTS_CRATE')  return PARTS_CRATE_PRICE
   if (lootboxType === 'SUPPLY_CRATE') return SUPPLY_CRATE_PRICE
-  if (lootboxType in ROBOT_CRATE_PRICES) return ROBOT_CRATE_PRICES[lootboxType]
+  if (lootboxType in SPECIFIC_CRATE_PRICES) return SPECIFIC_CRATE_PRICES[lootboxType]
   return 0
 }
 

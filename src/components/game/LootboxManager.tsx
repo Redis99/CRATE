@@ -6,7 +6,7 @@ import { LootboxDropModal } from '@/components/game/LootboxDropModal'
 import { QuantityStepper } from '@/components/ui/QuantityStepper'
 import { ActionButton } from '@/components/ui/ActionButton'
 
-// ─── Types (espelham a resposta da API) ───────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface CrateInfo {
   lootboxType: string
@@ -25,33 +25,52 @@ interface LootboxData {
   crates: CrateInfo[]
 }
 
-// ─── Rarity color map ─────────────────────────────────────────────────────────
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
 
-const RARITY_BADGE: Record<string, string> = {
-  ROBOT_CRATE_COMMON:   'text-gray-300 border-gray-600',
-  ROBOT_CRATE_UNCOMMON: 'text-green-400 border-green-600/40',
-  ROBOT_CRATE_RARE:     'text-blue-400 border-blue-600/40',
-  ROBOT_CRATE_EPIC:     'text-purple-400 border-purple-600/40',
+type TabKey = 'standard' | 'robots' | 'equipment' | 'baseUpgrades'
+
+const TABS: { key: TabKey; label: string; icon: string }[] = [
+  { key: 'standard',     label: 'Standard',      icon: '📦' },
+  { key: 'robots',       label: 'Robots',        icon: '🤖' },
+  { key: 'equipment',    label: 'Equipment',     icon: '⚙️' },
+  { key: 'baseUpgrades', label: 'Base Upgrades', icon: '🏗️' },
+]
+
+function getCrateTab(lootboxType: string): TabKey {
+  if (lootboxType.startsWith('ROBOT_CRATE_'))        return 'robots'
+  if (lootboxType.startsWith('EQUIPMENT_CRATE_'))    return 'equipment'
+  if (lootboxType.startsWith('BASE_UPGRADE_CRATE_')) return 'baseUpgrades'
+  return 'standard'
 }
 
+// ─── Rarity badge / button colors ────────────────────────────────────────────
+
 const RARITY_OPEN_BTN: Record<string, string> = {
-  ROBOT_CRATE_COMMON:   'bg-gray-600 hover:bg-gray-500',
-  ROBOT_CRATE_UNCOMMON: 'bg-green-700 hover:bg-green-600',
-  ROBOT_CRATE_RARE:     'bg-blue-600 hover:bg-blue-500',
-  ROBOT_CRATE_EPIC:     'bg-purple-600 hover:bg-purple-500',
+  COMMON:    'bg-gray-600 hover:bg-gray-500',
+  UNCOMMON:  'bg-green-700 hover:bg-green-600',
+  RARE:      'bg-blue-600 hover:bg-blue-500',
+  EPIC:      'bg-purple-600 hover:bg-purple-500',
+}
+
+const RARITY_BADGE: Record<string, string> = {
+  COMMON:    'text-gray-300 border-gray-600',
+  UNCOMMON:  'text-green-400 border-green-600/40',
+  RARE:      'text-blue-400 border-blue-600/40',
+  EPIC:      'text-purple-400 border-purple-600/40',
+}
+
+/** Extrai a raridade do lootboxType (ex: ROBOT_CRATE_RARE → RARE) */
+function getRarity(lootboxType: string): string | null {
+  const match = lootboxType.match(/_(COMMON|UNCOMMON|RARE|EPIC)$/)
+  return match ? match[1] : null
 }
 
 // ─── Crate Card ───────────────────────────────────────────────────────────────
 
 function CrateCard({
-  crate,
-  weeklyPartsPurchased,
-  weeklyPartsLimit,
-  balance,
-  buyQty, openQty,
-  onBuyQtyChange, onOpenQtyChange,
-  onBuy, onOpen,
-  loading,
+  crate, weeklyPartsPurchased, weeklyPartsLimit, balance,
+  buyQty, openQty, onBuyQtyChange, onOpenQtyChange,
+  onBuy, onOpen, loading,
 }: {
   crate: CrateInfo
   weeklyPartsPurchased: number
@@ -66,33 +85,29 @@ function CrateCard({
   loading: boolean
 }) {
   const [showDrops, setShowDrops] = useState(false)
-  const { lootboxType, name, description, price, weeklyLimit, owned, dropEntries } = crate
+  const { lootboxType, name, description, price, owned, dropEntries } = crate
 
-  const isPartsCrate   = lootboxType === 'PARTS_CRATE'
-  const isRobotCrate   = lootboxType.startsWith('ROBOT_CRATE_')
+  const isPartsCrate = lootboxType === 'PARTS_CRATE'
+  const rarity       = getRarity(lootboxType)
+  const isSpecific   = rarity !== null  // Robot/Equipment/BaseUpgrade crates
+
   const partsRemaining = weeklyPartsLimit - weeklyPartsPurchased
   const limitReached   = isPartsCrate && partsRemaining <= 0
+  const maxBuy         = isPartsCrate ? Math.min(partsRemaining, weeklyPartsLimit) : 10
+  const canBuy         = !limitReached && balance >= price
+  const totalBuyCost   = Math.round(price * buyQty * 100) / 100
 
-  const maxBuy = isPartsCrate
-    ? Math.min(partsRemaining, weeklyPartsLimit)
-    : 10
+  const openBtnClass   = rarity ? (RARITY_OPEN_BTN[rarity] ?? 'bg-purple-600 hover:bg-purple-500') : 'bg-purple-600 hover:bg-purple-500'
+  const badgeClass     = rarity ? (RARITY_BADGE[rarity] ?? '') : ''
 
-  const canBuy = !limitReached && balance >= price
-
-  const totalBuyCost = Math.round(price * buyQty * 100) / 100
-
-  // Badge de limite semanal
+  // Badge de limite / raridade
   const badge = isPartsCrate
     ? (limitReached
-        ? { text: 'Limit reached',       color: 'text-red-400 border-red-500/30' }
-        : { text: `${partsRemaining} left this week`, color: 'text-gray-500 border-gray-700' })
-    : weeklyLimit
-    ? { text: `Max ${weeklyLimit}/week`, color: 'text-gray-500 border-gray-700' }
+        ? { text: 'Limit reached',                color: 'text-red-400 border-red-500/30' }
+        : { text: `${partsRemaining} left / week`, color: 'text-gray-500 border-gray-700' })
+    : isSpecific && rarity
+    ? { text: 'Guaranteed', color: badgeClass }
     : null
-
-  // Botão de abertura: cor por tipo
-  const openBtnClass = RARITY_OPEN_BTN[lootboxType] ?? 'bg-purple-600 hover:bg-purple-500'
-  const rarityBadgeClass = RARITY_BADGE[lootboxType]
 
   return (
     <div className="bg-[#111118] border border-gray-800/60 rounded-xl p-5 flex flex-col">
@@ -106,11 +121,6 @@ function CrateCard({
                 {badge.text}
               </span>
             )}
-            {isRobotCrate && rarityBadgeClass && (
-              <span className={`text-xs px-1.5 py-0.5 rounded border shrink-0 ${rarityBadgeClass}`}>
-                Guaranteed
-              </span>
-            )}
           </div>
           <p className="text-gray-500 text-xs leading-relaxed">{description}</p>
         </div>
@@ -121,7 +131,7 @@ function CrateCard({
         </div>
       </div>
 
-      {/* Drop table toggle */}
+      {/* Drop table */}
       {dropEntries.length > 0 && (
         <>
           <button
@@ -134,7 +144,6 @@ function CrateCard({
             </svg>
             {showDrops ? 'Hide' : 'View'} drop table
           </button>
-
           {showDrops && (
             <div className="mb-3 bg-[#0d0d15] rounded-lg p-3 space-y-1 max-h-40 overflow-y-auto">
               {dropEntries.map((row, i) => (
@@ -148,27 +157,20 @@ function CrateCard({
         </>
       )}
 
-      {/* Espaço restante empurra ações para o fundo */}
       <div className="flex-1" />
 
-      {/* Buy section */}
+      {/* Buy */}
       <div className="border-t border-gray-800/40 pt-3 mb-3">
         <div className="flex items-center justify-between mb-2">
           <span className="text-gray-500 text-xs">Buy quantity</span>
           <QuantityStepper value={buyQty} min={1} max={maxBuy} onChange={onBuyQtyChange} />
         </div>
-        <ActionButton
-          variant="outline"
-          fullWidth
-          onClick={onBuy}
-          disabled={!canBuy || loading}
-          loading={loading}
-        >
+        <ActionButton variant="outline" fullWidth onClick={onBuy} disabled={!canBuy || loading} loading={loading}>
           {`Buy ${buyQty}× — ${totalBuyCost.toFixed(2)} CRATE`}
         </ActionButton>
       </div>
 
-      {/* Open section */}
+      {/* Open */}
       {owned > 0 && (
         <div className="border-t border-gray-800/40 pt-3">
           <div className="flex items-center justify-between mb-2">
@@ -180,7 +182,7 @@ function CrateCard({
             disabled={loading}
             className={`w-full py-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors ${openBtnClass}`}
           >
-            {loading ? 'Opening...' : `Open ${openQty}× ${isRobotCrate ? name : name.split(' ')[0] + ' Crate'}`}
+            {loading ? 'Opening...' : `Open ${openQty}×`}
           </button>
         </div>
       )}
@@ -198,16 +200,15 @@ export function LootboxManager() {
   const [success, setSuccess]   = useState('')
   const [drops, setDrops]       = useState<DropResultType[] | null>(null)
   const [stoppedEarly, setStoppedEarly] = useState(false)
+  const [activeTab, setActiveTab] = useState<TabKey>('standard')
 
-  // Quantidades por tipo de crate: buy + open
   const [buyQtys,  setBuyQtys]  = useState<Record<string, number>>({})
   const [openQtys, setOpenQtys] = useState<Record<string, number>>({})
 
   const getQty = (map: Record<string, number>, type: string) => map[type] ?? 1
   const setQty = (
     setter: React.Dispatch<React.SetStateAction<Record<string, number>>>,
-    type: string,
-    val: number,
+    type: string, val: number,
   ) => setter((prev) => ({ ...prev, [type]: val }))
 
   const fetchData = useCallback(async () => {
@@ -260,8 +261,30 @@ export function LootboxManager() {
   if (loading) return <div className="text-gray-500 text-sm py-8">Loading...</div>
   if (!data)   return <div className="text-red-400 text-sm py-8">Failed to load.</div>
 
-  const standardCrates = data.crates.filter((c) => !c.lootboxType.startsWith('ROBOT_CRATE_'))
-  const robotCrates    = data.crates.filter((c) => c.lootboxType.startsWith('ROBOT_CRATE_'))
+  // Agrupa crates por tab
+  const cratesByTab: Record<TabKey, CrateInfo[]> = {
+    standard:     [],
+    robots:       [],
+    equipment:    [],
+    baseUpgrades: [],
+  }
+  for (const crate of data.crates) {
+    cratesByTab[getCrateTab(crate.lootboxType)].push(crate)
+  }
+
+  // Badge de contagem de owned por tab
+  const tabOwned: Record<TabKey, number> = {
+    standard:     cratesByTab.standard.reduce((s, c) => s + c.owned, 0),
+    robots:       cratesByTab.robots.reduce((s, c) => s + c.owned, 0),
+    equipment:    cratesByTab.equipment.reduce((s, c) => s + c.owned, 0),
+    baseUpgrades: cratesByTab.baseUpgrades.reduce((s, c) => s + c.owned, 0),
+  }
+
+  const visibleCrates = cratesByTab[activeTab]
+
+  // Limite semanal: relevante apenas na aba Standard
+  const partsRemaining = data.weeklyPartsLimit - data.weeklyPartsPurchased
+  const partsLimitReached = partsRemaining <= 0
 
   return (
     <>
@@ -273,6 +296,7 @@ export function LootboxManager() {
         />
       )}
 
+      {/* Feedback */}
       {success && (
         <div className="mb-4 bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-3 flex justify-between items-center">
           <p className="text-green-400 text-sm">{success}</p>
@@ -294,38 +318,62 @@ export function LootboxManager() {
         </span>
       </div>
 
-      {/* Limite semanal Parts Crate */}
-      {(() => {
-        const partsCrate = data.crates.find((c) => c.lootboxType === 'PARTS_CRATE')
-        if (!partsCrate) return null
-        const remaining    = data.weeklyPartsLimit - data.weeklyPartsPurchased
-        const limitReached = remaining <= 0
-        return (
-          <div className="flex items-center gap-2 mb-5 text-xs text-gray-600">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
-              <line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-            Parts Crate weekly limit:
-            <span className={limitReached ? 'text-red-400' : 'text-gray-400'}>
-              {data.weeklyPartsPurchased} / {data.weeklyPartsLimit} used
-              {!limitReached && ` — ${remaining} remaining this week`}
-            </span>
-          </div>
-        )
-      })()}
+      {/* Tabs */}
+      <div className="flex gap-1 bg-[#0d0d15] rounded-xl p-1 mb-5">
+        {TABS.map(({ key, label, icon }) => {
+          const owned = tabOwned[key]
+          return (
+            <button
+              key={key}
+              onClick={() => { setActiveTab(key); setError(''); setSuccess('') }}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium transition-colors relative ${
+                activeTab === key
+                  ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30'
+                  : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              <span>{icon}</span>
+              <span className="hidden sm:inline">{label}</span>
+              {owned > 0 && (
+                <span className="absolute top-1 right-1 bg-green-500 text-white text-[9px] rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">
+                  {owned > 9 ? '9+' : owned}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
 
-      {/* Standard Crates (Parts + Supply + quaisquer outros não-robot) */}
-      {standardCrates.length > 0 && (
-        <div className={`grid gap-4 mb-8 ${standardCrates.length === 1 ? 'grid-cols-1 max-w-md' : 'grid-cols-2'}`}>
-          {standardCrates.map((crate) => (
+      {/* Limite semanal (só na aba Standard) */}
+      {activeTab === 'standard' && (
+        <div className="flex items-center gap-2 mb-5 text-xs text-gray-600">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          Parts Crate weekly limit:
+          <span className={partsLimitReached ? 'text-red-400' : 'text-gray-400'}>
+            {data.weeklyPartsPurchased} / {data.weeklyPartsLimit} used
+            {!partsLimitReached && ` — ${partsRemaining} remaining this week`}
+          </span>
+        </div>
+      )}
+
+      {/* Grade de crates */}
+      {visibleCrates.length === 0 ? (
+        <div className="text-center py-16">
+          <p className="text-gray-600 text-sm">No crates available in this category.</p>
+        </div>
+      ) : (
+        <div className={`grid gap-4 ${visibleCrates.length === 1 ? 'grid-cols-1 max-w-sm' : 'grid-cols-2'}`}>
+          {visibleCrates.map((crate) => (
             <CrateCard
               key={crate.lootboxType}
               crate={crate}
               weeklyPartsPurchased={data.weeklyPartsPurchased}
               weeklyPartsLimit={data.weeklyPartsLimit}
               balance={data.balance}
-              buyQty={getQty(buyQtys,  crate.lootboxType)}
+              buyQty={getQty(buyQtys, crate.lootboxType)}
               openQty={getQty(openQtys, crate.lootboxType)}
               onBuyQtyChange={(v) => setQty(setBuyQtys,  crate.lootboxType, v)}
               onOpenQtyChange={(v) => setQty(setOpenQtys, crate.lootboxType, v)}
@@ -335,35 +383,6 @@ export function LootboxManager() {
             />
           ))}
         </div>
-      )}
-
-      {/* Robot Crates */}
-      {robotCrates.length > 0 && (
-        <>
-          <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-gray-400 text-sm font-medium">Robot Crates</h2>
-            <div className="flex-1 h-px bg-gray-800/60" />
-            <span className="text-xs text-gray-600">Guaranteed robot by rarity</span>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {robotCrates.map((crate) => (
-              <CrateCard
-                key={crate.lootboxType}
-                crate={crate}
-                weeklyPartsPurchased={data.weeklyPartsPurchased}
-                weeklyPartsLimit={data.weeklyPartsLimit}
-                balance={data.balance}
-                buyQty={getQty(buyQtys,  crate.lootboxType)}
-                openQty={getQty(openQtys, crate.lootboxType)}
-                onBuyQtyChange={(v) => setQty(setBuyQtys,  crate.lootboxType, v)}
-                onOpenQtyChange={(v) => setQty(setOpenQtys, crate.lootboxType, v)}
-                onBuy={() => handleBuy(crate.lootboxType, getQty(buyQtys, crate.lootboxType))}
-                onOpen={() => handleOpen(crate.lootboxType, getQty(openQtys, crate.lootboxType))}
-                loading={busy}
-              />
-            ))}
-          </div>
-        </>
       )}
     </>
   )
