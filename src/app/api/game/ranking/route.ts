@@ -25,7 +25,6 @@ export async function GET() {
 
   const currentWeek = standings.map((u, idx) => ({
     position: idx + 1,
-    userId:   u.id,
     username: u.username,
     erTotal:  u.weeklyErContributed,
     isMe:     u.id === user.id,
@@ -53,7 +52,9 @@ export async function GET() {
     lastSnapshot: lastSnapshot
       ? {
           weekStart: lastSnapshot.weekStart.toISOString(),
-          entries:   lastSnapshot.entries,
+          // Remove userId dos entries antes de enviar ao browser
+          entries: (lastSnapshot.entries as { userId?: string; username: string; position: number; erTotal: number; rewarded: boolean }[])
+            .map(({ username, position, erTotal, rewarded }) => ({ username, position, erTotal, rewarded })),
         }
       : null,
   })
