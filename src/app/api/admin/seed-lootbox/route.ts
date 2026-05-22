@@ -15,6 +15,7 @@ const CONFIGS = [
     description: 'Crafting parts of various rarities. Limited to 5 purchases per week.',
     priceCrate:  0.01,
     weeklyLimit: 5,
+    sortOrder:   0,
     seasonal:    false,
     dropEntries: [
       { dropType: 'PART' as const, rarity: 'COMMON'   as const, minQuantity: 4, maxQuantity: 4, weight: 35 },
@@ -34,6 +35,7 @@ const CONFIGS = [
     description: 'Robots, equipment, base upgrades and consumables. Legendary drops possible.',
     priceCrate:  0.1,
     weeklyLimit: null,
+    sortOrder:   1,
     seasonal:    false,
     dropEntries: [
       { dropType: 'EQUIPMENT'    as const, rarity: 'COMMON'    as const, minQuantity: 1, maxQuantity: 1, weight: 18 },
@@ -62,6 +64,7 @@ const CONFIGS = [
     description: 'Guaranteed Common robot. Reliable and energy efficient.',
     priceCrate:  5,
     weeklyLimit: null,
+    sortOrder:   2,
     seasonal:    false,
     dropEntries: [
       { dropType: 'ROBOT' as const, rarity: 'COMMON' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
@@ -73,6 +76,7 @@ const CONFIGS = [
     description: 'Guaranteed Uncommon robot with improved extraction capabilities.',
     priceCrate:  15,
     weeklyLimit: null,
+    sortOrder:   3,
     seasonal:    false,
     dropEntries: [
       { dropType: 'ROBOT' as const, rarity: 'UNCOMMON' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
@@ -84,6 +88,7 @@ const CONFIGS = [
     description: 'Guaranteed Rare robot. High-performance unit with significant ER output.',
     priceCrate:  50,
     weeklyLimit: null,
+    sortOrder:   4,
     seasonal:    false,
     dropEntries: [
       { dropType: 'ROBOT' as const, rarity: 'RARE' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
@@ -95,6 +100,7 @@ const CONFIGS = [
     description: 'Guaranteed Epic robot. Top-tier unit. Maximum ER, higher power draw.',
     priceCrate:  150,
     weeklyLimit: null,
+    sortOrder:   5,
     seasonal:    false,
     dropEntries: [
       { dropType: 'ROBOT' as const, rarity: 'EPIC' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
@@ -108,6 +114,7 @@ const CONFIGS = [
     description: 'Guaranteed Common equipment. Basic module with minor ER or PD improvement.',
     priceCrate:  3,
     weeklyLimit: null,
+    sortOrder:   6,
     seasonal:    false,
     dropEntries: [
       { dropType: 'EQUIPMENT' as const, rarity: 'COMMON' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
@@ -119,6 +126,7 @@ const CONFIGS = [
     description: 'Guaranteed Uncommon equipment with noticeable stat gains.',
     priceCrate:  10,
     weeklyLimit: null,
+    sortOrder:   7,
     seasonal:    false,
     dropEntries: [
       { dropType: 'EQUIPMENT' as const, rarity: 'UNCOMMON' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
@@ -130,6 +138,7 @@ const CONFIGS = [
     description: 'Guaranteed Rare equipment. Significant ER or PD boost.',
     priceCrate:  30,
     weeklyLimit: null,
+    sortOrder:   8,
     seasonal:    false,
     dropEntries: [
       { dropType: 'EQUIPMENT' as const, rarity: 'RARE' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
@@ -141,6 +150,7 @@ const CONFIGS = [
     description: 'Guaranteed Epic equipment. May carry dual ER + PD benefits.',
     priceCrate:  90,
     weeklyLimit: null,
+    sortOrder:   9,
     seasonal:    false,
     dropEntries: [
       { dropType: 'EQUIPMENT' as const, rarity: 'EPIC' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
@@ -154,6 +164,7 @@ const CONFIGS = [
     description: 'Guaranteed Common base upgrade. Basic fleet-wide efficiency improvement.',
     priceCrate:  3,
     weeklyLimit: null,
+    sortOrder:   10,
     seasonal:    false,
     dropEntries: [
       { dropType: 'BASE_UPGRADE' as const, rarity: 'COMMON' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
@@ -165,6 +176,7 @@ const CONFIGS = [
     description: 'Guaranteed Uncommon base upgrade. Moderate global bonus for all deployed robots.',
     priceCrate:  10,
     weeklyLimit: null,
+    sortOrder:   11,
     seasonal:    false,
     dropEntries: [
       { dropType: 'BASE_UPGRADE' as const, rarity: 'UNCOMMON' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
@@ -176,6 +188,7 @@ const CONFIGS = [
     description: 'Guaranteed Rare base upgrade. Strong fleet enhancement.',
     priceCrate:  30,
     weeklyLimit: null,
+    sortOrder:   12,
     seasonal:    false,
     dropEntries: [
       { dropType: 'BASE_UPGRADE' as const, rarity: 'RARE' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
@@ -187,6 +200,7 @@ const CONFIGS = [
     description: 'Guaranteed Epic base upgrade. Maximum global benefit.',
     priceCrate:  90,
     weeklyLimit: null,
+    sortOrder:   13,
     seasonal:    false,
     dropEntries: [
       { dropType: 'BASE_UPGRADE' as const, rarity: 'EPIC' as const, minQuantity: 1, maxQuantity: 1, weight: 1 },
@@ -237,6 +251,15 @@ export async function POST(req: NextRequest) {
       },
     })
     created++
+  }
+
+  // Aplica sortOrder via SQL raw (campo novo — Prisma Client local pode não conhecê-lo ainda)
+  for (const cfg of CONFIGS) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE lootbox_configs SET sort_order = $1 WHERE lootbox_type = $2`,
+      cfg.sortOrder ?? 99,
+      cfg.lootboxType,
+    )
   }
 
   return NextResponse.json({ success: true, created })

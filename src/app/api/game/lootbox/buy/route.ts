@@ -26,36 +26,34 @@ const VALID_TYPES = [
 
 type ValidLootboxType = typeof VALID_TYPES[number]
 
-const MAX_PURCHASE: Record<ValidLootboxType, number> = {
-  PARTS_CRATE:                5,   // controlado pelo limite semanal
-  SUPPLY_CRATE:               10,
-  ROBOT_CRATE_COMMON:         10,
-  ROBOT_CRATE_UNCOMMON:       10,
-  ROBOT_CRATE_RARE:           10,
-  ROBOT_CRATE_EPIC:           10,
-  EQUIPMENT_CRATE_COMMON:     10,
-  EQUIPMENT_CRATE_UNCOMMON:   10,
-  EQUIPMENT_CRATE_RARE:       10,
-  EQUIPMENT_CRATE_EPIC:       10,
-  BASE_UPGRADE_CRATE_COMMON:  10,
-  BASE_UPGRADE_CRATE_UNCOMMON:10,
-  BASE_UPGRADE_CRATE_RARE:    10,
-  BASE_UPGRADE_CRATE_EPIC:    10,
+/** Máximo de crates por transação — teto de UX, independente do limite semanal */
+const MAX_PER_TX = 10
+
+interface CrateConfig {
+  price:       number
+  weeklyLimit: number | null  // null = ilimitado
 }
 
-/** Retorna o preço da lootbox: banco tem prioridade, fallback hardcoded */
-async function getPrice(lootboxType: string): Promise<number> {
+/**
+ * Busca configuração da crate no banco.
+ * O banco é sempre a fonte de verdade; fallback hardcoded apenas se DB vazio.
+ */
+async function getCrateConfig(lootboxType: string): Promise<CrateConfig> {
   const cfg = await prisma.lootboxConfig.findFirst({
-    where: { lootboxType, active: true },
-    select: { priceCrate: true },
+    where:  { lootboxType, active: true },
+    select: { priceCrate: true, weeklyLimit: true },
   })
-  if (cfg) return cfg.priceCrate
 
-  // Fallback hardcoded
-  if (lootboxType === 'PARTS_CRATE')  return PARTS_CRATE_PRICE
-  if (lootboxType === 'SUPPLY_CRATE') return SUPPLY_CRATE_PRICE
-  if (lootboxType in SPECIFIC_CRATE_PRICES) return SPECIFIC_CRATE_PRICES[lootboxType]
-  return 0
+  if (cfg) return { price: cfg.priceCrate, weeklyLimit: cfg.weeklyLimit }
+
+  // Fallback hardcoded (banco vazio / emergência)
+  const price = lootboxType === 'PARTS_CRATE'  ? PARTS_CRATE_PRICE
+              : lootboxType === 'SUPPLY_CRATE'  ? SUPPLY_CRATE_PRICE
+              : SPECIFIC_CRATE_PRICES[lootboxType] ?? 0
+
+  const weeklyLimit = lootboxType === 'PARTS_CRATE' ? PARTS_CRATE_WEEKLY_LIMIT : null
+
+  return { price, weeklyLimit }
 }
 
 export async function POST(req: NextRequest) {
@@ -75,37 +73,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Quantity must be a positive integer.' }, { status: 400 })
   }
 
-  const price = await getPrice(lootboxType)
-  if (price <= 0) return NextResponse.json({ error: 'Price not configured for this lootbox.' }, { status: 400 })
-
-  let qty = quantity
+  const config = await getCrateConfig(lootboxType)
+  if (config.price <= 0) {
+    return NextResponse.json({ error: 'Price not configured for this lootbox.' }, { status: 400 })
+  }
 
   const profile = await prisma.user.findUnique({
-    where: { id: user.id },
+    where:  { id: user.id },
     select: { balanceCrate: true },
   })
   if (!profile) return NextResponse.json({ error: 'Profile not found.' }, { status: 404 })
 
-  // Verifica e ajusta quantidade para Parts Crate (limite semanal)
-  if (lootboxType === 'PARTS_CRATE') {
+  // ── Limite semanal (lido do banco via config) ─────────────────────────────
+  // Funciona para qualquer crate que tenha weeklyLimit definido — não apenas Parts Crate.
+  let qty = Math.min(quantity, MAX_PER_TX)
+
+  if (config.weeklyLimit !== null) {
     const purchased = await prisma.transaction.count({
       where: {
-        userId: user.id,
-        type: 'LOOTBOX_PURCHASE',
-        txHash: 'PARTS_CRATE',
+        userId:    user.id,
+        type:      'LOOTBOX_PURCHASE',
+        txHash:    lootboxType,            // txHash armazena o tipo para rastreio
         createdAt: { gte: getLastMonday() },
       },
     })
-    const remaining = PARTS_CRATE_WEEKLY_LIMIT - purchased
+    const remaining = config.weeklyLimit - purchased
     if (remaining <= 0) {
-      return NextResponse.json({ error: 'Weekly limit reached for Parts Crates.' }, { status: 400 })
+      const typeName = lootboxType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+      return NextResponse.json({
+        error: `Weekly limit reached for ${typeName}. Resets every Monday.`,
+      }, { status: 400 })
     }
-    qty = Math.min(qty, remaining, PARTS_CRATE_WEEKLY_LIMIT)
-  } else {
-    qty = Math.min(qty, MAX_PURCHASE[lootboxType as ValidLootboxType] ?? 10)
+    qty = Math.min(qty, remaining)
   }
 
-  const totalCost = Math.round(price * qty * 100) / 100
+  // ── Verificação de saldo ──────────────────────────────────────────────────
+  const totalCost = Math.round(config.price * qty * 100) / 100
   if (profile.balanceCrate < totalCost) {
     const typeName = lootboxType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
     return NextResponse.json({
@@ -113,9 +116,9 @@ export async function POST(req: NextRequest) {
     }, { status: 400 })
   }
 
-  // Verifica espaço de lootboxes no inventário
+  // ── Verificação de espaço no inventário de lootboxes ──────────────────────
   const invProfile = await prisma.user.findUnique({
-    where: { id: user.id },
+    where:  { id: user.id },
     select: { slotsLootboxes: true, _count: { select: { lootboxes: true } } },
   })
   const ltEnum = lootboxType as LootboxType
@@ -124,15 +127,14 @@ export async function POST(req: NextRequest) {
     const existing = await prisma.inventoryLootbox.findUnique({
       where: { userId_lootboxType: { userId: user.id, lootboxType: ltEnum } },
     })
-    // Só verifica slot livre se este tipo ainda não está no inventário
     if (!existing && invProfile._count.lootboxes >= invProfile.slotsLootboxes) {
       return NextResponse.json({ error: 'Lootbox inventory is full.' }, { status: 400 })
     }
   }
 
+  // ── Transação atômica ─────────────────────────────────────────────────────
   try {
     await prisma.$transaction(async (tx) => {
-      // Debita de forma atômica — WHERE gte impede saldo negativo em requests concorrentes
       const deducted = await tx.user.updateMany({
         where: { id: user.id, balanceCrate: { gte: totalCost } },
         data:  { balanceCrate: { decrement: totalCost } },
@@ -145,7 +147,7 @@ export async function POST(req: NextRequest) {
       if (existing) {
         await tx.inventoryLootbox.update({
           where: { userId_lootboxType: { userId: user.id, lootboxType: ltEnum } },
-          data: { quantity: { increment: qty } },
+          data:  { quantity: { increment: qty } },
         })
       } else {
         await tx.inventoryLootbox.create({
@@ -153,15 +155,15 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      // Registra uma transaction por crate comprada (facilita rastreio do limite semanal)
+      // Uma transaction por crate — txHash = lootboxType para rastreio do limite semanal
       await tx.transaction.createMany({
         data: Array.from({ length: qty }, () => ({
           userId: user.id,
           type:   'LOOTBOX_PURCHASE' as const,
           token:  'CRATE'           as const,
-          amount: price,
-          txHash: lootboxType,   // identifica o tipo para rastreio do limite
-          status: 'CONFIRMED'    as const,
+          amount: config.price,
+          txHash: lootboxType,
+          status: 'CONFIRMED'       as const,
         })),
       })
     })

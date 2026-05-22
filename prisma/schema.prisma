@@ -563,6 +563,7 @@ model LootboxConfig {
   description String
   priceCrate  Float       @default(0.01)
   weeklyLimit Int?        // null = ilimitado
+  sortOrder   Int         @default(0)  // ordem de exibição na UI — editável pelo admin
   active      Boolean     @default(true)
   seasonal    Boolean     @default(false)
   startsAt    DateTime?   // para eventos sazonais
