@@ -103,8 +103,12 @@ export default function CodexAdminPage() {
   async function save() {
     if (!editing) return
     setMsg('Saving…')
+    // Remover campos computados que não existem no banco (totalRegistered)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id, totalRegistered, ...fields } = editing as typeof editing & { totalRegistered?: number }
     const payload = {
-      ...editing,
+      ...fields,
+      ...(isNew ? {} : { id }),          // include id only for PUT
       totalRequired: editing.requiredItems.length > 0 ? editing.requiredItems.length : editing.totalRequired,
     }
     const r = await fetch('/api/admin/codex', {
