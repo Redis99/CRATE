@@ -189,7 +189,7 @@ function TrophyCard({ item }: { item: CodexCollectionEntry }) {
 export function CodexManager() {
   const [data, setData]           = useState<CodexData | null>(null)
   const [loading, setLoading]     = useState(true)
-  const [activeTab, setActiveTab] = useState<'collections' | 'trophies'>('collections')
+  const [activeTab, setActiveTab] = useState<'collections' | 'completed' | 'trophies'>('collections')
   const [modal, setModal]         = useState<CodexCollectionData | null>(null)
 
   const fetchData = useCallback(async () => {
@@ -235,35 +235,64 @@ export function CodexManager() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-900/60 border border-gray-800/60 rounded-xl p-1 w-fit">
-        {(['collections', 'trophies'] as const).map((tab) => (
+        {([
+          { key: 'collections', label: 'Collections' },
+          { key: 'completed',   label: `Completed (${completeCount})` },
+          { key: 'trophies',    label: `Trophies (${totalEntries})` },
+        ] as const).map(({ key, label }) => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all capitalize ${
-              activeTab === tab ? 'bg-[#1a1a2e] text-white' : 'text-gray-500 hover:text-gray-300'
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              activeTab === key ? 'bg-[#1a1a2e] text-white' : 'text-gray-500 hover:text-gray-300'
             }`}
           >
-            {tab === 'trophies' ? `Trophies (${totalEntries})` : 'Collections'}
+            {label}
           </button>
         ))}
       </div>
 
-      {/* Collections tab */}
-      {activeTab === 'collections' && (
-        data.collections.length === 0 ? (
+      {/* Collections tab — apenas em andamento */}
+      {activeTab === 'collections' && (() => {
+        const inProgress = data.collections.filter((c) => !c.isComplete)
+        return inProgress.length === 0 ? (
           <div className="text-center py-16 text-gray-600">
             <p className="text-4xl mb-3">🏆</p>
-            <p className="text-sm">No collections available yet.</p>
-            <p className="text-xs mt-1">Check back after the admin configures Codex collections.</p>
+            <p className="text-sm">
+              {data.collections.length === 0
+                ? 'No collections available yet.'
+                : 'All collections are complete!'}
+            </p>
+            {data.collections.length === 0 && (
+              <p className="text-xs mt-1">Check back after the admin configures Codex collections.</p>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {data.collections.map((col) => (
+            {inProgress.map((col) => (
               <CodexCollectionCard key={col.id} collection={col} onRegister={setModal} />
             ))}
           </div>
         )
-      )}
+      })()}
+
+      {/* Completed tab */}
+      {activeTab === 'completed' && (() => {
+        const complete = data.collections.filter((c) => c.isComplete)
+        return complete.length === 0 ? (
+          <div className="text-center py-16 text-gray-600">
+            <p className="text-4xl mb-3">⭐</p>
+            <p className="text-sm">No collections completed yet.</p>
+            <p className="text-xs mt-1">Keep registering items to complete your first collection.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {complete.map((col) => (
+              <CodexCollectionCard key={col.id} collection={col} onRegister={setModal} />
+            ))}
+          </div>
+        )
+      })()}
 
       {/* Trophies tab */}
       {activeTab === 'trophies' && (
