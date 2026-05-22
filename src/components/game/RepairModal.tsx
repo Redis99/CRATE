@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { DurabilityBar } from '@/components/ui/DurabilityBar'
+import { QuantityStepper } from '@/components/ui/QuantityStepper'
 import { durabilityPct } from '@/lib/game-math'
 import type { RobotCardData } from '@/components/game/RobotCard'
 
@@ -20,14 +21,15 @@ interface Props {
 }
 
 export function RepairModal({ robot, isOpen, onClose, onRefresh }: Props) {
-  const [kits, setKits]         = useState<RepairKit[]>([])
-  const [loading, setLoading]   = useState(false)
-  const [actionId, setActionId] = useState<string | null>(null)
-  const [error, setError]       = useState('')
+  const [kits, setKits]           = useState<RepairKit[]>([])
+  const [quantities, setQuantities] = useState<Record<string, number>>({})
+  const [loading, setLoading]     = useState(false)
+  const [actionId, setActionId]   = useState<string | null>(null)
+  const [error, setError]         = useState('')
 
-  const maxDur  = robot.maxDurability ?? robot.durability
-  const pct     = durabilityPct(robot.durability, maxDur)
-  const isFull  = robot.durability >= maxDur
+  const maxDur      = robot.maxDurability ?? robot.durability
+  const pct         = durabilityPct(robot.durability, maxDur)
+  const isFull      = robot.durability >= maxDur
   const energyColor = pct > 50 ? 'text-green-400' : pct > 20 ? 'text-yellow-400' : 'text-red-400'
 
   useEffect(() => {
@@ -36,22 +38,37 @@ export function RepairModal({ robot, isOpen, onClose, onRefresh }: Props) {
     setError('')
     fetch('/api/game/inventory')
       .then((r) => r.json())
-      .then((data) =>
-        setKits(
-          (data.consumables ?? [])
-            .filter((c: RepairKit) => c.consumableType === 'REPAIR_KIT')
-            .sort((a: RepairKit, b: RepairKit) => a.value - b.value)
-        )
-      )
+      .then((data) => {
+        const sorted: RepairKit[] = (data.consumables ?? [])
+          .filter((c: RepairKit) => c.consumableType === 'REPAIR_KIT')
+          .sort((a: RepairKit, b: RepairKit) => a.value - b.value)
+        setKits(sorted)
+        // Inicializa quantities com 1 para cada kit
+        const init: Record<string, number> = {}
+        sorted.forEach((k) => { init[k.id] = 1 })
+        setQuantities(init)
+      })
       .finally(() => setLoading(false))
   }, [isOpen])
 
+  function setQty(kitId: string, qty: number) {
+    setQuantities((prev) => ({ ...prev, [kitId]: qty }))
+  }
+
+  // Quantidade máxima útil: não usar mais kits do que o necessário para encher
+  function maxUseful(kit: RepairKit): number {
+    if (isFull) return 0
+    const needed = Math.ceil((maxDur - robot.durability) / kit.value)
+    return Math.min(kit.quantity, needed)
+  }
+
   async function handleRepair(kit: RepairKit) {
+    const qty = quantities[kit.id] ?? 1
     setActionId(kit.id); setError('')
     const res  = await fetch('/api/game/robot/repair', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ consumableId: kit.id, robotId: robot.id, quantity: 1 }),
+      body: JSON.stringify({ consumableId: kit.id, robotId: robot.id, quantity: qty }),
     })
     const json = await res.json()
     if (!res.ok) { setError(json.error); setActionId(null); return }
@@ -109,30 +126,47 @@ export function RepairModal({ robot, isOpen, onClose, onRefresh }: Props) {
                 <p className="text-gray-700 text-xs mt-1">Get them from lootboxes or the shop.</p>
               </div>
             ) : (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {kits.map((kit) => {
-                  const after = Math.min(maxDur, robot.durability + kit.value)
+                  const qty   = quantities[kit.id] ?? 1
+                  const after = Math.min(maxDur, robot.durability + kit.value * qty)
                   const gain  = Math.max(0, after - robot.durability)
+                  const max   = maxUseful(kit)
                   return (
-                    <div key={kit.id} className="flex items-center justify-between bg-[#111118] rounded-xl px-3 py-2.5">
-                      <div>
-                        <p className="text-gray-200 text-xs font-medium">Repair Kit +{kit.value}</p>
-                        <p className="text-gray-500 text-xs">
-                          ×{kit.quantity} available
-                          {gain > 0 ? (
-                            <span className="text-green-400/80 ml-1">· +{gain.toFixed(1)} energy</span>
-                          ) : (
-                            <span className="text-gray-600 ml-1">· already full</span>
-                          )}
-                        </p>
+                    <div key={kit.id} className="bg-[#111118] rounded-xl px-3 py-2.5 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-gray-200 text-xs font-medium">Repair Kit +{kit.value}</p>
+                          <p className="text-gray-500 text-xs">
+                            ×{kit.quantity} available
+                            {gain > 0 ? (
+                              <span className="text-green-400/80 ml-1">· +{gain.toFixed(1)} energy</span>
+                            ) : (
+                              <span className="text-gray-600 ml-1">· already full</span>
+                            )}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleRepair(kit)}
+                          disabled={!!actionId || isFull || max === 0}
+                          className="text-xs px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                        >
+                          {actionId === kit.id ? '...' : 'Use'}
+                        </button>
                       </div>
-                      <button
-                        onClick={() => handleRepair(kit)}
-                        disabled={!!actionId || isFull}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        {actionId === kit.id ? '...' : 'Use'}
-                      </button>
+
+                      {/* Stepper de quantidade */}
+                      {!isFull && max > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600 text-xs">Quantity</span>
+                          <QuantityStepper
+                            value={qty}
+                            min={1}
+                            max={max}
+                            onChange={(v) => setQty(kit.id, v)}
+                          />
+                        </div>
+                      )}
                     </div>
                   )
                 })}
