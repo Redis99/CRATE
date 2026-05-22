@@ -34,9 +34,33 @@ const SOURCE_LABEL: Record<string, string> = {
   weekly_drop: 'Weekly Drop',
 }
 
-const TYPE_LABEL: Record<string, string> = {
-  PARTS_CRATE:  'Parts Crate',
-  SUPPLY_CRATE: 'Supply Crate',
+/** Formata o lootboxType para label legível */
+function crateLabel(t: string): string {
+  if (t === 'PARTS_CRATE')  return 'Parts Crate'
+  if (t === 'SUPPLY_CRATE') return 'Supply Crate'
+  // ROBOT_CRATE_COMMON → "Robot Crate — Common"
+  // BASE_UPGRADE_CRATE_EPIC → "Base Upgrade Crate — Epic"
+  const m = t.match(/^(.+)_CRATE_(.+)$/)
+  if (m) {
+    const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()
+    const type   = m[1].split('_').map(cap).join(' ')
+    const rarity = cap(m[2])
+    return `${type} Crate — ${rarity}`
+  }
+  return t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+/** Cor da raridade para o badge */
+const RARITY_COLOR: Record<string, string> = {
+  COMMON:   'text-gray-400',
+  UNCOMMON: 'text-green-400',
+  RARE:     'text-blue-400',
+  EPIC:     'text-purple-400',
+}
+
+function crateRarity(t: string): string | null {
+  const m = t.match(/_(COMMON|UNCOMMON|RARE|EPIC|LEGENDARY)$/)
+  return m ? m[1] : null
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -63,8 +87,8 @@ export function LootboxCard({ item, onOpen, opening, onDestroy, selectMode, sele
               )}
             </button>
           )}
-          <span className="text-purple-400 text-xs font-medium">
-            {TYPE_LABEL[item.lootboxType] ?? item.lootboxType}
+          <span className={`text-xs font-medium ${RARITY_COLOR[crateRarity(item.lootboxType) ?? ''] ?? 'text-purple-400'}`}>
+            {crateLabel(item.lootboxType)}
           </span>
         </div>
         <span className="text-white text-sm font-bold">×{item.quantity}</span>
