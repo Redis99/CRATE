@@ -25,7 +25,16 @@ export async function POST(req: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await req.json()
-  const collection = await prisma.codexCollection.create({ data: body })
+  // Ensure requiredItems is always stored as a valid JSON array
+  const data = {
+    ...body,
+    requiredItems: Array.isArray(body.requiredItems) ? body.requiredItems : [],
+    // totalRequired derived from requiredItems when not empty
+    totalRequired: Array.isArray(body.requiredItems) && body.requiredItems.length > 0
+      ? body.requiredItems.length
+      : body.totalRequired ?? 1,
+  }
+  const collection = await prisma.codexCollection.create({ data })
   return NextResponse.json(collection)
 }
 
@@ -33,9 +42,16 @@ export async function PUT(req: NextRequest) {
   const admin = await getAdminUser()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { id, ...data } = await req.json()
+  const { id, ...body } = await req.json()
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
+  const data = {
+    ...body,
+    requiredItems: Array.isArray(body.requiredItems) ? body.requiredItems : [],
+    totalRequired: Array.isArray(body.requiredItems) && body.requiredItems.length > 0
+      ? body.requiredItems.length
+      : body.totalRequired ?? 1,
+  }
   const collection = await prisma.codexCollection.update({ where: { id }, data })
   return NextResponse.json(collection)
 }
