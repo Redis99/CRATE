@@ -4,6 +4,7 @@ import { RarityBadge } from '@/components/ui/RarityBadge'
 import { DurabilityBar } from '@/components/ui/DurabilityBar'
 import { CategoryTag } from '@/components/game/CategoryTag'
 import { effectiveERWithEquipment, effectivePDWithEquipment, effectiveER, durabilityPct } from '@/lib/game-math'
+import { effectLabel } from '@/lib/effect-label'
 import type { Rarity } from '@/lib/rarity'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -145,6 +146,36 @@ export function RobotCard({
           </span>
         </div>
         <DurabilityBar value={robot.durability} max={maxDur} />
+
+        {/* Equipamentos instalados */}
+        {equips.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-gray-800/50 space-y-1">
+            {equips.map((eq) => (
+              <div key={eq.id} className="flex items-center gap-1.5 bg-[#0d0d15] rounded px-2 py-1">
+                <CategoryTag effectType={eq.effectType} />
+                <span className="text-gray-400 text-xs flex-1 truncate">{eq.name}</span>
+                <span className="text-gray-600 text-xs font-mono shrink-0">
+                  {effectLabel(eq.effectType, eq.effectValue)}
+                  {eq.effectType2 && eq.effectValue2 != null
+                    ? ` / ${effectLabel(eq.effectType2, eq.effectValue2)}`
+                    : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Slots vazios */}
+        {equips.length < MAX_EQUIPMENT_SLOTS && (
+          <div className="mt-1 flex gap-1">
+            {Array.from({ length: MAX_EQUIPMENT_SLOTS - equips.length }).map((_, i) => (
+              <span key={i} className="text-gray-800 text-xs">○</span>
+            ))}
+            <span className="text-gray-700 text-xs ml-0.5">
+              {MAX_EQUIPMENT_SLOTS - equips.length} slot{MAX_EQUIPMENT_SLOTS - equips.length !== 1 ? 's' : ''} free
+            </span>
+          </div>
+        )}
 
         {actions && <div className="mt-3">{actions}</div>}
       </div>

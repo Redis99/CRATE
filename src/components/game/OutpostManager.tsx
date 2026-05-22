@@ -8,6 +8,8 @@ import { calculateFleetER, calculateFleetPD } from '@/lib/game-math'
 import { ERWidget, PDWidget } from '@/components/game/FleetStatsWidget'
 import { RobotCard } from '@/components/game/RobotCard'
 import { EquipmentCard, EmptyEquipmentSlot } from '@/components/game/EquipmentCard'
+import { EquipmentModal } from '@/components/game/EquipmentModal'
+import { RepairModal } from '@/components/game/RepairModal'
 import type { RobotCardData } from '@/components/game/RobotCard'
 import type { EquipmentCardData } from '@/components/game/EquipmentCard'
 import { BASE_SLOT_LABELS } from '@/lib/game-constants'
@@ -26,9 +28,11 @@ interface OutpostData {
 export function OutpostManager() {
   const [data, setData]               = useState<OutpostData | null>(null)
   const [loading, setLoading]         = useState(true)
-  const [selectedRobot, setSelectedRobot] = useState<RobotCardData | null>(null)
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const [error, setError]             = useState('')
+  const [selectedRobot, setSelectedRobot]     = useState<RobotCardData | null>(null)
+  const [actionLoading, setActionLoading]     = useState<string | null>(null)
+  const [equipModalRobot, setEquipModalRobot] = useState<RobotCardData | null>(null)
+  const [repairModalRobot, setRepairModalRobot] = useState<RobotCardData | null>(null)
+  const [error, setError]                     = useState('')
 
   const fetchData = useCallback(async () => {
     const res = await fetch('/api/game/outpost')
@@ -82,6 +86,7 @@ export function OutpostManager() {
   const slots = Array.from({ length: data.outpostSlots }, (_, i) => i + 1)
 
   return (
+    <>
     <div className="space-y-6">
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
@@ -217,9 +222,11 @@ export function OutpostManager() {
         ) : (
           <div className="grid grid-cols-3 gap-3">
             {inventoryRobots.map((robot) => {
-              const isEmpty    = robot.durability === 0
-              const isSelected = selectedRobot?.id === robot.id
+              const isEmpty     = robot.durability === 0
+              const isSelected  = selectedRobot?.id === robot.id
               const outpostFull = deployedRobots.length >= data.outpostSlots
+              const maxDur      = robot.maxDurability ?? robot.durability
+              const needsRepair = maxDur > 0 && (robot.durability / maxDur) < 0.5
               return (
                 <div key={robot.id}
                   className={`border rounded-xl p-3 transition-all ${
@@ -228,20 +235,47 @@ export function OutpostManager() {
                     : `${RARITY_CARD_COLOR[robot.rarity]} border`
                   }`}>
                   <RobotCard robot={robot} variant="mini" />
-                  <button
-                    onClick={() => {
-                      if (isSelected) { setSelectedRobot(null); return }
-                      setSelectedRobot(robot); setError('')
-                    }}
-                    disabled={isEmpty || outpostFull || actionLoading === robot.id}
-                    className={`mt-2 w-full text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                      isSelected
-                        ? 'border-indigo-500/60 text-indigo-300 bg-indigo-500/10'
-                        : 'border-gray-700 text-gray-300 hover:border-indigo-500/50 hover:text-indigo-400 hover:bg-indigo-500/5'
-                    }`}
-                  >
-                    {isEmpty ? 'No Energy' : outpostFull && !isSelected ? 'Outpost Full' : isSelected ? '✓ Selected' : 'Deploy'}
-                  </button>
+
+                  {/* Botões de ação */}
+                  <div className="mt-2 flex gap-1.5">
+                    {/* Deploy / Selected */}
+                    <button
+                      onClick={() => {
+                        if (isSelected) { setSelectedRobot(null); return }
+                        setSelectedRobot(robot); setError('')
+                      }}
+                      disabled={isEmpty || outpostFull || actionLoading === robot.id}
+                      className={`flex-1 text-xs px-2 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                        isSelected
+                          ? 'border-indigo-500/60 text-indigo-300 bg-indigo-500/10'
+                          : 'border-gray-700 text-gray-300 hover:border-indigo-500/50 hover:text-indigo-400 hover:bg-indigo-500/5'
+                      }`}
+                    >
+                      {isEmpty ? 'No Energy' : outpostFull && !isSelected ? 'Full' : isSelected ? '✓' : 'Deploy'}
+                    </button>
+
+                    {/* Equip */}
+                    <button
+                      onClick={() => setEquipModalRobot(robot)}
+                      title="Manage equipment"
+                      className="text-xs px-2 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:border-purple-500/50 hover:text-purple-400 hover:bg-purple-500/5 transition-colors"
+                    >
+                      ⚙
+                    </button>
+
+                    {/* Repair */}
+                    <button
+                      onClick={() => setRepairModalRobot(robot)}
+                      title="Repair robot"
+                      className={`text-xs px-2 py-1.5 rounded-lg border transition-colors ${
+                        needsRepair
+                          ? 'border-amber-500/50 text-amber-400 hover:bg-amber-500/10'
+                          : 'border-gray-700 text-gray-400 hover:border-green-500/50 hover:text-green-400 hover:bg-green-500/5'
+                      }`}
+                    >
+                      ♻
+                    </button>
+                  </div>
                 </div>
               )
             })}
@@ -249,5 +283,24 @@ export function OutpostManager() {
         )}
       </div>
     </div>
+
+    {/* ── Modais ── */}
+    {equipModalRobot && (
+      <EquipmentModal
+        robot={equipModalRobot}
+        isOpen={!!equipModalRobot}
+        onClose={() => setEquipModalRobot(null)}
+        onRefresh={fetchData}
+      />
+    )}
+    {repairModalRobot && (
+      <RepairModal
+        robot={repairModalRobot}
+        isOpen={!!repairModalRobot}
+        onClose={() => setRepairModalRobot(null)}
+        onRefresh={fetchData}
+      />
+    )}
+    </>
   )
 }
