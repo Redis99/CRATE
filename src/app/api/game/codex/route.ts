@@ -35,11 +35,12 @@ export async function GET(_req: NextRequest) {
     const registered = entries.filter((e) => e.collection === col.name)
     const registeredNames = new Set(registered.map((e) => e.itemName))
 
-    // Disponíveis: filtra por nome específico se a coleção tiver requiredItems
+    // Disponíveis:
+    // - Modo específico: basta o nome estar em requiredItems e o slot não estar preenchido
+    // - Modo legado: filtra pelo campo collection do robô
     const available = hasSpecificItems
       ? availableRobots.filter(
-          (r) => r.collection === col.name &&
-                 requiredItems.includes(r.name) &&
+          (r) => requiredItems.includes(r.name) &&
                  !registeredNames.has(r.name)
         )
       : availableRobots.filter((r) => r.collection === col.name)
