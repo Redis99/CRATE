@@ -56,13 +56,17 @@ export async function GET(_req: NextRequest) {
     const registeredKeys = new Set(registered.map((e) => `${e.itemType}::${e.itemName}`))
 
     // Filtra disponíveis:
-    // - Modo específico: nome + tipo devem estar em requiredItems e slot não preenchido
-    // - Modo legado: filtra pelo campo collection do robô
+    // - Modo específico com tipo explícito: nome + tipo devem bater
+    // - Modo legado (isLegacy): match apenas por nome, aceita qualquer tipo
+    // - Modo genérico (requiredItems vazio): filtra pelo campo collection do robô
     const available = hasSpecificItems
-      ? allAvailable.filter((item) =>
-          requiredItems.some((r) => r.name === item.name && r.itemType === item.itemType) &&
-          !registeredKeys.has(`${item.itemType}::${item.name}`)
-        )
+      ? allAvailable.filter((item) => {
+          const slot = registeredKeys.has(`${item.itemType}::${item.name}`)
+          if (slot) return false  // slot já preenchido
+          return requiredItems.some((r) =>
+            r.name === item.name && (r.isLegacy ? true : r.itemType === item.itemType)
+          )
+        })
       : allAvailable.filter((item) => item.itemType === 'ROBOT' && (item as { collection: string }).collection === col.name)
 
     const isComplete = registered.length >= totalRequired
@@ -70,9 +74,12 @@ export async function GET(_req: NextRequest) {
     // Slots nomeados para UI de álbum de figurinhas
     const slots = hasSpecificItems
       ? requiredItems.map((req) => {
-          const key = `${req.itemType}::${req.name}`
-          const entry = registered.find((e) => e.itemType === req.itemType && e.itemName === req.name) ?? null
-          return { name: req.name, itemType: req.itemType, filled: registeredKeys.has(key), entry }
+          // Para legado: considera preenchido se qualquer tipo com esse nome estiver registrado
+          const entry = req.isLegacy
+            ? registered.find((e) => e.itemName === req.name) ?? null
+            : registered.find((e) => e.itemType === req.itemType && e.itemName === req.name) ?? null
+          const filled = !!entry
+          return { name: req.name, itemType: req.itemType, isLegacy: req.isLegacy ?? false, filled, entry }
         })
       : null
 

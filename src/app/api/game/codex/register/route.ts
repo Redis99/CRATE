@@ -70,9 +70,13 @@ export async function POST(req: NextRequest) {
   const collection = allCollections.find((col) => {
     const reqItems = normalizeRequiredItems(col.requiredItems)
     if (reqItems.length > 0) {
-      return reqItems.some((r) => r.name === itemName && r.itemType === itemType)
+      // isLegacy: aceita qualquer tipo, só bate o nome
+      // explícito: bate nome + tipo
+      return reqItems.some((r) =>
+        r.name === itemName && (r.isLegacy ? true : r.itemType === itemType)
+      )
     }
-    // Modo legado: apenas robôs, match por collection field
+    // Modo genérico: apenas robôs, match por collection field
     return itemType === 'ROBOT' && col.name === itemCollection
   })
 
