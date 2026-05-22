@@ -1,17 +1,17 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────────
 
 interface DropEntry {
   id: string
   dropType: string
   rarity: string | null
+  specificName: string | null
   minQuantity: number
   maxQuantity: number
   weight: number
-  specificName: string | null
 }
 
 interface LootboxConfig {
@@ -21,347 +21,603 @@ interface LootboxConfig {
   description: string
   priceCrate: number
   weeklyLimit: number | null
-  sortOrder: number
   active: boolean
   seasonal: boolean
+  startsAt: string | null
+  endsAt: string | null
   dropEntries: DropEntry[]
 }
 
-// ─── Opções dos selects — espelham os enums do schema ─────────────────────────
+interface AvailableItem { name: string; type: string; rarity?: string }
 
-// LootboxDropType enum: ROBOT | EQUIPMENT | BASE_UPGRADE | PART | CONSUMABLE
-const DROP_TYPES = ['ROBOT', 'EQUIPMENT', 'BASE_UPGRADE', 'PART', 'CONSUMABLE']
+// ── Constants ──────────────────────────────────────────────────────────────────
 
-// Rarity enum: COMMON | UNCOMMON | RARE | EPIC | LEGENDARY
-const RARITIES = ['', 'COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY']
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/** Calcula o % de chance de cada entrada */
-function entryChance(entry: DropEntry, allEntries: DropEntry[]): string {
-  const total = allEntries.reduce((s, e) => s + e.weight, 0)
-  if (total === 0) return '0%'
-  return `${((entry.weight / total) * 100).toFixed(1).replace(/\.0$/, '')}%`
+const DROP_TYPES = [
+  'ROBOT_RANDOM','EQUIPMENT_RANDOM','BASE_UPGRADE_RANDOM',
+  'PARTS_RANDOM','REPAIR_KIT','PARTS_CRATE_FREE','SUPPLY_CRATE_FREE',
+  'ROBOT_SPECIFIC','EQUIPMENT_SPECIFIC','BASE_UPGRADE_SPECIFIC',
+]
+const RANDOM_TYPES = DROP_TYPES.filter(t => t.endsWith('_RANDOM') || t === 'PARTS_RANDOM' || t === 'REPAIR_KIT' || t.endsWith('_FREE'))
+const SPECIFIC_TYPES = DROP_TYPES.filter(t => t.endsWith('_SPECIFIC'))
+const RARITIES = ['COMMON','UNCOMMON','RARE','EPIC','LEGENDARY']
+const RARITY_COLOR: Record<string, string> = {
+  COMMON: 'text-gray-400', UNCOMMON: 'text-green-400',
+  RARE: 'text-blue-400', EPIC: 'text-purple-400', LEGENDARY: 'text-yellow-400',
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+const EMPTY_CONFIG = {
+  lootboxType: 'CUSTOM_EVENT',
+  name: '', description: '', priceCrate: 1,
+  weeklyLimit: null, active: false, seasonal: false,
+  startsAt: null, endsAt: null,
+}
+
+const EMPTY_ENTRY: Partial<DropEntry> = {
+  dropType: 'ROBOT_RANDOM', rarity: 'COMMON', specificName: null,
+  minQuantity: 1, maxQuantity: 1, weight: 1,
+}
+
+function totalWeight(entries: DropEntry[]) {
+  return entries.reduce((s, e) => s + e.weight, 0)
+}
+
+// ── Component ──────────────────────────────────────────────────────────────────
 
 export default function LootboxAdminPage() {
-  const [configs, setConfigs] = useState<LootboxConfig[]>([])
-  const [loading, setLoading] = useState(true)
-  const [msg, setMsg]         = useState('')
-  const [editing, setEditing] = useState<Record<string, Partial<DropEntry>>>({})
-  const [newEntry, setNewEntry] = useState<Record<string, Partial<DropEntry>>>({})
+  const [configs, setConfigs]         = useState<LootboxConfig[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [msg, setMsg]                 = useState('')
 
-  async function load() {
+  // Which lootbox is open in the editor modal
+  const [selected, setSelected]       = useState<LootboxConfig | null>(null)
+
+  // New lootbox modal
+  const [newCfgOpen, setNewCfgOpen]   = useState(false)
+  const [newCfg, setNewCfg]           = useState({ ...EMPTY_CONFIG })
+
+  // Entry being edited inside the modal
+  const [editEntry, setEditEntry]     = useState<Record<string, Partial<DropEntry>>>({})
+  const [addForm, setAddForm]         = useState<Partial<DropEntry>>({ ...EMPTY_ENTRY })
+
+  // Specific item picker
+  const [pickerOpen, setPickerOpen]   = useState(false)
+  const [pickerFor, setPickerFor]     = useState<'add' | string>('add') // 'add' | entryId
+  const [availItems, setAvailItems]   = useState<AvailableItem[]>([])
+  const [pickerSearch, setPickerSearch] = useState('')
+  const [pickerType, setPickerType]   = useState<'ALL'|'ROBOT'|'EQUIPMENT'|'BASE_UPGRADE'>('ALL')
+
+  const load = useCallback(async () => {
     setLoading(true)
     const r = await fetch('/api/admin/lootbox')
-    if (r.ok) setConfigs(await r.json())
+    setConfigs(await r.json())
     setLoading(false)
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  // Reload selected config after changes
+  async function reloadAndSync() {
+    const r = await fetch('/api/admin/lootbox')
+    const data: LootboxConfig[] = await r.json()
+    setConfigs(data)
+    if (selected) setSelected(data.find(c => c.id === selected.id) ?? null)
   }
 
-  useEffect(() => { load() }, [])
+  // ── Item picker ──────────────────────────────────────────────────────────────
 
-  // ── Drop entry actions ───────────────────────────────────────────────────
+  async function openPicker(forId: 'add' | string) {
+    setPickerFor(forId)
+    setPickerSearch('')
+    setPickerType('ALL')
+    setPickerOpen(true)
+    if (availItems.length === 0) {
+      const [rd, ed, ud] = await Promise.all([
+        fetch('/api/admin/robots').then(r => r.json()),
+        fetch('/api/admin/items?category=equipment-specific').then(r => r.json()),
+        fetch('/api/admin/items?category=base-upgrade-specific').then(r => r.json()),
+      ])
+      setAvailItems([
+        ...(rd.items ?? []).map((i: { metadata: { robotName: string }; rarity: string }) => ({ name: i.metadata.robotName, type: 'ROBOT', rarity: i.rarity })),
+        ...(ed.items ?? []).map((i: { name: string; rarity: string }) => ({ name: i.name, type: 'EQUIPMENT', rarity: i.rarity })),
+        ...(ud.items ?? []).map((i: { name: string; rarity: string }) => ({ name: i.name, type: 'BASE_UPGRADE', rarity: i.rarity })),
+      ])
+    }
+  }
 
-  async function saveEntry(entry: Partial<DropEntry>) {
-    setMsg('Saving…')
-    const r = await fetch('/api/admin/lootbox', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(entry),
+  function selectSpecificItem(item: AvailableItem) {
+    const dropType = item.type === 'ROBOT' ? 'ROBOT_SPECIFIC' : item.type === 'EQUIPMENT' ? 'EQUIPMENT_SPECIFIC' : 'BASE_UPGRADE_SPECIFIC'
+    if (pickerFor === 'add') {
+      setAddForm(p => ({ ...p, dropType, specificName: item.name, rarity: null }))
+    } else {
+      setEditEntry(p => ({ ...p, [pickerFor]: { ...p[pickerFor], dropType, specificName: item.name, rarity: null } }))
+    }
+    setPickerOpen(false)
+  }
+
+  // ── CRUD ─────────────────────────────────────────────────────────────────────
+
+  async function createConfig() {
+    setMsg('Creating…')
+    await fetch('/api/admin/lootbox', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'create-config', config: newCfg }),
     })
-    if (r.ok) { setMsg('✓ Entry saved'); setEditing({}); load() }
-    else setMsg('✗ Error saving entry')
+    setNewCfgOpen(false)
+    setNewCfg({ ...EMPTY_CONFIG })
+    setMsg('Lootbox created!')
+    load()
   }
 
-  async function deleteEntry(id: string) {
-    if (!confirm('Delete this drop entry?')) return
+  async function saveConfig() {
+    if (!selected) return
+    setMsg('Saving…')
+    await fetch('/api/admin/lootbox', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'update-config', config: selected }),
+    })
+    setMsg('Saved')
+    reloadAndSync()
+  }
+
+  async function deleteConfig(id: string, name: string) {
+    if (!confirm(`Delete lootbox "${name}" and all its drop entries?`)) return
     setMsg('Deleting…')
     await fetch('/api/admin/lootbox', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete-config', id }),
+    })
+    setSelected(null)
+    setMsg('Deleted')
+    load()
+  }
+
+  async function saveEntry(id: string) {
+    const data = editEntry[id]
+    await fetch('/api/admin/lootbox', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ...data }),
+    })
+    setEditEntry(p => { const n = { ...p }; delete n[id]; return n })
+    reloadAndSync()
+  }
+
+  async function addEntry() {
+    if (!selected || !addForm.dropType) return
+    setMsg('Adding…')
+    await fetch('/api/admin/lootbox', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add-entry', entry: { ...addForm, lootboxConfigId: selected.id } }),
+    })
+    setAddForm({ ...EMPTY_ENTRY })
+    setMsg('Added')
+    reloadAndSync()
+  }
+
+  async function removeEntry(id: string) {
+    if (!confirm('Remove this drop entry?')) return
+    await fetch('/api/admin/lootbox', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'delete-entry', id }),
     })
-    setMsg('✓ Deleted')
-    load()
+    reloadAndSync()
   }
 
-  async function addEntry(configId: string) {
-    const entry = newEntry[configId]
-    if (!entry?.dropType) { setMsg('✗ Drop type required'); return }
-    if (!entry.weight || entry.weight <= 0) { setMsg('✗ Weight must be > 0'); return }
-    setMsg('Adding…')
-    const r = await fetch('/api/admin/lootbox', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'add-entry',
-        entry: {
-          ...entry,
-          lootboxConfigId: configId,
-          rarity:      entry.rarity      || null,
-          specificName: entry.specificName || null,
-          minQuantity: entry.minQuantity  ?? 1,
-          maxQuantity: entry.maxQuantity  ?? 1,
-        },
-      }),
-    })
-    if (r.ok) {
-      setNewEntry((p) => ({ ...p, [configId]: {} }))
-      setMsg('✓ Entry added')
-      load()
-    } else setMsg('✗ Error adding entry')
-  }
+  const isSpecific = (dt: string) => dt.endsWith('_SPECIFIC')
 
-  // ── Config actions ───────────────────────────────────────────────────────
-
-  async function updateConfig(config: LootboxConfig) {
-    setMsg('Saving config…')
-    const r = await fetch('/api/admin/lootbox', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'update-config', config }),
-    })
-    if (r.ok) setMsg('✓ Config saved')
-    else setMsg('✗ Error saving config')
-    load()
-  }
-
-  // ────────────────────────────────────────────────────────────────────────
-
-  if (loading) return <div className="p-6 text-gray-400 text-sm">Loading…</div>
+  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-4">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-purple-300 font-mono">Lootbox Drop Tables</h1>
-        <p className="text-xs text-gray-600">{configs.length} configs • sorted by sortOrder</p>
+        <h1 className="text-xl font-bold text-purple-300 font-mono">Lootboxes</h1>
+        <button onClick={() => setNewCfgOpen(true)}
+          className="px-3 py-1.5 text-xs bg-purple-800/60 border border-purple-600 text-purple-200 rounded hover:bg-purple-700/60">
+          + New Lootbox
+        </button>
       </div>
 
-      {msg && (
-        <p className={`text-xs font-mono px-3 py-2 rounded border ${
-          msg.startsWith('✓') ? 'text-green-400 border-green-900/40 bg-green-900/10'
-            : msg.startsWith('✗') ? 'text-red-400 border-red-900/40 bg-red-900/10'
-            : 'text-yellow-400 border-yellow-900/40'
-        }`}>
-          {msg}
-        </p>
+      {msg && <p className="text-xs font-mono text-yellow-400">{msg}</p>}
+
+      {/* Compact card grid */}
+      {loading ? <p className="text-gray-400 text-sm">Loading…</p> : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {configs.map(cfg => {
+            const total = totalWeight(cfg.dropEntries)
+            return (
+              <div key={cfg.id}
+                className={`bg-[#0d0d1a] border rounded-lg p-4 flex flex-col gap-2 ${cfg.active ? 'border-purple-900/30' : 'border-gray-800/40 opacity-70'}`}>
+                {/* Card header */}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold text-gray-200">{cfg.name}</span>
+                      {cfg.seasonal && <span className="text-xs bg-yellow-900/30 text-yellow-400 px-1.5 rounded">Seasonal</span>}
+                      {cfg.active
+                        ? <span className="text-xs bg-green-900/30 text-green-400 px-1.5 rounded">Active</span>
+                        : <span className="text-xs bg-gray-800 text-gray-500 px-1.5 rounded">Inactive</span>}
+                    </div>
+                    <p className="text-xs text-gray-600 font-mono mt-0.5">{cfg.lootboxType}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-bold text-purple-300">{cfg.priceCrate} CRATE</p>
+                    {cfg.weeklyLimit && <p className="text-xs text-gray-600">Limit: {cfg.weeklyLimit}/week</p>}
+                  </div>
+                </div>
+
+                {/* Stats bar */}
+                <div className="flex items-center gap-3 text-xs text-gray-500">
+                  <span>{cfg.dropEntries.length} entries</span>
+                  <span>·</span>
+                  <span>Σ weight {total.toFixed(1)}</span>
+                  {cfg.seasonal && cfg.startsAt && (
+                    <>
+                      <span>·</span>
+                      <span>{new Date(cfg.startsAt).toLocaleDateString()} – {cfg.endsAt ? new Date(cfg.endsAt).toLocaleDateString() : '∞'}</span>
+                    </>
+                  )}
+                </div>
+
+                {/* Entry preview — top 3 by weight */}
+                <div className="space-y-0.5">
+                  {[...cfg.dropEntries].sort((a,b) => b.weight - a.weight).slice(0,3).map(e => (
+                    <div key={e.id} className="flex items-center justify-between text-xs text-gray-600">
+                      <span className="truncate">
+                        {e.specificName
+                          ? <span className="text-blue-400">{e.specificName}</span>
+                          : <>{e.rarity && <span className={`${RARITY_COLOR[e.rarity]} mr-1`}>{e.rarity}</span>}{e.dropType}</>
+                        }
+                      </span>
+                      <span className="shrink-0 ml-2 text-gray-700">
+                        {total > 0 ? ((e.weight / total) * 100).toFixed(1) : 0}%
+                      </span>
+                    </div>
+                  ))}
+                  {cfg.dropEntries.length > 3 && (
+                    <p className="text-xs text-gray-700">+{cfg.dropEntries.length - 3} more…</p>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-1.5 mt-1">
+                  <button onClick={() => { setSelected(cfg); setEditEntry({}) }}
+                    className="flex-1 px-3 py-1.5 text-xs bg-purple-800/40 border border-purple-700/40 text-purple-200 rounded hover:bg-purple-700/40 transition-colors">
+                    Edit
+                  </button>
+                  <button onClick={() => deleteConfig(cfg.id, cfg.name)}
+                    className="px-3 py-1.5 text-xs border border-red-900/60 text-red-400 rounded hover:bg-red-900/20 transition-colors">
+                    Delete
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
       )}
 
-      {configs.map((cfg) => (
-        <div key={cfg.id} className="bg-[#0d0d1a] border border-purple-900/30 rounded-lg p-4 space-y-4">
-
-          {/* ── Config Header ── */}
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-sm font-bold text-gray-200">{cfg.name}</h2>
-              <p className="text-xs text-gray-600 font-mono">{cfg.lootboxType}</p>
+      {/* ── New Lootbox Modal ──────────────────────────────────────────────────── */}
+      {newCfgOpen && (
+        <Modal title="New Lootbox" onClose={() => setNewCfgOpen(false)}>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <F label="Name"><input value={newCfg.name} className="w-full ia" placeholder="e.g. Solar Storm Crate"
+                onChange={e => setNewCfg(p => ({ ...p, name: e.target.value }))} /></F>
+              <F label="Type (ID)"><input value={newCfg.lootboxType} className="w-full ia" placeholder="SOLAR_STORM"
+                onChange={e => setNewCfg(p => ({ ...p, lootboxType: e.target.value.toUpperCase().replace(/\s/g,'_') }))} /></F>
             </div>
-
-            <div className="flex items-center gap-3 flex-wrap text-xs text-gray-400">
-              {/* Price */}
-              <label className="flex items-center gap-1">
-                Price (CRATE)
-                <input
-                  type="number" step="0.001" min={0}
-                  defaultValue={cfg.priceCrate}
-                  onBlur={(e) => updateConfig({ ...cfg, priceCrate: parseFloat(e.target.value) || 0 })}
-                  className="input-admin w-24 ml-1"
-                />
-              </label>
-
-              {/* Weekly limit */}
-              <label className="flex items-center gap-1">
-                Weekly limit
-                <input
-                  type="number" min={0} placeholder="∞"
-                  defaultValue={cfg.weeklyLimit ?? ''}
-                  onBlur={(e) => {
-                    const v = e.target.value.trim()
-                    updateConfig({ ...cfg, weeklyLimit: v === '' ? null : parseInt(v) })
-                  }}
-                  className="input-admin w-16 ml-1"
-                />
-              </label>
-
-              {/* Sort order */}
-              <label className="flex items-center gap-1">
-                Sort order
-                <input
-                  type="number" min={0}
-                  defaultValue={cfg.sortOrder}
-                  onBlur={(e) => updateConfig({ ...cfg, sortOrder: parseInt(e.target.value) || 0 })}
-                  className="input-admin w-16 ml-1"
-                />
-              </label>
-
-              {/* Active toggle */}
-              <label className="flex items-center gap-1 cursor-pointer">
-                Active
-                <input
-                  type="checkbox"
-                  checked={cfg.active}
-                  onChange={(e) => updateConfig({ ...cfg, active: e.target.checked })}
-                  className="ml-1 accent-purple-500"
-                />
-              </label>
+            <F label="Description"><textarea value={newCfg.description} rows={2} className="w-full ia"
+              onChange={e => setNewCfg(p => ({ ...p, description: e.target.value }))} /></F>
+            <div className="grid grid-cols-2 gap-3">
+              <F label="Price (CRATE)"><input type="number" step="0.001" value={newCfg.priceCrate} className="w-full ia"
+                onChange={e => setNewCfg(p => ({ ...p, priceCrate: parseFloat(e.target.value) }))} /></F>
+              <F label="Weekly Limit"><input type="number" min={0} value={newCfg.weeklyLimit ?? ''} className="w-full ia"
+                placeholder="Empty = unlimited"
+                onChange={e => setNewCfg(p => ({ ...p, weeklyLimit: e.target.value ? parseInt(e.target.value) : null }))} /></F>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <F label="Seasonal?">
+                <select value={newCfg.seasonal ? 'yes' : 'no'} className="w-full ia"
+                  onChange={e => setNewCfg(p => ({ ...p, seasonal: e.target.value === 'yes' }))}>
+                  <option value="no">No</option><option value="yes">Yes</option>
+                </select>
+              </F>
+              <F label="Active?">
+                <select value={newCfg.active ? 'yes' : 'no'} className="w-full ia"
+                  onChange={e => setNewCfg(p => ({ ...p, active: e.target.value === 'yes' }))}>
+                  <option value="no">No (draft)</option><option value="yes">Yes</option>
+                </select>
+              </F>
+            </div>
+            {newCfg.seasonal && (
+              <div className="grid grid-cols-2 gap-3">
+                <F label="Starts At"><input type="datetime-local" className="w-full ia"
+                  value={newCfg.startsAt?.slice(0,16) ?? ''}
+                  onChange={e => setNewCfg(p => ({ ...p, startsAt: e.target.value ? new Date(e.target.value).toISOString() : null }))} /></F>
+                <F label="Ends At"><input type="datetime-local" className="w-full ia"
+                  value={newCfg.endsAt?.slice(0,16) ?? ''}
+                  onChange={e => setNewCfg(p => ({ ...p, endsAt: e.target.value ? new Date(e.target.value).toISOString() : null }))} /></F>
+              </div>
+            )}
+            <div className="flex gap-2 pt-1">
+              <Btn onClick={createConfig}>Create</Btn>
+              <Btn secondary onClick={() => setNewCfgOpen(false)}>Cancel</Btn>
             </div>
           </div>
+        </Modal>
+      )}
 
-          {/* ── Drop entries table ── */}
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-gray-500 border-b border-gray-800">
-                <th className="text-left pb-1 pr-2">Drop Type</th>
-                <th className="text-left pb-1 pr-2">Rarity</th>
-                <th className="text-left pb-1 pr-2">Specific Name</th>
-                <th className="text-center pb-1 px-2">Min</th>
-                <th className="text-center pb-1 px-2">Max</th>
-                <th className="text-center pb-1 px-2">Weight</th>
-                <th className="text-center pb-1 px-2">Chance</th>
-                <th className="text-right pb-1">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cfg.dropEntries.map((entry) => {
-                const isEditing = !!editing[entry.id]
-                const ed = editing[entry.id] ?? entry
+      {/* ── Edit Lootbox Modal ─────────────────────────────────────────────────── */}
+      {selected && (
+        <div className="fixed inset-0 bg-black/75 z-50 flex items-start justify-center p-4 overflow-y-auto">
+          <div className="bg-[#0d0d1a] border border-purple-800/50 rounded-lg w-full max-w-3xl my-4 space-y-0 overflow-hidden">
+
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+              <div>
+                <h2 className="text-sm font-bold text-purple-300">{selected.name}</h2>
+                <p className="text-xs text-gray-600 font-mono">{selected.lootboxType}</p>
+              </div>
+              <button onClick={() => setSelected(null)} className="text-gray-500 hover:text-gray-300 text-lg">×</button>
+            </div>
+
+            {/* Config fields */}
+            <div className="px-5 py-3 border-b border-gray-800 grid grid-cols-2 md:grid-cols-4 gap-3">
+              <F label="Price (CRATE)">
+                <input type="number" step="0.001" value={selected.priceCrate} className="w-full ia"
+                  onChange={e => setSelected(p => p && ({ ...p, priceCrate: parseFloat(e.target.value) }))} />
+              </F>
+              <F label="Weekly Limit">
+                <input type="number" value={selected.weeklyLimit ?? ''} className="w-full ia" placeholder="Unlimited"
+                  onChange={e => setSelected(p => p && ({ ...p, weeklyLimit: e.target.value ? parseInt(e.target.value) : null }))} />
+              </F>
+              <F label="Active">
+                <select value={selected.active ? 'yes' : 'no'} className="w-full ia"
+                  onChange={e => setSelected(p => p && ({ ...p, active: e.target.value === 'yes' }))}>
+                  <option value="no">No</option><option value="yes">Yes</option>
+                </select>
+              </F>
+              <F label="Seasonal">
+                <select value={selected.seasonal ? 'yes' : 'no'} className="w-full ia"
+                  onChange={e => setSelected(p => p && ({ ...p, seasonal: e.target.value === 'yes' }))}>
+                  <option value="no">No</option><option value="yes">Yes</option>
+                </select>
+              </F>
+              {selected.seasonal && (
+                <>
+                  <F label="Starts At">
+                    <input type="datetime-local" className="w-full ia"
+                      value={selected.startsAt?.slice(0,16) ?? ''}
+                      onChange={e => setSelected(p => p && ({ ...p, startsAt: e.target.value ? new Date(e.target.value).toISOString() : null }))} />
+                  </F>
+                  <F label="Ends At">
+                    <input type="datetime-local" className="w-full ia"
+                      value={selected.endsAt?.slice(0,16) ?? ''}
+                      onChange={e => setSelected(p => p && ({ ...p, endsAt: e.target.value ? new Date(e.target.value).toISOString() : null }))} />
+                  </F>
+                </>
+              )}
+              <div className="col-span-full flex justify-end">
+                <Btn onClick={saveConfig}>Save config</Btn>
+              </div>
+            </div>
+
+            {/* Drop entries */}
+            <div className="px-5 py-3 space-y-2">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Drop Table</span>
+                <span className="text-xs text-gray-600">
+                  Σ {totalWeight(selected.dropEntries).toFixed(1)} weight
+                </span>
+              </div>
+
+              {selected.dropEntries.map(entry => {
+                const ed = editEntry[entry.id]
+                const isEd = !!ed
+                const cur = { ...entry, ...ed }
+                const specific = isSpecific(cur.dropType ?? entry.dropType)
+                const pct = totalWeight(selected.dropEntries) > 0
+                  ? ((entry.weight / totalWeight(selected.dropEntries)) * 100).toFixed(1)
+                  : '0'
+
                 return (
-                  <tr key={entry.id} className="border-b border-gray-900 hover:bg-white/[0.02]">
-                    <td className="py-1 pr-2">
-                      {isEditing ? (
-                        <select value={ed.dropType ?? entry.dropType}
-                          onChange={(e) => setEditing((p) => ({ ...p, [entry.id]: { ...p[entry.id], dropType: e.target.value } }))}
-                          className="input-admin w-full">
-                          {DROP_TYPES.map((t) => <option key={t}>{t}</option>)}
-                        </select>
-                      ) : <span className="text-gray-300 font-mono">{entry.dropType}</span>}
-                    </td>
-                    <td className="py-1 pr-2">
-                      {isEditing ? (
-                        <select value={ed.rarity ?? ''}
-                          onChange={(e) => setEditing((p) => ({ ...p, [entry.id]: { ...p[entry.id], rarity: e.target.value || null } }))}
-                          className="input-admin w-24">
-                          {RARITIES.map((r) => <option key={r} value={r}>{r || '—'}</option>)}
-                        </select>
-                      ) : <span className="text-gray-400">{entry.rarity ?? '—'}</span>}
-                    </td>
-                    <td className="py-1 pr-2">
-                      {isEditing ? (
-                        <input type="text" placeholder="e.g. REPAIR_KIT_25"
-                          value={ed.specificName ?? ''}
-                          onChange={(e) => setEditing((p) => ({ ...p, [entry.id]: { ...p[entry.id], specificName: e.target.value || null } }))}
-                          className="input-admin w-full" />
-                      ) : <span className="text-gray-600">{entry.specificName ?? '—'}</span>}
-                    </td>
-                    <td className="py-1 px-2 text-center">
-                      {isEditing ? (
-                        <input type="number" value={ed.minQuantity ?? entry.minQuantity} min={1}
-                          onChange={(e) => setEditing((p) => ({ ...p, [entry.id]: { ...p[entry.id], minQuantity: parseInt(e.target.value) } }))}
-                          className="input-admin w-14 text-center" />
-                      ) : <span className="text-gray-400">{entry.minQuantity}</span>}
-                    </td>
-                    <td className="py-1 px-2 text-center">
-                      {isEditing ? (
-                        <input type="number" value={ed.maxQuantity ?? entry.maxQuantity} min={1}
-                          onChange={(e) => setEditing((p) => ({ ...p, [entry.id]: { ...p[entry.id], maxQuantity: parseInt(e.target.value) } }))}
-                          className="input-admin w-14 text-center" />
-                      ) : <span className="text-gray-400">{entry.maxQuantity}</span>}
-                    </td>
-                    <td className="py-1 px-2 text-center">
-                      {isEditing ? (
-                        <input type="number" value={ed.weight ?? entry.weight} step="0.1" min={0}
-                          onChange={(e) => setEditing((p) => ({ ...p, [entry.id]: { ...p[entry.id], weight: parseFloat(e.target.value) } }))}
-                          className="input-admin w-16 text-center" />
-                      ) : <span className="text-gray-400">{entry.weight}</span>}
-                    </td>
-                    <td className="py-1 px-2 text-center">
-                      <span className="text-green-400 font-mono">{entryChance(entry, cfg.dropEntries)}</span>
-                    </td>
-                    <td className="py-1 text-right">
-                      <div className="flex gap-1 justify-end">
-                        {isEditing ? (
-                          <>
-                            <button onClick={() => saveEntry({ id: entry.id, ...ed })}
-                              className="px-2 py-0.5 text-xs bg-green-900/40 border border-green-700/40 text-green-300 rounded">Save</button>
-                            <button onClick={() => setEditing((p) => { const n = { ...p }; delete n[entry.id]; return n })}
-                              className="px-2 py-0.5 text-xs bg-gray-800 border border-gray-700 text-gray-400 rounded">Cancel</button>
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={() => setEditing((p) => ({ ...p, [entry.id]: { ...entry } }))}
-                              className="px-2 py-0.5 text-xs border border-gray-700 text-gray-400 rounded hover:bg-gray-800">Edit</button>
-                            <button onClick={() => deleteEntry(entry.id)}
-                              className="px-2 py-0.5 text-xs border border-red-900 text-red-400 rounded hover:bg-red-900/20">Del</button>
-                          </>
-                        )}
+                  <div key={entry.id} className="bg-gray-900/30 border border-gray-800 rounded-lg p-2.5">
+                    {isEd ? (
+                      /* Editing row */
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <F label="Drop Type">
+                            <select value={cur.dropType} className="w-full ia"
+                              onChange={e => setEditEntry(p => ({ ...p, [entry.id]: { ...p[entry.id], dropType: e.target.value, specificName: null, rarity: null } }))}>
+                              <optgroup label="Random">
+                                {RANDOM_TYPES.map(t => <option key={t}>{t}</option>)}
+                              </optgroup>
+                              <optgroup label="Specific Item">
+                                {SPECIFIC_TYPES.map(t => <option key={t}>{t}</option>)}
+                              </optgroup>
+                            </select>
+                          </F>
+                          {specific ? (
+                            <F label="Specific Item">
+                              <div className="flex gap-1">
+                                <input value={cur.specificName ?? ''} className="flex-1 ia" placeholder="Item name"
+                                  onChange={e => setEditEntry(p => ({ ...p, [entry.id]: { ...p[entry.id], specificName: e.target.value } }))} />
+                                <button onClick={() => openPicker(entry.id)}
+                                  className="px-2 text-xs border border-purple-700 text-purple-400 rounded hover:bg-purple-900/20">⋯</button>
+                              </div>
+                            </F>
+                          ) : (
+                            <F label="Rarity">
+                              <select value={cur.rarity ?? ''} className="w-full ia"
+                                onChange={e => setEditEntry(p => ({ ...p, [entry.id]: { ...p[entry.id], rarity: e.target.value || null } }))}>
+                                <option value="">— Any —</option>
+                                {RARITIES.map(r => <option key={r}>{r}</option>)}
+                              </select>
+                            </F>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <F label="Min Qty"><input type="number" min={1} value={cur.minQuantity} className="w-full ia"
+                            onChange={e => setEditEntry(p => ({ ...p, [entry.id]: { ...p[entry.id], minQuantity: parseInt(e.target.value) } }))} /></F>
+                          <F label="Max Qty"><input type="number" min={1} value={cur.maxQuantity} className="w-full ia"
+                            onChange={e => setEditEntry(p => ({ ...p, [entry.id]: { ...p[entry.id], maxQuantity: parseInt(e.target.value) } }))} /></F>
+                          <F label="Weight"><input type="number" step="0.1" min={0} value={cur.weight} className="w-full ia"
+                            onChange={e => setEditEntry(p => ({ ...p, [entry.id]: { ...p[entry.id], weight: parseFloat(e.target.value) } }))} /></F>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <Btn onClick={() => saveEntry(entry.id)}>Save</Btn>
+                          <Btn secondary onClick={() => setEditEntry(p => { const n={...p}; delete n[entry.id]; return n })}>Cancel</Btn>
+                        </div>
                       </div>
-                    </td>
-                  </tr>
+                    ) : (
+                      /* Read row */
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 text-xs">
+                            {entry.specificName
+                              ? <span className="text-blue-400 font-medium">{entry.specificName}</span>
+                              : <>
+                                  {entry.rarity && <span className={`font-bold ${RARITY_COLOR[entry.rarity]}`}>{entry.rarity}</span>}
+                                  <span className="text-gray-400">{entry.dropType}</span>
+                                </>
+                            }
+                            <span className="text-gray-700">×{entry.minQuantity}{entry.minQuantity !== entry.maxQuantity ? `–${entry.maxQuantity}` : ''}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0 text-xs">
+                          <span className="text-gray-500">w {entry.weight}</span>
+                          <span className="text-gray-700">{pct}%</span>
+                          <button onClick={() => setEditEntry(p => ({ ...p, [entry.id]: { ...entry } }))}
+                            className="px-2 py-0.5 border border-gray-700 text-gray-400 rounded hover:bg-gray-800">Edit</button>
+                          <button onClick={() => removeEntry(entry.id)}
+                            className="px-2 py-0.5 border border-red-900/60 text-red-400 rounded hover:bg-red-900/20">×</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )
               })}
-            </tbody>
-          </table>
 
-          {/* ── Add new entry ── */}
-          <div className="border-t border-gray-800 pt-3">
-            <p className="text-xs text-gray-500 mb-2">Add drop entry:</p>
-            <div className="grid grid-cols-[1fr_1fr_1fr_60px_60px_70px_auto] gap-2 items-end">
-              <select
-                value={newEntry[cfg.id]?.dropType ?? ''}
-                onChange={(e) => setNewEntry((p) => ({ ...p, [cfg.id]: { ...p[cfg.id], dropType: e.target.value } }))}
-                className="input-admin">
-                <option value="">Drop type *</option>
-                {DROP_TYPES.map((t) => <option key={t}>{t}</option>)}
-              </select>
-              <select
-                value={newEntry[cfg.id]?.rarity ?? ''}
-                onChange={(e) => setNewEntry((p) => ({ ...p, [cfg.id]: { ...p[cfg.id], rarity: e.target.value || null } }))}
-                className="input-admin">
-                {RARITIES.map((r) => <option key={r} value={r}>{r || 'No rarity'}</option>)}
-              </select>
-              <input type="text" placeholder="specificName (optional)"
-                value={newEntry[cfg.id]?.specificName ?? ''}
-                onChange={(e) => setNewEntry((p) => ({ ...p, [cfg.id]: { ...p[cfg.id], specificName: e.target.value || null } }))}
-                className="input-admin" />
-              <input type="number" placeholder="Min" min={1}
-                value={newEntry[cfg.id]?.minQuantity ?? ''}
-                onChange={(e) => setNewEntry((p) => ({ ...p, [cfg.id]: { ...p[cfg.id], minQuantity: parseInt(e.target.value) } }))}
-                className="input-admin text-center" />
-              <input type="number" placeholder="Max" min={1}
-                value={newEntry[cfg.id]?.maxQuantity ?? ''}
-                onChange={(e) => setNewEntry((p) => ({ ...p, [cfg.id]: { ...p[cfg.id], maxQuantity: parseInt(e.target.value) } }))}
-                className="input-admin text-center" />
-              <input type="number" placeholder="Weight *" step="0.1" min={0}
-                value={newEntry[cfg.id]?.weight ?? ''}
-                onChange={(e) => setNewEntry((p) => ({ ...p, [cfg.id]: { ...p[cfg.id], weight: parseFloat(e.target.value) } }))}
-                className="input-admin text-center" />
-              <button onClick={() => addEntry(cfg.id)}
-                className="px-3 py-1 text-xs bg-purple-800/50 border border-purple-700 text-purple-200 rounded hover:bg-purple-700/50 whitespace-nowrap">
-                + Add
-              </button>
+              {/* Add entry form */}
+              <div className="bg-purple-900/10 border border-purple-900/30 rounded-lg p-3 space-y-2">
+                <p className="text-xs text-gray-500 font-semibold">New Entry</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <F label="Drop Type">
+                    <select value={addForm.dropType ?? ''} className="w-full ia"
+                      onChange={e => setAddForm(p => ({ ...p, dropType: e.target.value, specificName: null, rarity: null }))}>
+                      <optgroup label="Random">
+                        {RANDOM_TYPES.map(t => <option key={t}>{t}</option>)}
+                      </optgroup>
+                      <optgroup label="Specific Item">
+                        {SPECIFIC_TYPES.map(t => <option key={t}>{t}</option>)}
+                      </optgroup>
+                    </select>
+                  </F>
+                  {isSpecific(addForm.dropType ?? '') ? (
+                    <F label="Specific Item">
+                      <div className="flex gap-1">
+                        <input value={addForm.specificName ?? ''} className="flex-1 ia" placeholder="Item name"
+                          onChange={e => setAddForm(p => ({ ...p, specificName: e.target.value }))} />
+                        <button onClick={() => openPicker('add')}
+                          className="px-2 text-xs border border-purple-700 text-purple-400 rounded hover:bg-purple-900/20">⋯</button>
+                      </div>
+                    </F>
+                  ) : (
+                    <F label="Rarity">
+                      <select value={addForm.rarity ?? ''} className="w-full ia"
+                        onChange={e => setAddForm(p => ({ ...p, rarity: e.target.value || null }))}>
+                        <option value="">— Any —</option>
+                        {RARITIES.map(r => <option key={r}>{r}</option>)}
+                      </select>
+                    </F>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <F label="Min Qty"><input type="number" min={1} value={addForm.minQuantity ?? 1} className="w-full ia"
+                    onChange={e => setAddForm(p => ({ ...p, minQuantity: parseInt(e.target.value) }))} /></F>
+                  <F label="Max Qty"><input type="number" min={1} value={addForm.maxQuantity ?? 1} className="w-full ia"
+                    onChange={e => setAddForm(p => ({ ...p, maxQuantity: parseInt(e.target.value) }))} /></F>
+                  <F label="Weight"><input type="number" step="0.1" min={0} value={addForm.weight ?? 1} className="w-full ia"
+                    onChange={e => setAddForm(p => ({ ...p, weight: parseFloat(e.target.value) }))} /></F>
+                </div>
+                <Btn onClick={addEntry}>Add Entry</Btn>
+              </div>
             </div>
-            <p className="text-[10px] text-gray-700 mt-1">
-              CONSUMABLE → set specificName = REPAIR_KIT_5 / REPAIR_KIT_25 / REPAIR_KIT_50 / REPAIR_KIT_100
-            </p>
+
+            <div className="px-5 py-3 border-t border-gray-800 flex justify-end">
+              <Btn secondary onClick={() => setSelected(null)}>Close</Btn>
+            </div>
           </div>
         </div>
-      ))}
+      )}
+
+      {/* ── Item Picker ────────────────────────────────────────────────────────── */}
+      {pickerOpen && (
+        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
+          <div className="bg-[#0d0d1a] border border-purple-800/50 rounded-lg w-full max-w-sm flex flex-col" style={{ maxHeight: '70vh' }}>
+            <div className="p-3 border-b border-gray-800 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-purple-300">Pick Item</span>
+                <button onClick={() => setPickerOpen(false)} className="text-gray-500 hover:text-gray-300">×</button>
+              </div>
+              <div className="flex gap-1 flex-wrap">
+                {(['ALL','ROBOT','EQUIPMENT','BASE_UPGRADE'] as const).map(t => (
+                  <button key={t} onClick={() => setPickerType(t)}
+                    className={`px-2 py-0.5 text-xs rounded border transition-colors ${pickerType === t ? 'bg-purple-800/60 border-purple-600 text-purple-200' : 'border-gray-700 text-gray-500 hover:border-gray-500'}`}>
+                    {t === 'BASE_UPGRADE' ? 'UPGRADE' : t}
+                  </button>
+                ))}
+              </div>
+              <input value={pickerSearch} onChange={e => setPickerSearch(e.target.value)}
+                placeholder="Search…" className="w-full px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 placeholder-gray-600 outline-none focus:border-purple-700" />
+            </div>
+            <div className="overflow-y-auto flex-1">
+              {availItems
+                .filter(i => (pickerType === 'ALL' || i.type === pickerType) && (!pickerSearch || i.name.toLowerCase().includes(pickerSearch.toLowerCase())))
+                .map(i => (
+                  <button key={`${i.type}-${i.name}`} onClick={() => selectSpecificItem(i)}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-purple-900/20 transition-colors">
+                    <span className="flex-1 text-sm text-gray-200">{i.name}</span>
+                    {i.rarity && <span className={`text-xs font-bold ${RARITY_COLOR[i.rarity] ?? 'text-gray-400'}`}>{i.rarity}</span>}
+                    <span className="text-xs text-gray-600">{i.type === 'BASE_UPGRADE' ? 'UPG' : i.type.slice(0,3)}</span>
+                  </button>
+                ))
+              }
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx global>{`
-        .input-admin {
-          background: #111122;
-          border: 1px solid #2d2d50;
-          border-radius: 4px;
-          padding: 4px 8px;
-          font-size: 12px;
-          color: #d1d5db;
-          outline: none;
-          width: 100%;
-        }
-        .input-admin:focus { border-color: #7c3aed; }
+        .ia { background:#111122;border:1px solid #2d2d50;border-radius:4px;padding:4px 8px;font-size:12px;color:#d1d5db;outline:none; }
+        .ia:focus { border-color:#7c3aed; }
       `}</style>
+    </div>
+  )
+}
+
+function F({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div><label className="block text-xs text-gray-500 mb-1">{label}</label>{children}</div>
+}
+
+function Btn({ onClick, secondary, children }: { onClick: () => void; secondary?: boolean; children: React.ReactNode }) {
+  return (
+    <button onClick={onClick}
+      className={`px-3 py-1.5 text-xs rounded border transition-colors ${secondary ? 'border-gray-700 text-gray-300 hover:bg-gray-800' : 'bg-purple-800/60 border-purple-600 text-purple-200 hover:bg-purple-700/60'}`}>
+      {children}
+    </button>
+  )
+}
+
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 bg-black/75 z-50 flex items-start justify-center p-4 overflow-y-auto">
+      <div className="bg-[#0d0d1a] border border-purple-800/50 rounded-lg p-5 w-full max-w-lg my-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-purple-300">{title}</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300">×</button>
+        </div>
+        {children}
+      </div>
     </div>
   )
 }
