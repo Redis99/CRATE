@@ -52,5 +52,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(updated)
   }
 
+  if (action === 'create-config') {
+    const config = await prisma.lootboxConfig.create({ data: body.config })
+    return NextResponse.json(config)
+  }
+
+  if (action === 'delete-config') {
+    await prisma.lootboxDropEntry.deleteMany({ where: { lootboxConfigId: body.id } })
+    await prisma.lootboxConfig.delete({ where: { id: body.id } })
+    return NextResponse.json({ success: true })
+  }
+
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 }
