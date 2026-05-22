@@ -45,7 +45,11 @@ const RARITY_COLOR: Record<string, string> = {
   RARE: 'text-blue-400', EPIC: 'text-purple-400', LEGENDARY: 'text-yellow-400',
 }
 
-const EMPTY_CONFIG = {
+const EMPTY_CONFIG: {
+  lootboxType: string; name: string; description: string; priceCrate: number
+  weeklyLimit: number | null; active: boolean; seasonal: boolean
+  startsAt: string | null; endsAt: string | null
+} = {
   lootboxType: 'CUSTOM_EVENT',
   name: '', description: '', priceCrate: 1,
   weeklyLimit: null, active: false, seasonal: false,
