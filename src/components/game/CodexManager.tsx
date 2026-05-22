@@ -2,29 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { CodexCollectionCard } from '@/components/game/CodexCollectionCard'
-import type { CodexCollectionData, CodexAvailableRobot } from '@/components/game/CodexCollectionCard'
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface TotalBonuses {
-  erPct: number
-  pdPct: number
-}
-
-interface CodexData {
-  collections:  CodexCollectionData[]
-  totalBonuses: TotalBonuses
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const RARITY_COLORS: Record<string, string> = {
-  COMMON:    'text-gray-300',
-  UNCOMMON:  'text-green-400',
-  RARE:      'text-blue-400',
-  EPIC:      'text-purple-400',
-  LEGENDARY: 'text-yellow-400',
-}
+import { RARITY_TEXT_COLOR } from '@/lib/rarity'
 
 const RARITY_BORDER: Record<string, string> = {
   COMMON:    'border-gray-600/40',
@@ -33,6 +11,19 @@ const RARITY_BORDER: Record<string, string> = {
   EPIC:      'border-purple-500/30',
   LEGENDARY: 'border-yellow-500/40',
 }
+import { CODEX_ITEM_EMOJI, CODEX_ITEM_LABEL } from '@/lib/codex-types'
+import type { CodexCollectionData, CodexAvailableItem, CodexCollectionEntry } from '@/components/game/CodexCollectionCard'
+import type { CodexItemType } from '@/lib/codex-types'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface TotalBonuses { erPct: number; pdPct: number }
+interface CodexData { collections: CodexCollectionData[]; totalBonuses: TotalBonuses }
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function rarityTextClass(r: string)   { return (RARITY_TEXT_COLOR as Record<string, string>)[r] ?? 'text-gray-400' }
+function rarityBorderClass(r: string) { return RARITY_BORDER[r] ?? 'border-gray-700/40' }
 
 // ─── Register Modal ───────────────────────────────────────────────────────────
 
@@ -45,10 +36,19 @@ function RegisterModal({
   onClose:    () => void
   onSuccess:  () => void
 }) {
-  const [selected, setSelected]       = useState<CodexAvailableRobot | null>(null)
+  const [selected, setSelected]       = useState<CodexAvailableItem | null>(null)
   const [confirming, setConfirming]   = useState(false)
   const [registering, setRegistering] = useState(false)
   const [error, setError]             = useState('')
+
+  const available = collection.availableItems ?? []
+
+  // Agrupa por tipo para exibição organizada
+  const byType = available.reduce<Record<string, CodexAvailableItem[]>>((acc, item) => {
+    if (!acc[item.itemType]) acc[item.itemType] = []
+    acc[item.itemType].push(item)
+    return acc
+  }, {})
 
   async function handleRegister() {
     if (!selected) return
@@ -57,28 +57,25 @@ function RegisterModal({
     const res = await fetch('/api/game/codex/register', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ robotId: selected.id }),
+      body:    JSON.stringify({ itemId: selected.id, itemType: selected.itemType }),
     })
     const json = await res.json()
-    if (!res.ok) {
-      setError(json.error ?? 'Failed to register')
-      setRegistering(false)
-      return
-    }
+    if (!res.ok) { setError(json.error ?? 'Failed to register'); setRegistering(false); return }
     onSuccess()
     onClose()
   }
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-[#0e0e18] border border-gray-700/50 rounded-2xl w-full max-w-md">
-        <div className="p-6">
-          <div className="flex items-start justify-between mb-4">
+      <div className="bg-[#0e0e18] border border-gray-700/50 rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col">
+        <div className="p-6 flex flex-col gap-4 overflow-y-auto">
+          {/* Header */}
+          <div className="flex items-start justify-between">
             <div>
               <h3 className="text-white font-bold text-lg">Register to Codex</h3>
               <p className="text-gray-500 text-sm mt-0.5">{collection.name}</p>
             </div>
-            <button onClick={onClose} className="text-gray-600 hover:text-gray-400 transition-colors">
+            <button onClick={onClose} className="text-gray-600 hover:text-gray-400 transition-colors shrink-0">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
@@ -86,43 +83,49 @@ function RegisterModal({
           </div>
 
           {/* Warning */}
-          <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 mb-5">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
             <p className="text-red-400 text-xs font-medium">
-              ⚠ This action is permanent and cannot be undone. The robot will be permanently removed from your inventory.
+              ⚠ This action is permanent and cannot be undone. The item will be permanently removed from your inventory.
             </p>
           </div>
 
-          {/* Robot list */}
-          {(collection.availableRobots?.length ?? 0) === 0 ? (
-            <p className="text-gray-500 text-sm text-center py-4">
-              No robots from this collection in your inventory.
-            </p>
+          {/* Item list — agrupado por tipo */}
+          {available.length === 0 ? (
+            <p className="text-gray-500 text-sm text-center py-4">No eligible items in your inventory.</p>
           ) : (
-            <div className="space-y-2 mb-5">
-              {collection.availableRobots!.map((robot) => (
-                <button
-                  key={robot.id}
-                  onClick={() => { setSelected(robot); setConfirming(false) }}
-                  className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
-                    selected?.id === robot.id
-                      ? 'border-blue-500/60 bg-blue-500/10'
-                      : `${RARITY_BORDER[robot.rarity] ?? 'border-gray-700/40'} bg-gray-900/40 hover:bg-gray-800/40`
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-white text-sm font-medium">{robot.name}</span>
-                    <span className={`text-xs ${RARITY_COLORS[robot.rarity] ?? 'text-gray-400'}`}>
-                      {robot.rarity}
-                    </span>
+            <div className="space-y-4">
+              {(Object.keys(byType) as CodexItemType[]).map((type) => (
+                <div key={type}>
+                  <p className="text-gray-600 text-xs font-medium mb-1.5">
+                    {CODEX_ITEM_EMOJI[type]} {CODEX_ITEM_LABEL[type]}
+                  </p>
+                  <div className="space-y-1.5">
+                    {byType[type].map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => { setSelected(item); setConfirming(false) }}
+                        className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
+                          selected?.id === item.id
+                            ? 'border-blue-500/60 bg-blue-500/10'
+                            : `${rarityBorderClass(item.rarity)} bg-gray-900/40 hover:bg-gray-800/40`
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-white text-sm font-medium">{item.name}</span>
+                          <span className={`text-xs ${rarityTextClass(item.rarity)}`}>{item.rarity}</span>
+                        </div>
+                        <p className="text-gray-500 text-xs mt-0.5">{item.stat}</p>
+                      </button>
+                    ))}
                   </div>
-                  <p className="text-gray-500 text-xs mt-0.5">{robot.hashPower} ER base</p>
-                </button>
+                </div>
               ))}
             </div>
           )}
 
-          {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+          {error && <p className="text-red-400 text-sm">{error}</p>}
 
+          {/* Actions */}
           {selected && !confirming && (
             <button
               onClick={() => setConfirming(true)}
@@ -131,11 +134,12 @@ function RegisterModal({
               Register {selected.name}
             </button>
           )}
-
           {selected && confirming && (
             <div className="space-y-2">
               <p className="text-gray-400 text-xs text-center">
-                Are you absolutely sure? <span className="text-white font-medium">{selected.name}</span> will be gone from your inventory forever.
+                Are you absolutely sure?{' '}
+                <span className="text-white font-medium">{selected.name}</span>{' '}
+                will be gone from your inventory forever.
               </p>
               <button
                 onClick={handleRegister}
@@ -154,6 +158,28 @@ function RegisterModal({
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── Trophy card — genérico por tipo ─────────────────────────────────────────
+
+function TrophyCard({ item }: { item: CodexCollectionEntry }) {
+  return (
+    <div className={`bg-[#111118] border ${rarityBorderClass(item.rarity)} rounded-xl p-3`}>
+      <div className="flex items-center gap-2 mb-1">
+        <div className="w-7 h-7 rounded-lg bg-gray-800/80 flex items-center justify-center text-sm">
+          {CODEX_ITEM_EMOJI[item.itemType] ?? '🏆'}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-white text-xs font-medium truncate">{item.itemName}</p>
+          <p className={`text-[10px] ${rarityTextClass(item.rarity)}`}>{item.rarity}</p>
+        </div>
+      </div>
+      <p className="text-gray-600 text-[10px]">
+        {CODEX_ITEM_LABEL[item.itemType]} ·{' '}
+        {new Date(item.registeredAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+      </p>
     </div>
   )
 }
@@ -182,9 +208,7 @@ export function CodexManager() {
     )
   }
 
-  if (!data) {
-    return <p className="text-gray-500 text-sm">Failed to load Codex data.</p>
-  }
+  if (!data) return <p className="text-gray-500 text-sm">Failed to load Codex data.</p>
 
   const totalEntries  = data.collections.reduce((s, c) => s + (c.registeredCount ?? 0), 0)
   const completeCount = data.collections.filter((c) => c.isComplete).length
@@ -197,17 +221,13 @@ export function CodexManager() {
           <div>
             <p className="text-yellow-600 text-xs font-medium mb-0.5">Active Codex Bonuses</p>
             <div className="flex gap-4">
-              {data.totalBonuses.erPct > 0 && (
-                <p className="text-yellow-400 font-bold text-lg">+{data.totalBonuses.erPct}% ER</p>
-              )}
-              {data.totalBonuses.pdPct > 0 && (
-                <p className="text-blue-400 font-bold text-lg">-{data.totalBonuses.pdPct}% PD</p>
-              )}
+              {data.totalBonuses.erPct > 0 && <p className="text-yellow-400 font-bold text-lg">+{data.totalBonuses.erPct}% ER</p>}
+              {data.totalBonuses.pdPct > 0 && <p className="text-blue-400 font-bold text-lg">-{data.totalBonuses.pdPct}% PD</p>}
             </div>
           </div>
           <div className="ml-auto text-right">
             <p className="text-gray-600 text-xs">
-              {totalEntries} robots registered · {completeCount} collection{completeCount !== 1 ? 's' : ''} complete
+              {totalEntries} item{totalEntries !== 1 ? 's' : ''} registered · {completeCount} collection{completeCount !== 1 ? 's' : ''} complete
             </p>
           </div>
         </div>
@@ -220,9 +240,7 @@ export function CodexManager() {
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all capitalize ${
-              activeTab === tab
-                ? 'bg-[#1a1a2e] text-white'
-                : 'text-gray-500 hover:text-gray-300'
+              activeTab === tab ? 'bg-[#1a1a2e] text-white' : 'text-gray-500 hover:text-gray-300'
             }`}
           >
             {tab === 'trophies' ? `Trophies (${totalEntries})` : 'Collections'}
@@ -241,11 +259,7 @@ export function CodexManager() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {data.collections.map((col) => (
-              <CodexCollectionCard
-                key={col.id}
-                collection={col}
-                onRegister={setModal}
-              />
+              <CodexCollectionCard key={col.id} collection={col} onRegister={setModal} />
             ))}
           </div>
         )
@@ -255,9 +269,9 @@ export function CodexManager() {
       {activeTab === 'trophies' && (
         totalEntries === 0 ? (
           <div className="text-center py-16 text-gray-600">
-            <p className="text-4xl mb-3">🤖</p>
-            <p className="text-sm">No robots registered yet.</p>
-            <p className="text-xs mt-1">Register robots from your inventory to earn permanent bonuses.</p>
+            <p className="text-4xl mb-3">🏆</p>
+            <p className="text-sm">No items registered yet.</p>
+            <p className="text-xs mt-1">Register items from your inventory to earn permanent bonuses.</p>
           </div>
         ) : (
           <div className="space-y-6">
@@ -275,25 +289,7 @@ export function CodexManager() {
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                     {col.registeredItems!.map((item) => (
-                      <div
-                        key={item.id}
-                        className={`bg-[#111118] border ${RARITY_BORDER[item.rarity] ?? 'border-gray-800/60'} rounded-xl p-3`}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="w-7 h-7 rounded-lg bg-gray-800/80 flex items-center justify-center text-sm">
-                            🤖
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-white text-xs font-medium truncate">{item.itemName}</p>
-                            <p className={`text-[10px] ${RARITY_COLORS[item.rarity] ?? 'text-gray-500'}`}>
-                              {item.rarity}
-                            </p>
-                          </div>
-                        </div>
-                        <p className="text-gray-600 text-[10px]">
-                          {new Date(item.registeredAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </p>
-                      </div>
+                      <TrophyCard key={item.id} item={item} />
                     ))}
                   </div>
                 </div>
@@ -304,11 +300,7 @@ export function CodexManager() {
 
       {/* Register modal */}
       {modal && (
-        <RegisterModal
-          collection={modal}
-          onClose={() => setModal(null)}
-          onSuccess={fetchData}
-        />
+        <RegisterModal collection={modal} onClose={() => setModal(null)} onSuccess={fetchData} />
       )}
     </div>
   )

@@ -29,13 +29,15 @@ export async function POST(req: NextRequest) {
         include: { robot: true },
       })
       if (!eq) return NextResponse.json({ error: 'Equipment not found.' }, { status: 404 })
-      if (eq.robot) return NextResponse.json({ error: 'Cannot destroy equipped item. Unequip it from the robot first.' }, { status: 409 })
+      if (eq.robot)   return NextResponse.json({ error: 'Cannot destroy equipped item. Unequip it from the robot first.' }, { status: 409 })
+      if (eq.inCodex) return NextResponse.json({ error: 'Cannot destroy equipment registered in the Codex.' }, { status: 409 })
       await prisma.equipment.delete({ where: { id: itemId } })
       break
     }
     case 'baseUpgrade': {
       const bu = await prisma.baseUpgrade.findFirst({ where: { id: itemId, userId: user.id } })
       if (!bu) return NextResponse.json({ error: 'Base upgrade not found.' }, { status: 404 })
+      if (bu.inCodex) return NextResponse.json({ error: 'Cannot destroy a base upgrade registered in the Codex.' }, { status: 409 })
       await prisma.baseUpgrade.delete({ where: { id: itemId } })
       break
     }

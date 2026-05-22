@@ -49,8 +49,9 @@ export async function POST(req: NextRequest) {
 
     case 'EQUIPMENT': {
       const eq = await prisma.equipment.findFirst({ where: { id: itemId, userId: user.id }, include: { robot: true, listing: true } })
-      if (!eq)      return NextResponse.json({ error: 'Equipment not found.' }, { status: 404 })
-      if (eq.robot) return NextResponse.json({ error: 'Unequip from robot before listing.' }, { status: 409 })
+      if (!eq)        return NextResponse.json({ error: 'Equipment not found.' }, { status: 404 })
+      if (eq.robot)   return NextResponse.json({ error: 'Unequip from robot before listing.' }, { status: 409 })
+      if (eq.inCodex) return NextResponse.json({ error: 'This equipment is permanently registered in the Codex.' }, { status: 409 })
       if (eq.listing?.status === 'ACTIVE' && eq.listing.expiresAt > now) {
         return NextResponse.json({ error: 'Equipment is already listed.' }, { status: 409 })
       }
@@ -65,6 +66,7 @@ export async function POST(req: NextRequest) {
       const bu = await prisma.baseUpgrade.findFirst({ where: { id: itemId, userId: user.id }, include: { listing: true } })
       if (!bu)          return NextResponse.json({ error: 'Base upgrade not found.' }, { status: 404 })
       if (bu.isApplied) return NextResponse.json({ error: 'Remove from base slot before listing.' }, { status: 409 })
+      if (bu.inCodex)   return NextResponse.json({ error: 'This base upgrade is permanently registered in the Codex.' }, { status: 409 })
       if (bu.listing?.status === 'ACTIVE' && bu.listing.expiresAt > now) {
         return NextResponse.json({ error: 'Base upgrade is already listed.' }, { status: 409 })
       }

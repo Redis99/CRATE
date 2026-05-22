@@ -168,6 +168,7 @@ model Equipment {
   effectType2  EffectType?   // efeito secundário (ex: equipamento ER + PD)
   effectValue2 Float?
   isPermanent  Boolean        @default(false)
+  inCodex      Boolean        @default(false) // permanentemente registrado no Codex
   expiresAt    DateTime?
   createdAt    DateTime       @default(now())
 
@@ -196,6 +197,7 @@ model BaseUpgrade {
   effectValue2 Float?
   isApplied    Boolean       @default(false)
   appliedSlot  Int?          // 1 = Mining Power, 2 = Energy Reduction
+  inCodex      Boolean       @default(false) // permanentemente registrado no Codex
   createdAt   DateTime      @default(now())
 
   codexEntry  CodexEntry?

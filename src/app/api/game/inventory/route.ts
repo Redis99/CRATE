@@ -36,6 +36,7 @@ export async function GET(_req: NextRequest) {
         orderBy: { createdAt: 'asc' },
       },
       equipments: {
+        where: { inCodex: false },
         select: {
           id: true, name: true, rarity: true,
           effectType: true, effectValue: true,
@@ -50,6 +51,7 @@ export async function GET(_req: NextRequest) {
         orderBy: { createdAt: 'asc' },
       },
       baseUpgrades: {
+        where: { inCodex: false },
         select: {
           id: true, name: true, rarity: true,
           effectType: true, effectValue: true, isApplied: true, appliedSlot: true,
