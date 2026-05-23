@@ -119,7 +119,7 @@ export default function NexusDashboard() {
             className="px-3 py-1.5 text-xs bg-purple-800/50 hover:bg-purple-700/50 text-purple-200 rounded border border-purple-700/30 transition-colors">
             Trigger Mining Block
           </button>
-          {['seed-robots','seed-parts','seed-missions','seed-crafting','seed-lootbox','seed-shop','seed-codex'].map(a => (
+          {['seed-robots','seed-parts','seed-consumables','seed-missions','seed-crafting','seed-lootbox','seed-shop','seed-codex'].map(a => (
             <button key={a} onClick={() => runAction(a, a)}
               className="px-3 py-1.5 text-xs bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 rounded border border-gray-700/30 transition-colors">
               {a.replace('seed-', 'Seed ').replace(/^./, c => c.toUpperCase())}

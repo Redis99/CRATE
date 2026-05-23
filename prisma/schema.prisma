@@ -185,14 +185,34 @@ model BaseUpgrade {
 
 // Catálogo mestre de peças — substitui PARTS_BY_CATEGORY hardcoded
 model Part {
-  id        String       @id @default(uuid())
-  partType  String       @unique          // nome exato da peça (ex: "Drill Bit")
-  category  PartCategory                  // categoria para agrupamento e geração
-  active    Boolean      @default(true)   // se false, não aparece em drops nem dropdown
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id          String       @id @default(uuid())
+  partType    String       @unique          // nome exato da peça (ex: "Drill Bit")
+  category    PartCategory                  // categoria para agrupamento e geração
+  rarities    Json         @default("[]")   // raridades disponíveis para esta peça (vazio = todas)
+  description String?                        // descrição opcional
+  active      Boolean      @default(true)   // se false, não aparece em drops nem dropdown
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   @@map("parts_catalog")
+}
+
+// Catálogo mestre de consumíveis (kits de reparo, boosts temporários, etc.)
+model ConsumableTemplate {
+  id              String         @id @default(uuid())
+  consumableType  ConsumableType                     // REPAIR_KIT | BOOST_TEMP
+  name            String                              // ex: "Repair Kit 25%", "ER Boost 1h"
+  description     String?
+  effectType      String                              // 'REPAIR_PCT' | 'ER_BOOST_FLAT' | 'ER_BOOST_PCT' | 'PD_REDUCTION_PCT' | ...
+  effectValue     Float                               // valor do efeito (ex: 25 para 25%)
+  durationSec     Int            @default(0)         // 0 = instantâneo, > 0 = temporário
+  rarity          String?                             // raridade opcional
+  active          Boolean        @default(true)
+  sortOrder       Int            @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@map("consumable_templates")
 }
 
 model InventoryPart {
