@@ -183,6 +183,18 @@ model BaseUpgrade {
 // PEÇAS DE CRAFTING
 // ─────────────────────────────────────────────
 
+// Catálogo mestre de peças — substitui PARTS_BY_CATEGORY hardcoded
+model Part {
+  id        String       @id @default(uuid())
+  partType  String       @unique          // nome exato da peça (ex: "Drill Bit")
+  category  PartCategory                  // categoria para agrupamento e geração
+  active    Boolean      @default(true)   // se false, não aparece em drops nem dropdown
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@map("parts_catalog")
+}
+
 model InventoryPart {
   id        String   @id @default(uuid())
   userId    String
