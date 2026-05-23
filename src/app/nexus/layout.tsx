@@ -14,6 +14,7 @@ const NAV = [
   { href: '/nexus/items',         label: 'Equip & Upgrades' },
   { href: '/nexus/missions',      label: 'Missions' },
   { href: '/nexus/codex',         label: 'Codex' },
+  { href: '/nexus/outpost-themes', label: 'Outpost Themes' },
   { href: '/nexus/notifications', label: 'Notifications' },
 ]
 
