@@ -52,7 +52,8 @@ export async function POST(req: NextRequest) {
     data: {
       ...recipeData,
       ingredients: { create: ingredients.map(pickIngredientFields) },
-    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any,
     include: { ingredients: true },
   })
   return NextResponse.json(recipe)
@@ -77,7 +78,8 @@ export async function PUT(req: NextRequest) {
     data: {
       ...recipeData,
       ingredients: { create: ingredients.map(pickIngredientFields) },
-    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any,
     include: { ingredients: true },
   })
   return NextResponse.json(recipe)
