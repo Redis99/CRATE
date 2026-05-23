@@ -594,6 +594,48 @@ model LootboxDropEntry {
 }
 
 // ─────────────────────────────────────────────
+// OUTPOST THEMES (aparência sazonal do Outpost)
+// ─────────────────────────────────────────────
+
+model OutpostTheme {
+  id          String   @id @default(uuid())
+  slug        String   @unique         // 'default' | 'halloween' | 'christmas' | 'solar-storm' | etc.
+  name        String                   // "Halloween 2026"
+  description String
+  layoutKey   String                   // chave do componente de layout no código (ex: 'halloween')
+
+  // Cores opcionais — override do layout via CSS vars
+  accentColor String?                  // hex, ex: '#ff6b00'
+  bgColor     String?                  // hex
+  borderColor String?
+
+  // Banner exibido no topo do outpost (opcional)
+  bannerText     String?
+  bannerSubtext  String?
+  bannerIcon     String?              // emoji ou URL
+
+  // Agendamento
+  startsAt    DateTime?                // null = sempre disponível
+  endsAt      DateTime?
+  active      Boolean  @default(false) // toggle manual do admin
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("outpost_themes")
+}
+
+model OutpostActiveTheme {
+  id         String   @id @default("singleton")  // singleton row
+  themeSlug  String                              // 'default' ou slug ativo
+  // Override manual: se setado, ignora agendamento dos themes
+  forcedSlug String?
+  updatedAt  DateTime @updatedAt
+
+  @@map("outpost_active_theme")
+}
+
+// ─────────────────────────────────────────────
 // CRAFTING (banco de dados — gerenciado pelo admin)
 // ─────────────────────────────────────────────
 
