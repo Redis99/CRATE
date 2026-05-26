@@ -44,37 +44,37 @@ const ROADMAP_PHASES = [
   {
     phase: '01',
     title: 'Foundation',
-    period: 'May – Jul 2026',
+    period: 'Completed',
     items: ['Authentication & custodial wallets', 'SOL deposits with auto sweep', 'Landing page'],
-    status: 'current' as const,
+    status: 'done' as const,
   },
   {
     phase: '02',
     title: 'Core Gameplay',
-    period: 'Aug – Oct 2026',
+    period: 'Completed',
     items: ['Outpost & robot management', 'Idle mining with 15-min blocks', 'Inventory & lootboxes'],
-    status: 'upcoming' as const,
+    status: 'done' as const,
   },
   {
     phase: '03',
     title: 'Economy',
-    period: 'Oct – Nov 2026',
+    period: 'Completed',
     items: ['In-game shop & crafting', 'P2P marketplace (5% fee → pool)', 'SOL → $CRATE conversion'],
-    status: 'upcoming' as const,
+    status: 'done' as const,
   },
   {
     phase: '04',
     title: 'Content',
-    period: 'Nov 2026',
+    period: 'Completed',
     items: ['5 minigames with ER boosts', 'Codex trophy system', 'Missions & seasonal events'],
-    status: 'upcoming' as const,
+    status: 'done' as const,
   },
   {
     phase: '05',
     title: 'Mainnet Launch',
     period: 'Dec 2026',
     items: ['Live $CRATE token on Solana', 'Jupiter real-time pricing', 'Public launch — Season 1'],
-    status: 'launch' as const,
+    status: 'current' as const,
   },
 ]
 
@@ -436,40 +436,40 @@ export default function LandingPage() {
 
             <div className="space-y-4">
               {ROADMAP_PHASES.map((phase) => {
+                const isDone    = phase.status === 'done'
                 const isCurrent = phase.status === 'current'
-                const isLaunch = phase.status === 'launch'
                 return (
                   <div key={phase.phase} className="relative md:pl-16">
                     {/* Phase dot */}
                     <div className={`absolute left-4 top-5 w-4 h-4 rounded-full border-2 hidden md:block -translate-x-1/2 ${
-                      isCurrent ? 'border-indigo-500 bg-indigo-500/30' :
-                      isLaunch  ? 'border-yellow-500 bg-yellow-500/30' :
+                      isDone    ? 'border-green-600 bg-green-500/20' :
+                      isCurrent ? 'border-yellow-500 bg-yellow-500/30' :
                                   'border-gray-700 bg-[#0a0a0f]'
                     }`} />
 
                     <div className={`bg-[#111118] border rounded-xl p-5 ${
-                      isCurrent ? 'border-indigo-500/40' :
-                      isLaunch  ? 'border-yellow-500/30' :
+                      isDone    ? 'border-green-900/50' :
+                      isCurrent ? 'border-yellow-500/30' :
                                   'border-white/8'
                     }`}>
                       <div className="flex flex-wrap items-center gap-3 mb-3">
                         <span className="text-xs font-mono text-gray-600">PHASE {phase.phase}</span>
                         <span className={`text-sm font-semibold ${
-                          isCurrent ? 'text-indigo-400' :
-                          isLaunch  ? 'text-yellow-400' :
+                          isDone    ? 'text-white' :
+                          isCurrent ? 'text-yellow-400' :
                                       'text-gray-300'
                         }`}>
                           {phase.title}
                         </span>
                         <span className="text-xs text-gray-500">{phase.period}</span>
-                        {isCurrent && (
-                          <span className="text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full">
-                            In Progress
+                        {isDone && (
+                          <span className="text-[10px] font-semibold bg-green-500/15 text-green-400 px-2 py-0.5 rounded-full">
+                            ✓ Completed
                           </span>
                         )}
-                        {isLaunch && (
+                        {isCurrent && (
                           <span className="text-[10px] font-semibold bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded-full">
-                            Target Launch
+                            In Progress
                           </span>
                         )}
                       </div>
@@ -477,8 +477,8 @@ export default function LandingPage() {
                         {phase.items.map((item) => (
                           <li key={item} className="flex items-center gap-2 text-xs text-gray-500">
                             <span className={`w-1 h-1 rounded-full shrink-0 ${
-                              isCurrent ? 'bg-indigo-400' :
-                              isLaunch  ? 'bg-yellow-400' :
+                              isDone    ? 'bg-green-600' :
+                              isCurrent ? 'bg-yellow-400' :
                                           'bg-gray-600'
                             }`} />
                             {item}
