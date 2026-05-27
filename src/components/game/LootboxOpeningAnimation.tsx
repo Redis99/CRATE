@@ -26,49 +26,42 @@ function getBestRarity(drops: DropResultType[]): string {
 // ─── Particle helpers ─────────────────────────────────────────────────────────
 
 interface Particle {
-  id: number
-  x: number
-  y: number
-  size: number
-  duration: number
-  delay: number
-  color: string
-  shape: 'circle' | 'diamond'
+  id: number; x: number; y: number
+  size: number; duration: number; delay: number
+  color: string; shape: 'circle' | 'diamond'
 }
 
 function generateParticles(color: string, count = 18): Particle[] {
   return Array.from({ length: count }, (_, i) => {
-    const angle   = (i / count) * 360 + (Math.random() - 0.5) * 20
-    const dist    = 70 + Math.random() * 100
-    const rad     = (angle * Math.PI) / 180
+    const angle = (i / count) * 360 + (Math.random() - 0.5) * 20
+    const dist  = 70 + Math.random() * 100
+    const rad   = (angle * Math.PI) / 180
     return {
-      id:       i,
-      x:        Math.cos(rad) * dist,
-      y:        Math.sin(rad) * dist - 20,     // slight upward bias
+      id: i,
+      x: Math.cos(rad) * dist,
+      y: Math.sin(rad) * dist - 20,
       size:     2.5 + Math.random() * 4,
       duration: 600 + Math.random() * 400,
       delay:    Math.random() * 150,
       color,
-      shape:    Math.random() > 0.5 ? 'circle' : 'diamond',
+      shape: Math.random() > 0.5 ? 'circle' : 'diamond',
     }
   })
 }
 
 // ─── Animation phases ─────────────────────────────────────────────────────────
-// falling  → crate drops from above (0-700ms)
-// waiting  → crate settled, subtle breathing, waiting for API (700ms+)
-// opening  → lid flies open, beam shoots up (when drops arrive)
-// bursting → glow expands across screen (+600ms)
-// done     → onReveal called, component unmounts
+// falling  → crate drops with bounce           (0–700 ms)
+// waiting  → crate floats, shakes, waits       (700 ms …)
+// opening  → lid flies off, beam shoots up     (when drops arrive +600 ms)
+// bursting → glow expands, particles scatter   (+600–1300 ms)
+// done     → onReveal fired                    (+1300 ms)
 
 type Phase = 'falling' | 'waiting' | 'opening' | 'bursting' | 'done'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface LootboxOpeningAnimationProps {
-  /** Drops from API — null while loading, set when API returns */
-  drops: DropResultType[] | null
-  /** Called after burst animation completes */
+  drops: DropResultType[] | null  // null while API is loading
   onReveal: (drops: DropResultType[]) => void
 }
 
@@ -78,50 +71,76 @@ export function LootboxOpeningAnimation({ drops, onReveal }: LootboxOpeningAnima
   const [phase, setPhase]           = useState<Phase>('falling')
   const [particles, setParticles]   = useState<Particle[]>([])
   const [glowOpacity, setGlowOpacity] = useState(0)
-  const dropsRef                    = useRef(drops)
-  dropsRef.current                  = drops
 
-  const bestRarity  = drops ? getBestRarity(drops) : 'COMMON'
-  const colors      = RARITY_COLORS[bestRarity] ?? RARITY_COLORS.COMMON
-  const isSpecial   = bestRarity === 'LEGENDARY' || bestRarity === 'EPIC'
+  // ── Refs ─────────────────────────────────────────────────────────────────────
+  // Always point to latest onReveal so stale closures never misfire
+  const onRevealRef    = useRef(onReveal)
+  onRevealRef.current  = onReveal
 
-  // ── Phase 1 & 2: fall → settle → wait ──────────────────────────────────────
+  // Guard: opening sequence must only start once
+  const openingStarted = useRef(false)
+
+  // Persistent timeout store — cleared only on unmount (not on re-render)
+  const timeoutsRef    = useRef<ReturnType<typeof setTimeout>[]>([])
+
+  // ── Phase 1: fall → waiting (700 ms) ─────────────────────────────────────────
   useEffect(() => {
-    const t1 = setTimeout(() => setPhase('waiting'), 700)
-    return () => clearTimeout(t1)
+    const t = setTimeout(() => setPhase('waiting'), 700)
+    return () => clearTimeout(t)
   }, [])
 
-  // ── Phase 3+: triggered when drops arrive during 'waiting' ─────────────────
+  // ── Phase 2+: open when drops arrive ─────────────────────────────────────────
+  // This effect watches for the combination (waiting phase + drops available).
+  // openingStarted ref prevents re-entry if the effect re-fires.
+  // Timeouts are stored in timeoutsRef so cleanup does NOT cancel them on re-render.
   useEffect(() => {
-    if (phase !== 'waiting' || drops === null) return
+    if (drops === null)          return  // API still loading
+    if (phase === 'falling')     return  // wait for settled state
+    if (phase !== 'waiting')     return  // already past this point
+    if (openingStarted.current)  return  // guard against double-fire
 
+    openingStarted.current = true
     setPhase('opening')
 
-    // At 600ms into opening: burst
+    // Snapshot values for closures — drops will not change after this point
+    const bestRarity   = getBestRarity(drops)
+    const colors       = RARITY_COLORS[bestRarity] ?? RARITY_COLORS.COMMON
+    const dropsCapture = drops
+
+    // t1: lid has flown off — show burst
     const t1 = setTimeout(() => {
       setParticles(generateParticles(colors.particle))
       setGlowOpacity(1)
       setPhase('bursting')
     }, 600)
 
-    // After burst: reveal drops
+    // t2: animation done — hand off to drop modal
     const t2 = setTimeout(() => {
       setPhase('done')
-      onReveal(drops)
+      onRevealRef.current(dropsCapture)
     }, 1300)
 
-    return () => { clearTimeout(t1); clearTimeout(t2) }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, drops])
+    // Store in ref — cleaned up on unmount only
+    timeoutsRef.current.push(t1, t2)
+  }, [drops, phase])  // re-runs if drops arrives late (after waiting starts)
 
-  // Derived visual states
+  // ── Unmount cleanup only ──────────────────────────────────────────────────────
+  useEffect(() => {
+    return () => { timeoutsRef.current.forEach(clearTimeout) }
+  }, [])
+
+  // ── Derived visual state ──────────────────────────────────────────────────────
+  const bestRarity  = drops ? getBestRarity(drops) : 'COMMON'
+  const colors      = RARITY_COLORS[bestRarity] ?? RARITY_COLORS.COMMON
+  const isSpecial   = bestRarity === 'LEGENDARY' || bestRarity === 'EPIC'
   const lidOpen     = phase === 'opening' || phase === 'bursting' || phase === 'done'
   const beamVisible = phase === 'opening' || phase === 'bursting'
   const burst       = phase === 'bursting'
 
+  // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* ── Keyframes (injected once) ─────────────── */}
+      {/* ── CSS keyframes ──────────────────────────── */}
       <style>{`
         @keyframes _crateFall {
           0%   { transform: translateY(-220px); opacity: 0; }
@@ -139,40 +158,36 @@ export function LootboxOpeningAnimation({ drops, onReveal }: LootboxOpeningAnima
           75%     { transform: rotate(-1deg) translateX(-1px); }
         }
         @keyframes _lidFly {
-          0%   { transform: rotateX(0deg) translateY(0); }
-          60%  { transform: rotateX(-80deg) translateY(-20px); }
+          0%   { transform: rotateX(0deg) translateY(0); opacity: 1; }
+          60%  { transform: rotateX(-80deg) translateY(-20px); opacity: 1; }
           100% { transform: rotateX(-135deg) translateY(-60px); opacity: 0; }
         }
         @keyframes _beamRise {
-          0%   { transform: scaleY(0) translateX(-50%); opacity: 0; transform-origin: bottom; }
+          0%   { transform: scaleY(0); opacity: 0; }
           30%  { opacity: 1; }
-          100% { transform: scaleY(1) translateX(-50%); opacity: 0.7; transform-origin: bottom; }
+          100% { transform: scaleY(1); opacity: 0.75; }
         }
         @keyframes _glowPulse {
-          0%,100% { opacity: 0.3; transform: scale(1); }
-          50%     { opacity: 0.7; transform: scale(1.08); }
+          0%,100% { opacity: 0.35; transform: scale(1); }
+          50%     { opacity: 0.75; transform: scale(1.08); }
         }
         @keyframes _burstExpand {
           0%   { transform: scale(0.1); opacity: 0.9; }
           100% { transform: scale(6);   opacity: 0; }
         }
         @keyframes _particleFly {
-          0%   { opacity: 1; transform: translate(0, 0) scale(1) rotate(0deg); }
-          80%  { opacity: 0.6; }
-          100% { opacity: 0; transform: translate(var(--px), var(--py)) scale(0.2) rotate(180deg); }
+          0%   { opacity: 1; transform: translate(0,0) scale(1) rotate(0deg); }
+          80%  { opacity: 0.5; }
+          100% { opacity: 0;   transform: translate(var(--px),var(--py)) scale(0.2) rotate(180deg); }
         }
         @keyframes _screenFlash {
           0%   { opacity: 0; }
-          20%  { opacity: 0.15; }
+          20%  { opacity: 0.18; }
           100% { opacity: 0; }
         }
-        @keyframes _labelAppear {
-          0%   { opacity: 0; transform: translateY(8px) scale(0.9); }
+        @keyframes _labelIn {
+          0%   { opacity: 0; transform: translateY(8px) scale(0.92); }
           100% { opacity: 1; transform: translateY(0)   scale(1); }
-        }
-        @keyframes _breathe {
-          0%,100% { filter: drop-shadow(0 0 4px var(--c)) ; opacity: 0.6; }
-          50%     { filter: drop-shadow(0 0 12px var(--c)); opacity: 1.0; }
         }
         @keyframes _floatCrate {
           0%,100% { transform: translateY(0); }
@@ -196,8 +211,8 @@ export function LootboxOpeningAnimation({ drops, onReveal }: LootboxOpeningAnima
           />
         )}
 
-        {/* Expanding burst ring */}
-        {(burst || glowOpacity > 0) && (
+        {/* Expanding ring */}
+        {burst && (
           <div
             className="absolute pointer-events-none"
             style={{
@@ -222,7 +237,7 @@ export function LootboxOpeningAnimation({ drops, onReveal }: LootboxOpeningAnima
               : undefined,
           }}
         >
-          {/* Light beam (shoots up from inside) */}
+          {/* Light beam */}
           {beamVisible && (
             <div
               style={{
@@ -234,14 +249,14 @@ export function LootboxOpeningAnimation({ drops, onReveal }: LootboxOpeningAnima
                 background: `linear-gradient(to top, ${colors.beam}cc 0%, ${colors.beam}33 60%, transparent 100%)`,
                 clipPath: 'polygon(30% 100%, 70% 100%, 100% 0%, 0% 0%)',
                 animation: '_beamRise 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-                transformOrigin: 'bottom',
+                transformOrigin: 'bottom center',
                 transform: 'translateX(-50%)',
                 filter: `blur(2px) drop-shadow(0 0 8px ${colors.beam})`,
               }}
             />
           )}
 
-          {/* Lid */}
+          {/* ── Lid ───────────────────────────────── */}
           <div
             style={{
               position: 'absolute',
@@ -254,19 +269,15 @@ export function LootboxOpeningAnimation({ drops, onReveal }: LootboxOpeningAnima
             }}
           >
             <svg viewBox="0 0 160 68" width="160" height="68" style={{ display: 'block', overflow: 'visible' }}>
-              {/* Lid body */}
               <rect x="4" y="10" width="152" height="52" rx="4"
                 fill="#12121e" stroke="rgba(99,102,241,0.55)" strokeWidth="1.5" />
-              {/* Lid highlight stripe */}
               <rect x="4" y="10" width="152" height="10" rx="4"
                 fill="rgba(99,102,241,0.15)" />
-              {/* Lid plank lines */}
               <line x1="54" y1="10" x2="54" y2="62" stroke="rgba(99,102,241,0.22)" strokeWidth="1" />
               <line x1="106" y1="10" x2="106" y2="62" stroke="rgba(99,102,241,0.22)" strokeWidth="1" />
-              {/* Metal corners */}
-              <rect x="2" y="8" width="10" height="10" rx="1" fill="rgba(99,102,241,0.35)" />
-              <rect x="148" y="8" width="10" height="10" rx="1" fill="rgba(99,102,241,0.35)" />
-              <rect x="2" y="54" width="10" height="10" rx="1" fill="rgba(99,102,241,0.35)" />
+              <rect x="2"  y="8"  width="10" height="10" rx="1" fill="rgba(99,102,241,0.35)" />
+              <rect x="148" y="8"  width="10" height="10" rx="1" fill="rgba(99,102,241,0.35)" />
+              <rect x="2"  y="54" width="10" height="10" rx="1" fill="rgba(99,102,241,0.35)" />
               <rect x="148" y="54" width="10" height="10" rx="1" fill="rgba(99,102,241,0.35)" />
               {/* Handle */}
               <rect x="65" y="3" width="30" height="10" rx="5"
@@ -275,7 +286,7 @@ export function LootboxOpeningAnimation({ drops, onReveal }: LootboxOpeningAnima
             </svg>
           </div>
 
-          {/* Crate body */}
+          {/* ── Body ──────────────────────────────── */}
           <div
             style={{
               position: 'absolute',
@@ -284,7 +295,7 @@ export function LootboxOpeningAnimation({ drops, onReveal }: LootboxOpeningAnima
               animation: phase === 'waiting' ? '_crateShake 0.7s ease-in-out infinite' : undefined,
             }}
           >
-            {/* Inner glow (visible before lid opens) */}
+            {/* Inner glow (breathes while waiting) */}
             {(phase === 'waiting' || phase === 'opening') && (
               <div
                 style={{
@@ -293,50 +304,34 @@ export function LootboxOpeningAnimation({ drops, onReveal }: LootboxOpeningAnima
                   height: 20,
                   background: `radial-gradient(ellipse at center, ${colors.glow}60 0%, transparent 70%)`,
                   animation: '_glowPulse 1.4s ease-in-out infinite',
-                  ['--c' as string]: colors.glow,
                 }}
               />
             )}
 
             <svg viewBox="0 0 160 132" width="160" height="132" style={{ display: 'block', overflow: 'visible' }}>
-              {/* Body */}
               <rect x="4" y="2" width="152" height="126" rx="4"
                 fill="#0e0e1a" stroke="rgba(99,102,241,0.50)" strokeWidth="1.5" />
-
-              {/* Horizontal plank grooves */}
-              <line x1="4" y1="44" x2="156" y2="44" stroke="rgba(99,102,241,0.20)" strokeWidth="1" />
-              <line x1="4" y1="86" x2="156" y2="86" stroke="rgba(99,102,241,0.20)" strokeWidth="1" />
-
-              {/* Vertical panel dividers */}
-              <line x1="54" y1="2" x2="54" y2="128" stroke="rgba(99,102,241,0.20)" strokeWidth="1" />
+              <line x1="4" y1="44"  x2="156" y2="44"  stroke="rgba(99,102,241,0.20)" strokeWidth="1" />
+              <line x1="4" y1="86"  x2="156" y2="86"  stroke="rgba(99,102,241,0.20)" strokeWidth="1" />
+              <line x1="54"  y1="2" x2="54"  y2="128" stroke="rgba(99,102,241,0.20)" strokeWidth="1" />
               <line x1="106" y1="2" x2="106" y2="128" stroke="rgba(99,102,241,0.20)" strokeWidth="1" />
-
-              {/* Metal corner brackets */}
               <rect x="2"   y="0"   width="12" height="12" rx="1" fill="rgba(99,102,241,0.30)" />
               <rect x="146" y="0"   width="12" height="12" rx="1" fill="rgba(99,102,241,0.30)" />
               <rect x="2"   y="118" width="12" height="12" rx="1" fill="rgba(99,102,241,0.30)" />
               <rect x="146" y="118" width="12" height="12" rx="1" fill="rgba(99,102,241,0.30)" />
-
-              {/* Mid-height metal strip */}
               <rect x="4" y="60" width="152" height="6" rx="1"
                 fill="rgba(99,102,241,0.12)" stroke="rgba(99,102,241,0.25)" strokeWidth="0.5" />
-
-              {/* Center seal / lock */}
-              <circle cx="80" cy="65" r="14"
-                fill="#0c0c18" stroke="rgba(99,102,241,0.50)" strokeWidth="1.5" />
-              <circle cx="80" cy="65" r="8"
-                fill="rgba(99,102,241,0.10)" stroke="rgba(99,102,241,0.40)" strokeWidth="1" />
-              {/* Lock keyhole */}
-              <circle cx="80" cy="62" r="3" fill="rgba(99,102,241,0.70)" />
+              {/* Center seal */}
+              <circle cx="80" cy="65" r="14" fill="#0c0c18" stroke="rgba(99,102,241,0.50)" strokeWidth="1.5" />
+              <circle cx="80" cy="65" r="8"  fill="rgba(99,102,241,0.10)" stroke="rgba(99,102,241,0.40)" strokeWidth="1" />
+              <circle cx="80" cy="62" r="3"  fill="rgba(99,102,241,0.70)" />
               <rect x="78" y="64" width="4" height="5" rx="1" fill="rgba(99,102,241,0.70)" />
-
-              {/* Glow seam (top edge of body) */}
-              <line x1="4" y1="3" x2="156" y2="3"
-                stroke="rgba(99,102,241,0.55)" strokeWidth="1.5" />
+              {/* Top glow seam */}
+              <line x1="4" y1="3" x2="156" y2="3" stroke="rgba(99,102,241,0.55)" strokeWidth="1.5" />
             </svg>
           </div>
 
-          {/* Particles (scatter on burst) */}
+          {/* ── Particles ─────────────────────────── */}
           {particles.map((p) => (
             <div
               key={p.id}
@@ -346,7 +341,7 @@ export function LootboxOpeningAnimation({ drops, onReveal }: LootboxOpeningAnima
                 width: p.size, height: p.size,
                 borderRadius: p.shape === 'circle' ? '50%' : '2px',
                 background: p.color,
-                transform: `rotate(45deg)`,
+                transform: 'rotate(45deg)',
                 boxShadow: `0 0 ${p.size * 2}px ${p.color}`,
                 ['--px' as string]: `${p.x}px`,
                 ['--py' as string]: `${p.y}px`,
@@ -374,22 +369,23 @@ export function LootboxOpeningAnimation({ drops, onReveal }: LootboxOpeningAnima
           )}
 
           {phase === 'waiting' && (
-            <div style={{ animation: '_glowPulse 1.2s ease-in-out infinite', ['--c' as string]: '#6366f1' }}>
-              <p className="text-indigo-400/70 text-sm tracking-widest uppercase">
-                Searching…
-              </p>
-            </div>
+            <p
+              className="text-sm tracking-widest uppercase"
+              style={{
+                color: 'rgba(99,102,241,0.6)',
+                animation: '_glowPulse 1.2s ease-in-out infinite',
+              }}
+            >
+              {drops ? 'Ready…' : 'Searching…'}
+            </p>
           )}
 
           {(phase === 'opening' || phase === 'bursting') && drops && (
-            <div style={{ animation: '_labelAppear 0.3s ease-out forwards' }}>
+            <div style={{ animation: '_labelIn 0.3s ease-out forwards' }}>
               <p
                 className={`text-lg font-bold tracking-widest uppercase ${
-                  bestRarity === 'LEGENDARY'
-                    ? 'text-legendary'
-                    : bestRarity === 'EPIC'
-                    ? 'text-purple-300'
-                    : ''
+                  bestRarity === 'LEGENDARY' ? 'text-legendary' :
+                  bestRarity === 'EPIC'      ? 'text-purple-300' : ''
                 }`}
                 style={
                   bestRarity !== 'LEGENDARY' && bestRarity !== 'EPIC'
@@ -400,7 +396,7 @@ export function LootboxOpeningAnimation({ drops, onReveal }: LootboxOpeningAnima
                 {colors.label}
               </p>
               {isSpecial && (
-                <p className="text-xs text-white/40 mt-1 tracking-widest">
+                <p className="text-xs mt-1 tracking-widest" style={{ color: 'rgba(255,255,255,0.35)' }}>
                   {drops.length} item{drops.length !== 1 ? 's' : ''} received
                 </p>
               )}

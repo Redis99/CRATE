@@ -244,7 +244,7 @@ export function LootboxManager() {
   async function handleOpen(lootboxType: string, quantity: number) {
     setBusy(true); setError(''); setSuccess('')
 
-    // Show opening animation immediately, before API returns
+    // Show opening animation immediately — API runs in parallel
     setAnimating(true)
     setPendingDrops(null)
 
@@ -256,7 +256,6 @@ export function LootboxManager() {
     const json = await res.json()
 
     if (!res.ok) {
-      // API failed — abort animation and show error
       setAnimating(false)
       setPendingDrops(null)
       setError(json.error ?? 'Failed to open.')
@@ -265,16 +264,22 @@ export function LootboxManager() {
     }
 
     if (json.drops?.length > 0) {
-      setStoppedEarly(json.stoppedEarly)
-      // Feed drops into animation — it will call onReveal when ready
+      setStoppedEarly(json.stoppedEarly ?? false)
+      // Hand drops to animation — onReveal is called after burst, then shows modal
       setPendingDrops(json.drops)
+      // Refresh lootbox counts in background — does NOT block the animation
+      fetchData().catch(console.error)
     } else {
       setAnimating(false)
       setPendingDrops(null)
-      setError('Inventory is full. Free up some space before opening lootboxes.')
+      // stoppedEarly=true → inventory blocked the first drop
+      // stoppedEarly=false here means something unexpected happened
+      const msg = json.stoppedEarly
+        ? 'Inventory is full — free up space before opening more lootboxes.'
+        : (json.error ?? 'No items were generated. Please try again.')
+      setError(msg)
     }
 
-    await fetchData()
     setBusy(false)
   }
 
