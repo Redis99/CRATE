@@ -1,9 +1,51 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────
+   Design Tokens — Inside the Crate
+   ───────────────────────────────────────────── */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Surfaces */
+  --surface-0: #07070e;   /* page background */
+  --surface-1: #0d0d15;   /* sidebar, card base */
+  --surface-2: #111118;   /* card elevated */
+  --surface-3: #16161f;   /* modal, popover */
+  --surface-4: #1c1c28;   /* hover state */
+
+  /* Borders */
+  --border-subtle:  rgba(255,255,255,0.05);
+  --border-default: rgba(255,255,255,0.08);
+  --border-strong:  rgba(255,255,255,0.14);
+
+  /* Primary — indigo */
+  --primary:        #6366f1;
+  --primary-dim:    rgba(99,102,241,0.12);
+  --primary-border: rgba(99,102,241,0.30);
+  --primary-glow:   rgba(99,102,241,0.20);
+
+  /* Stat colors */
+  --er-color:  #fb923c;   /* orange-400 — Extraction Rate */
+  --pd-color:  #2dd4bf;   /* teal-400  — Power Draw */
+
+  /* Rarity */
+  --rarity-common:    #9ca3af;   /* gray-400  */
+  --rarity-uncommon:  #4ade80;   /* green-400 */
+  --rarity-rare:      #60a5fa;   /* blue-400  */
+  --rarity-epic:      #c084fc;   /* purple-400 */
+  --rarity-legendary: #facc15;   /* yellow-400 */
+
+  /* Typography */
+  --font-sans: var(--font-geist-sans), 'Inter', system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), 'JetBrains Mono', monospace;
+
+  /* Legacy compat */
+  --background: var(--surface-0);
+  --foreground: #ededed;
 }
+
+/* ─────────────────────────────────────────────
+   Base
+   ───────────────────────────────────────────── */
 
 @theme inline {
   --color-background: var(--background);
@@ -12,15 +54,126 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
+  background: var(--surface-0);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
+
+/* ─────────────────────────────────────────────
+   Animations
+   ───────────────────────────────────────────── */
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1.0; }
+}
+
+@keyframes legendaryShine {
+  0%   { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
+@keyframes dropIn {
+  0%   { opacity: 0; transform: translateY(-8px) scale(0.96); }
+  60%  { transform: translateY(2px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ─────────────────────────────────────────────
+   Utility classes
+   ───────────────────────────────────────────── */
+
+/* Cards */
+.card {
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: 0.75rem;
+}
+
+.card-hover {
+  transition: border-color 0.15s, background 0.15s;
+}
+.card-hover:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-3);
+}
+
+/* Entrance animations */
+.animate-fade-slide-up {
+  animation: fadeSlideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-drop-in {
+  animation: dropIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Rarity glows — used on EPIC/LEGENDARY items */
+.glow-epic {
+  box-shadow: 0 0 12px rgba(192, 132, 252, 0.20),
+              0 0 2px  rgba(192, 132, 252, 0.30) inset;
+}
+
+.glow-legendary {
+  box-shadow: 0 0 20px rgba(250, 204, 21, 0.25),
+              0 0 4px  rgba(250, 204, 21, 0.30) inset;
+}
+
+/* Legendary shimmer text */
+.text-legendary {
+  background: linear-gradient(
+    90deg,
+    #facc15 0%,
+    #fde68a 40%,
+    #fbbf24 60%,
+    #facc15 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: legendaryShine 3s linear infinite;
+}
+
+/* Stat badges */
+.stat-er {
+  color: var(--er-color);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-pd {
+  color: var(--pd-color);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scrollbar — dark + minimal */
+::-webkit-scrollbar         { width: 4px; height: 4px; }
+::-webkit-scrollbar-track   { background: transparent; }
+::-webkit-scrollbar-thumb   { background: rgba(255,255,255,0.10); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
+
+/* Tabular numbers for game stats */
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* Primary button ring */
+.ring-primary { box-shadow: 0 0 0 2px var(--primary-border); }
