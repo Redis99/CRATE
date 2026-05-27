@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { DropResultType } from '@/lib/lootbox'
 import { LootboxDropModal } from '@/components/game/LootboxDropModal'
+import { LootboxOpeningAnimation } from '@/components/game/LootboxOpeningAnimation'
 import { QuantityStepper } from '@/components/ui/QuantityStepper'
 import { ActionButton } from '@/components/ui/ActionButton'
 
@@ -195,11 +196,14 @@ function CrateCard({
 export function LootboxManager() {
   const [data, setData]         = useState<LootboxData | null>(null)
   const [loading, setLoading]   = useState(true)
-  const [busy, setBusy]         = useState(false)
-  const [error, setError]       = useState('')
-  const [success, setSuccess]   = useState('')
-  const [drops, setDrops]       = useState<DropResultType[] | null>(null)
+  const [busy, setBusy]               = useState(false)
+  const [error, setError]             = useState('')
+  const [success, setSuccess]         = useState('')
+  const [drops, setDrops]             = useState<DropResultType[] | null>(null)
   const [stoppedEarly, setStoppedEarly] = useState(false)
+  // Animation state: true = show opening animation, pendingDrops = waiting for API
+  const [animating, setAnimating]       = useState(false)
+  const [pendingDrops, setPendingDrops] = useState<DropResultType[] | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>('standard')
 
   const [buyQtys,  setBuyQtys]  = useState<Record<string, number>>({})
@@ -239,18 +243,34 @@ export function LootboxManager() {
 
   async function handleOpen(lootboxType: string, quantity: number) {
     setBusy(true); setError(''); setSuccess('')
+
+    // Show opening animation immediately, before API returns
+    setAnimating(true)
+    setPendingDrops(null)
+
     const res  = await fetch('/api/game/lootbox/open', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lootboxType, quantity }),
     })
     const json = await res.json()
-    if (!res.ok) { setError(json.error ?? 'Failed to open.'); setBusy(false); return }
+
+    if (!res.ok) {
+      // API failed — abort animation and show error
+      setAnimating(false)
+      setPendingDrops(null)
+      setError(json.error ?? 'Failed to open.')
+      setBusy(false)
+      return
+    }
 
     if (json.drops?.length > 0) {
-      setDrops(json.drops)
       setStoppedEarly(json.stoppedEarly)
+      // Feed drops into animation — it will call onReveal when ready
+      setPendingDrops(json.drops)
     } else {
+      setAnimating(false)
+      setPendingDrops(null)
       setError('Inventory is full. Free up some space before opening lootboxes.')
     }
 
@@ -288,6 +308,19 @@ export function LootboxManager() {
 
   return (
     <>
+      {/* Opening animation — shown while API call + animation runs */}
+      {animating && (
+        <LootboxOpeningAnimation
+          drops={pendingDrops}
+          onReveal={(revealedDrops) => {
+            setAnimating(false)
+            setPendingDrops(null)
+            setDrops(revealedDrops)
+          }}
+        />
+      )}
+
+      {/* Drop result modal */}
       {drops && (
         <LootboxDropModal
           drops={drops}
