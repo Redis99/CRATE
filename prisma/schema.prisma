@@ -578,10 +578,50 @@ model ShopItem {
   sortOrder   Int      @default(0)
   // Metadados específicos por tipo (gerado, bateria, slot, inventário)
   metadata    Json?
+  // Visual override direto — sobrescreve ItemVisual quando preenchido
+  imageUrl    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@map("shop_items_config")
+}
+
+// ─────────────────────────────────────────────
+// VISUAIS DE ITENS (sprites e ícones — gerenciados pelo admin)
+// ─────────────────────────────────────────────
+
+model ItemVisual {
+  id       String  @id @default(cuid())
+
+  // Chave de lookup
+  // category: 'robot' | 'equipment' | 'baseUpgrade' | 'part' | 'consumable' | 'lootbox'
+  // key     : collection (robot) | effectType (equip/upgrade) | partType ou category (part)
+  //         : "REPAIR_KIT_25" (consumable) | lootboxType string (lootbox)
+  category String
+  key      String
+  rarity   String?  // null = aplica a todas as raridades; definido = override por raridade
+
+  label    String?  // nome amigável para exibição no admin
+
+  // Imagem estática (ícone base — usado quando não há sprite configurado)
+  imageUrl         String?
+
+  // Sprite sheets para animação de robôs (PNG horizontal — frames lado a lado)
+  spriteIdleUrl    String?  // idle / sem energia
+  spriteActiveUrl  String?  // minerando / ativo
+  spriteLowUrl     String?  // energia baixa (< 20%)
+
+  // Configuração do sprite sheet
+  frameWidth   Int @default(128)
+  frameHeight  Int @default(128)
+  frameCount   Int @default(1)
+  fps          Int @default(8)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([category, key, rarity])
+  @@map("item_visuals")
 }
 
 // ─────────────────────────────────────────────

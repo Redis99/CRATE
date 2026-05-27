@@ -15,7 +15,8 @@ const NAV = [
   { href: '/nexus/missions',      label: 'Missions' },
   { href: '/nexus/codex',         label: 'Codex' },
   { href: '/nexus/outpost-themes', label: 'Outpost Themes' },
-  { href: '/nexus/notifications', label: 'Notifications' },
+  { href: '/nexus/visuals',        label: '🖼️ Item Visuals' },
+  { href: '/nexus/notifications',  label: 'Notifications' },
 ]
 
 export default async function NexusLayout({

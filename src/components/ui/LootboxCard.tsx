@@ -2,7 +2,9 @@
 
 import { useState } from 'react'
 import { QuantityStepper } from '@/components/ui/QuantityStepper'
-import { ActionButton } from '@/components/ui/ActionButton'
+import { ActionButton }   from '@/components/ui/ActionButton'
+import { ItemSprite }     from '@/components/ui/ItemSprite'
+import type { ItemVisualData } from '@/lib/item-visual-keys'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -15,6 +17,7 @@ export interface LootboxCardData {
 
 interface LootboxCardProps {
   item:        LootboxCardData
+  visual?:     ItemVisualData | null  // opcional
   onOpen?:     (lootboxType: string, qty: number) => void
   opening?:    boolean
   onDestroy?:  (id: string) => void
@@ -65,11 +68,18 @@ function crateRarity(t: string): string | null {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function LootboxCard({ item, onOpen, opening, onDestroy, selectMode, selected, onToggle, onEdit }: LootboxCardProps) {
+export function LootboxCard({ item, visual, onOpen, opening, onDestroy, selectMode, selected, onToggle, onEdit }: LootboxCardProps) {
   const [qty, setQty] = useState(1)
 
   return (
     <div className="border border-purple-700/30 rounded-xl p-3 bg-[#0d0d15]">
+      {/* Ícone da crate — centralizado quando presente */}
+      {visual?.imageUrl && (
+        <div className="flex justify-center mb-2">
+          <ItemSprite visual={visual} size={56} alt={item.lootboxType} />
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex justify-between items-start mb-1">
         <div className="flex items-center gap-1.5">

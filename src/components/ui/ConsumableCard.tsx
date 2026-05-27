@@ -1,6 +1,8 @@
 'use client'
 
 import { ActionButton } from '@/components/ui/ActionButton'
+import { ItemSprite }   from '@/components/ui/ItemSprite'
+import type { ItemVisualData } from '@/lib/item-visual-keys'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -13,6 +15,7 @@ export interface ConsumableCardData {
 
 interface ConsumableCardProps {
   item:        ConsumableCardData
+  visual?:     ItemVisualData | null   // opcional — vem do useItemVisuals()
   onUse?:      (item: ConsumableCardData) => void
   onDestroy?:  (id: string) => void
   selectMode?: boolean
@@ -37,7 +40,7 @@ function typeIcon(type: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function ConsumableCard({ item, onUse, onDestroy, selectMode, selected, onToggle, onEdit }: ConsumableCardProps) {
+export function ConsumableCard({ item, visual, onUse, onDestroy, selectMode, selected, onToggle, onEdit }: ConsumableCardProps) {
   return (
     <div className="border border-gray-700/50 rounded-xl p-3 bg-[#0d0d15]">
       {/* Header */}
@@ -57,7 +60,12 @@ export function ConsumableCard({ item, onUse, onDestroy, selectMode, selected, o
               )}
             </button>
           )}
-          <span className="text-gray-400 text-xs">{typeIcon(item.consumableType)}</span>
+          {/* Ícone: imagem configurada ou emoji fallback */}
+          <ItemSprite
+            visual={visual}
+            size={28}
+            fallback={<span className="text-gray-400 text-xs">{typeIcon(item.consumableType)}</span>}
+          />
         </div>
         <span className="text-white text-sm font-bold">×{item.quantity}</span>
       </div>

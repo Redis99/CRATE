@@ -1,6 +1,8 @@
 'use client'
 
 import { RARITY_BORDER_COLOR, RARITY_LABEL, type Rarity } from '@/lib/rarity'
+import { ItemSprite } from '@/components/ui/ItemSprite'
+import type { ItemVisualData } from '@/lib/item-visual-keys'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -14,6 +16,7 @@ export interface PartCardData {
 
 interface PartCardProps {
   part:         PartCardData
+  visual?:      ItemVisualData | null  // opcional
   // Inventory actions (optional — admin panel won't need these)
   onDestroy?:   (id: string) => void
   selectMode?:  boolean
@@ -35,12 +38,19 @@ const RARITY_TEXT: Record<string, string> = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function PartCard({ part, onDestroy, selectMode, selected, onToggle, onEdit }: PartCardProps) {
+export function PartCard({ part, visual, onDestroy, selectMode, selected, onToggle, onEdit }: PartCardProps) {
   const borderClass = RARITY_BORDER_COLOR[part.rarity] ?? 'border-gray-700/50'
   const textClass   = RARITY_TEXT[part.rarity]        ?? 'text-gray-400'
 
   return (
     <div className={`border rounded-xl p-3 bg-[#0d0d15] ${borderClass}`}>
+      {/* Ícone do item — centralizado quando presente */}
+      {visual?.imageUrl && (
+        <div className="flex justify-center mb-2">
+          <ItemSprite visual={visual} size={48} alt={part.partType} />
+        </div>
+      )}
+
       {/* Header: rarity label + checkbox + quantity */}
       <div className="flex items-start justify-between mb-1">
         <div className="flex items-center gap-1.5">
