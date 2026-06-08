@@ -14,6 +14,8 @@ import type { RobotCardData } from '@/components/game/RobotCard'
 import type { EquipmentCardData } from '@/components/game/EquipmentCard'
 import { BASE_SLOT_LABELS } from '@/lib/game-constants'
 import { ActionButton } from '@/components/ui/ActionButton'
+import { useItemVisuals } from '@/hooks/useItemVisuals'
+import { robotKey } from '@/lib/item-visual-keys'
 
 interface BaseUpgradeSlot extends EquipmentCardData {
   appliedSlot: number | null
@@ -26,6 +28,7 @@ interface OutpostData {
 }
 
 export function OutpostManager() {
+  const { getVisual } = useItemVisuals()
   const [data, setData]               = useState<OutpostData | null>(null)
   const [loading, setLoading]         = useState(true)
   const [selectedRobot, setSelectedRobot]     = useState<RobotCardData | null>(null)
@@ -168,6 +171,7 @@ export function OutpostManager() {
                   <RobotCard
                     robot={robot}
                     variant="outpost"
+                    visual={getVisual('robot', robotKey(robot.collection), robot.rarity)}
                     slotNumber={slot}
                     actions={
                       <ActionButton
@@ -234,7 +238,7 @@ export function OutpostManager() {
                     : isEmpty    ? 'border-red-900/40 bg-red-900/5 opacity-60'
                     : `${RARITY_CARD_COLOR[robot.rarity]} border`
                   }`}>
-                  <RobotCard robot={robot} variant="mini" />
+                  <RobotCard robot={robot} variant="mini" visual={getVisual('robot', robotKey(robot.collection), robot.rarity)} />
 
                   {/* Botões de ação */}
                   <div className="mt-2 flex gap-1.5">

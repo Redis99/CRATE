@@ -3,9 +3,11 @@
 import { RarityBadge } from '@/components/ui/RarityBadge'
 import { DurabilityBar } from '@/components/ui/DurabilityBar'
 import { CategoryTag } from '@/components/game/CategoryTag'
+import { RobotSprite, type RobotState } from '@/components/ui/RobotSprite'
 import { effectiveERWithEquipment, effectivePDWithEquipment, effectiveER, durabilityPct } from '@/lib/game-math'
 import { effectLabel } from '@/lib/effect-label'
 import type { Rarity } from '@/lib/rarity'
+import type { ItemVisualData } from '@/lib/item-visual-keys'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,6 +55,8 @@ interface RobotCardProps {
   onToggleSelect?: (id: string) => void
   actions?: React.ReactNode
   onUnequip?: (equipmentId: string) => void
+  /** Visual do robô (sprite). Ausente → placeholder genérico do RobotSprite. */
+  visual?: ItemVisualData | null
 }
 
 const MAX_EQUIPMENT_SLOTS = 3
@@ -66,6 +70,7 @@ export function RobotCard({
   onToggleSelect,
   actions,
   onUnequip,
+  visual,
 }: RobotCardProps) {
   const equips      = robot.equipments?.map((e) => e.equipment) ?? []
   const boostedER   = effectiveERWithEquipment(robot.hashPower, equips)
@@ -91,13 +96,17 @@ export function RobotCard({
   const pct = durabilityPct(robot.durability, maxDur)
   const energyColor = pct > 50 ? 'text-green-400' : pct > 20 ? 'text-yellow-400' : 'text-red-400'
 
+  // Estado do sprite: ativo (minerando) > crítico (bateria baixa) > idle
+  const spriteState: RobotState = robot.isActive ? 'active' : pct <= 20 ? 'low' : 'idle'
+
   const usedSlots = robot.equipments?.length ?? 0
   const freeSlots = MAX_EQUIPMENT_SLOTS - usedSlots
 
   // ─── Mini (dashboard) ────────────────────────────────────────────────────
   if (variant === 'mini') {
     return (
-      <div className="flex items-center justify-between bg-[#0d0d15] rounded-lg p-3">
+      <div className="flex items-center justify-between bg-[#0d0d15] rounded-lg p-3 gap-3">
+        <RobotSprite visual={visual} state={spriteState} size={44} className="shrink-0" alt={robot.name} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-white text-sm font-medium truncate">{robot.name}</span>
@@ -122,8 +131,13 @@ export function RobotCard({
   if (variant === 'outpost') {
     return (
       <div>
-        <p className="text-white text-sm font-semibold truncate">{robot.name}</p>
-        <p className="text-gray-500 text-xs truncate mb-2">{robot.collection}</p>
+        <div className="flex items-center gap-2 mb-2">
+          <RobotSprite visual={visual} state={spriteState} size={40} className="shrink-0" alt={robot.name} />
+          <div className="min-w-0">
+            <p className="text-white text-sm font-semibold truncate">{robot.name}</p>
+            <p className="text-gray-500 text-xs truncate">{robot.collection}</p>
+          </div>
+        </div>
 
         <div className="space-y-1 mb-2">
           <div className="flex items-center gap-1.5 text-xs">
@@ -200,8 +214,13 @@ export function RobotCard({
         {!selectMode && actions && <div className="flex items-center">{actions}</div>}
       </div>
 
-      <p className="text-white text-sm font-semibold mt-1 truncate">{robot.name}</p>
-      <p className="text-gray-500 text-xs truncate">{robot.collection}</p>
+      <div className="flex items-center gap-2.5 mt-1">
+        <RobotSprite visual={visual} state={spriteState} size={52} className="shrink-0" alt={robot.name} />
+        <div className="min-w-0">
+          <p className="text-white text-sm font-semibold truncate">{robot.name}</p>
+          <p className="text-gray-500 text-xs truncate">{robot.collection}</p>
+        </div>
+      </div>
 
       <div className="mt-2 mb-1 space-y-1.5">
         <div className="flex items-center gap-1.5 text-xs">

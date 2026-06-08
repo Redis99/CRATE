@@ -73,12 +73,15 @@ export function LootboxCard({ item, visual, onOpen, opening, onDestroy, selectMo
 
   return (
     <div className="border border-purple-700/30 rounded-xl p-3 bg-[#0d0d15]">
-      {/* Ícone da crate — centralizado quando presente */}
-      {visual?.imageUrl && (
-        <div className="flex justify-center mb-2">
-          <ItemSprite visual={visual} size={56} alt={item.lootboxType} />
-        </div>
-      )}
+      {/* Ícone da crate — sempre presente (ItemSprite cai no placeholder genérico se não houver imagem) */}
+      <div className="flex justify-center mb-2">
+        <ItemSprite
+          visual={visual}
+          size={56}
+          alt={item.lootboxType}
+          fallback={<span className="text-2xl">📦</span>}
+        />
+      </div>
 
       {/* Header */}
       <div className="flex justify-between items-start mb-1">

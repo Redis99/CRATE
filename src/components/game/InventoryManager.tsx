@@ -15,6 +15,11 @@ import type { RobotCardData } from '@/components/game/RobotCard'
 import { PartCard } from '@/components/ui/PartCard'
 import { ConsumableCard } from '@/components/ui/ConsumableCard'
 import { LootboxCard } from '@/components/ui/LootboxCard'
+import { useItemVisuals } from '@/hooks/useItemVisuals'
+import { consumableKey, robotKey, type ItemVisualData } from '@/lib/item-visual-keys'
+
+// Função de lookup de visual injetada nas tabs
+type GetVisual = (category: Parameters<ReturnType<typeof useItemVisuals>['getVisual']>[0], key: string, rarity?: string | null) => ItemVisualData | null
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -453,10 +458,11 @@ function SelectCheckbox({ id, selected, onToggle }: { id: string; selected: Set<
   )
 }
 
-function RobotsTab({ robots, onDestroy, onUnequip, selectMode, selected, onToggleSelect }: {
+function RobotsTab({ robots, onDestroy, onUnequip, getVisual, selectMode, selected, onToggleSelect }: {
   robots: Robot[]
   onDestroy: (id: string, type: ItemType) => void
   onUnequip: (equipmentId: string) => void
+  getVisual: GetVisual
 } & SelectProps) {
   if (!robots.length) return <EmptyTab message="No robots in inventory. Open lootboxes or visit the Shop." />
 
@@ -467,6 +473,7 @@ function RobotsTab({ robots, onDestroy, onUnequip, selectMode, selected, onToggl
           <RobotCard
             robot={r}
             variant="full"
+            visual={getVisual('robot', robotKey(r.collection), r.rarity)}
             selectMode={selectMode}
             selected={selected?.has(r.id)}
             onToggleSelect={onToggleSelect}
@@ -605,7 +612,7 @@ function BaseUpgradesTab({ items, onDestroy, onApply, onRemove, selectMode, sele
   )
 }
 
-function PartsTab({ items, onDestroy, selectMode, selected, onToggleSelect }: { items: Part[]; onDestroy: (id: string, type: ItemType) => void } & SelectProps) {
+function PartsTab({ items, onDestroy, getVisual, selectMode, selected, onToggleSelect }: { items: Part[]; onDestroy: (id: string, type: ItemType) => void; getVisual: GetVisual } & SelectProps) {
   if (!items.length) return <EmptyTab message="No crafting parts in inventory. Open Parts Crates to get parts." />
   return (
     <div className="grid grid-cols-3 gap-3">
@@ -613,6 +620,7 @@ function PartsTab({ items, onDestroy, selectMode, selected, onToggleSelect }: { 
         <PartCard
           key={p.id}
           part={p}
+          visual={getVisual('part', p.partType, p.rarity) ?? getVisual('part', p.category, p.rarity)}
           onDestroy={(id) => onDestroy(id, 'part')}
           selectMode={selectMode}
           selected={selected?.has(p.id)}
@@ -623,10 +631,11 @@ function PartsTab({ items, onDestroy, selectMode, selected, onToggleSelect }: { 
   )
 }
 
-function ConsumablesTab({ items, onDestroy, onUse, selectMode, selected, onToggleSelect }: {
+function ConsumablesTab({ items, onDestroy, onUse, getVisual, selectMode, selected, onToggleSelect }: {
   items: Consumable[]
   onDestroy: (id: string, type: ItemType) => void
   onUse: (item: Consumable) => void
+  getVisual: GetVisual
 } & SelectProps) {
   if (!items.length) return <EmptyTab message="No consumables in inventory." />
   return (
@@ -635,6 +644,7 @@ function ConsumablesTab({ items, onDestroy, onUse, selectMode, selected, onToggl
         <ConsumableCard
           key={c.id}
           item={c}
+          visual={getVisual('consumable', consumableKey(c.consumableType, c.value))}
           onUse={onUse}
           onDestroy={(id) => onDestroy(id, 'consumable')}
           selectMode={selectMode}
@@ -646,9 +656,10 @@ function ConsumablesTab({ items, onDestroy, onUse, selectMode, selected, onToggl
   )
 }
 
-function LootboxesTab({ items, onDestroy, onOpen, opening, selectMode, selected, onToggleSelect }: {
+function LootboxesTab({ items, onDestroy, onOpen, opening, getVisual, selectMode, selected, onToggleSelect }: {
   items: Lootbox[]; onDestroy: (id: string, type: ItemType) => void
   onOpen: (lootboxType: string, qty: number) => void; opening: boolean
+  getVisual: GetVisual
 } & SelectProps) {
   if (!items.length) return <EmptyTab message="No lootboxes in inventory. Purchase them in the Shop." />
   return (
@@ -657,6 +668,7 @@ function LootboxesTab({ items, onDestroy, onOpen, opening, selectMode, selected,
         <LootboxCard
           key={lb.id}
           item={lb}
+          visual={getVisual('lootbox', lb.lootboxType)}
           onOpen={onOpen}
           opening={opening}
           onDestroy={(id) => onDestroy(id, 'lootbox')}
@@ -672,6 +684,7 @@ function LootboxesTab({ items, onDestroy, onOpen, opening, selectMode, selected,
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function InventoryManager() {
+  const { getVisual } = useItemVisuals()
   const [data, setData]           = useState<InventoryData | null>(null)
   const [loading, setLoading]     = useState(true)
   const [activeTab, setActiveTab] = useState<Tab>('robots')
@@ -996,12 +1009,12 @@ export function InventoryManager() {
 
         const selProps = { selectMode, selected, onToggleSelect: toggleSelect }
 
-        if (activeTab === 'robots')       return <RobotsTab       robots={robots}       onDestroy={handleDestroy} onUnequip={handleUnequip} {...selProps} />
+        if (activeTab === 'robots')       return <RobotsTab       robots={robots}       onDestroy={handleDestroy} onUnequip={handleUnequip} getVisual={getVisual} {...selProps} />
         if (activeTab === 'equipments')   return <EquipmentsTab   items={equipments}    onDestroy={handleDestroy} onEquip={setEquipTarget}   {...selProps} />
         if (activeTab === 'baseUpgrades') return <BaseUpgradesTab items={baseUpgrades}  onDestroy={handleDestroy} onApply={setApplyTarget} onRemove={handleRemoveUpgrade} {...selProps} />
-        if (activeTab === 'parts')        return <PartsTab        items={parts}         onDestroy={handleDestroy} {...selProps} />
-        if (activeTab === 'consumables')  return <ConsumablesTab  items={consumables}   onDestroy={handleDestroy} onUse={setRepairTarget} {...selProps} />
-        if (activeTab === 'lootboxes')    return <LootboxesTab    items={lootboxes}     onDestroy={handleDestroy} onOpen={handleOpen} opening={opening} {...selProps} />
+        if (activeTab === 'parts')        return <PartsTab        items={parts}         onDestroy={handleDestroy} getVisual={getVisual} {...selProps} />
+        if (activeTab === 'consumables')  return <ConsumablesTab  items={consumables}   onDestroy={handleDestroy} onUse={setRepairTarget} getVisual={getVisual} {...selProps} />
+        if (activeTab === 'lootboxes')    return <LootboxesTab    items={lootboxes}     onDestroy={handleDestroy} onOpen={handleOpen} opening={opening} getVisual={getVisual} {...selProps} />
       })()}
     </div>
   )

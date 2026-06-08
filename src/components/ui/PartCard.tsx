@@ -44,12 +44,15 @@ export function PartCard({ part, visual, onDestroy, selectMode, selected, onTogg
 
   return (
     <div className={`border rounded-xl p-3 bg-[#0d0d15] ${borderClass}`}>
-      {/* Ícone do item — centralizado quando presente */}
-      {visual?.imageUrl && (
-        <div className="flex justify-center mb-2">
-          <ItemSprite visual={visual} size={48} alt={part.partType} />
-        </div>
-      )}
+      {/* Ícone do item — sempre presente (ItemSprite cai no placeholder genérico se não houver imagem) */}
+      <div className="flex justify-center mb-2">
+        <ItemSprite
+          visual={visual}
+          size={48}
+          alt={part.partType}
+          fallback={<span className="text-xl">🔩</span>}
+        />
+      </div>
 
       {/* Header: rarity label + checkbox + quantity */}
       <div className="flex items-start justify-between mb-1">
