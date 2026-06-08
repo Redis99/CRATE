@@ -44,28 +44,28 @@ const ROADMAP_PHASES = [
   {
     phase: '01',
     title: 'Foundation',
-    period: 'Completed',
+    period: 'May – Jul 2026',
     items: ['Authentication & custodial wallets', 'SOL deposits with auto sweep', 'Landing page'],
     status: 'done' as const,
   },
   {
     phase: '02',
     title: 'Core Gameplay',
-    period: 'Completed',
+    period: 'Aug – Oct 2026',
     items: ['Outpost & robot management', 'Idle mining with 15-min blocks', 'Inventory & lootboxes'],
     status: 'done' as const,
   },
   {
     phase: '03',
     title: 'Economy',
-    period: 'Completed',
+    period: 'Oct – Nov 2026',
     items: ['In-game shop & crafting', 'P2P marketplace (5% fee → pool)', 'SOL → $CRATE conversion'],
     status: 'done' as const,
   },
   {
     phase: '04',
     title: 'Content',
-    period: 'Completed',
+    period: 'Nov 2026',
     items: ['5 minigames with ER boosts', 'Codex trophy system', 'Missions & seasonal events'],
     status: 'done' as const,
   },
@@ -113,6 +113,14 @@ function XIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
       <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  )
+}
+
+function TelegramIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.479.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
     </svg>
   )
 }
@@ -188,15 +196,26 @@ export default function LandingPage() {
             </Link>
           </div>
 
-          <a
-            href="https://x.com/insidecrate"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-300 text-sm transition-colors"
-          >
-            <XIcon />
-            Follow @insidecrate
-          </a>
+          <div className="flex items-center justify-center gap-6">
+            <a
+              href="https://x.com/insidecrate"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-300 text-sm transition-colors"
+            >
+              <XIcon />
+              Follow @insidecrate
+            </a>
+            <a
+              href="http://t.me/insideCrate"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-gray-500 hover:text-[#229ED9] text-sm transition-colors"
+            >
+              <TelegramIcon />
+              Join Telegram
+            </a>
+          </div>
         </div>
       </section>
 
@@ -556,6 +575,14 @@ export default function LandingPage() {
               className="hover:text-gray-400 transition-colors flex items-center gap-1.5"
             >
               <XIcon /> @insidecrate
+            </a>
+            <a
+              href="http://t.me/insideCrate"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-gray-400 transition-colors flex items-center gap-1.5"
+            >
+              <TelegramIcon /> Telegram
             </a>
             <a href="#legal" className="hover:text-gray-400 transition-colors">Legal</a>
             <a href="#faq" className="hover:text-gray-400 transition-colors">FAQ</a>
