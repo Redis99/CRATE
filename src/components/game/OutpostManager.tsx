@@ -132,6 +132,7 @@ export function OutpostManager() {
                 variant="base"
                 slot={slot}
                 slotLabel={BASE_SLOT_LABELS[slot]}
+                visual={getVisual('baseUpgrade', upgrade.effectType, upgrade.rarity as string)}
               />
             ) : (
               <EmptyEquipmentSlot

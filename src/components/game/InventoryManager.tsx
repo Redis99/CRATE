@@ -15,6 +15,7 @@ import type { RobotCardData } from '@/components/game/RobotCard'
 import { PartCard } from '@/components/ui/PartCard'
 import { ConsumableCard } from '@/components/ui/ConsumableCard'
 import { LootboxCard } from '@/components/ui/LootboxCard'
+import { ItemSprite } from '@/components/ui/ItemSprite'
 import { useItemVisuals } from '@/hooks/useItemVisuals'
 import { consumableKey, robotKey, type ItemVisualData } from '@/lib/item-visual-keys'
 
@@ -490,10 +491,11 @@ function RobotsTab({ robots, onDestroy, onUnequip, getVisual, selectMode, select
   )
 }
 
-function EquipmentsTab({ items, onDestroy, onEquip, selectMode, selected, onToggleSelect }: {
+function EquipmentsTab({ items, onDestroy, onEquip, getVisual, selectMode, selected, onToggleSelect }: {
   items: Equipment[]
   onDestroy: (id: string, type: ItemType) => void
   onEquip: (item: Equipment) => void
+  getVisual: GetVisual
 } & SelectProps) {
   if (!items.length) return <EmptyTab message="No equipment in inventory." />
   return (
@@ -520,7 +522,11 @@ function EquipmentsTab({ items, onDestroy, onEquip, selectMode, selected, onTogg
                 </span>
               )}
             </div>
-            <p className="text-white text-sm font-semibold truncate">{e.name}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <ItemSprite visual={getVisual('equipment', e.effectType, e.rarity)} size={36} alt={e.name}
+                className="shrink-0" fallback={<span className="text-lg">⚙️</span>} />
+              <p className="text-white text-sm font-semibold truncate flex-1">{e.name}</p>
+            </div>
             {equippedOn && (
               <p className="text-blue-400/60 text-xs truncate mt-0.5">on {equippedOn}</p>
             )}
@@ -542,11 +548,12 @@ function EquipmentsTab({ items, onDestroy, onEquip, selectMode, selected, onTogg
   )
 }
 
-function BaseUpgradesTab({ items, onDestroy, onApply, onRemove, selectMode, selected, onToggleSelect }: {
+function BaseUpgradesTab({ items, onDestroy, onApply, onRemove, getVisual, selectMode, selected, onToggleSelect }: {
   items: BaseUpgrade[]
   onDestroy: (id: string, type: ItemType) => void
   onApply: (item: BaseUpgrade) => void
   onRemove: (id: string) => void
+  getVisual: GetVisual
 } & SelectProps) {
   if (!items.length) return <EmptyTab message="No base upgrades in inventory." />
 
@@ -594,7 +601,11 @@ function BaseUpgradesTab({ items, onDestroy, onApply, onRemove, selectMode, sele
               <div className="flex items-center gap-2 mt-2 mb-1">
                 <CategoryTag effectType={b.effectType} />
               </div>
-              <p className="text-white text-sm font-semibold truncate">{b.name}</p>
+              <div className="flex items-center gap-2">
+                <ItemSprite visual={getVisual('baseUpgrade', b.effectType, b.rarity)} size={36} alt={b.name}
+                  className="shrink-0" fallback={<span className="text-lg">🏗️</span>} />
+                <p className="text-white text-sm font-semibold truncate flex-1">{b.name}</p>
+              </div>
               <p className="text-gray-500 text-xs mt-0.5 mb-3">
                 {EFFECT_LABEL[b.effectType]}{b.effectValue}{b.effectType.includes('PCT') ? '%' : ''}
               </p>
@@ -1010,8 +1021,8 @@ export function InventoryManager() {
         const selProps = { selectMode, selected, onToggleSelect: toggleSelect }
 
         if (activeTab === 'robots')       return <RobotsTab       robots={robots}       onDestroy={handleDestroy} onUnequip={handleUnequip} getVisual={getVisual} {...selProps} />
-        if (activeTab === 'equipments')   return <EquipmentsTab   items={equipments}    onDestroy={handleDestroy} onEquip={setEquipTarget}   {...selProps} />
-        if (activeTab === 'baseUpgrades') return <BaseUpgradesTab items={baseUpgrades}  onDestroy={handleDestroy} onApply={setApplyTarget} onRemove={handleRemoveUpgrade} {...selProps} />
+        if (activeTab === 'equipments')   return <EquipmentsTab   items={equipments}    onDestroy={handleDestroy} onEquip={setEquipTarget}   getVisual={getVisual} {...selProps} />
+        if (activeTab === 'baseUpgrades') return <BaseUpgradesTab items={baseUpgrades}  onDestroy={handleDestroy} onApply={setApplyTarget} onRemove={handleRemoveUpgrade} getVisual={getVisual} {...selProps} />
         if (activeTab === 'parts')        return <PartsTab        items={parts}         onDestroy={handleDestroy} getVisual={getVisual} {...selProps} />
         if (activeTab === 'consumables')  return <ConsumablesTab  items={consumables}   onDestroy={handleDestroy} onUse={setRepairTarget} getVisual={getVisual} {...selProps} />
         if (activeTab === 'lootboxes')    return <LootboxesTab    items={lootboxes}     onDestroy={handleDestroy} onOpen={handleOpen} opening={opening} getVisual={getVisual} {...selProps} />

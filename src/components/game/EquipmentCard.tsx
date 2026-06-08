@@ -1,6 +1,8 @@
 import { RarityBadge } from '@/components/ui/RarityBadge'
 import { CategoryTag } from '@/components/game/CategoryTag'
+import { ItemSprite } from '@/components/ui/ItemSprite'
 import type { Rarity } from '@/lib/rarity'
+import type { ItemVisualData } from '@/lib/item-visual-keys'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -28,6 +30,8 @@ interface EquipmentCardProps {
   slotLabel?: string
   // Ações opcionais no rodapé
   actions?: React.ReactNode
+  /** Visual do equipamento. Ausente → ItemSprite cai no DefaultIcon genérico. */
+  visual?: ItemVisualData | null
 }
 
 // ─── Formatação de efeito ─────────────────────────────────────────────────────
@@ -69,8 +73,8 @@ function MiniEquipmentCard({ item, actions }: { item: EquipmentCardData; actions
 
 // ─── Variante base slot ───────────────────────────────────────────────────────
 
-function BaseEquipmentCard({ item, slot, slotLabel, actions }: {
-  item: EquipmentCardData; slot?: number; slotLabel?: string; actions?: React.ReactNode
+function BaseEquipmentCard({ item, slot, slotLabel, actions, visual }: {
+  item: EquipmentCardData; slot?: number; slotLabel?: string; actions?: React.ReactNode; visual?: ItemVisualData | null
 }) {
   return (
     <div className="border border-green-700/30 bg-green-500/5 rounded-xl p-3">
@@ -80,6 +84,8 @@ function BaseEquipmentCard({ item, slot, slotLabel, actions }: {
         </p>
       )}
       <div className="flex items-start justify-between gap-2">
+        <ItemSprite visual={visual} size={40} alt={item.name} className="shrink-0 mt-0.5"
+          fallback={<span className="text-xl">🏗️</span>} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-1 flex-wrap">
             <CategoryTag effectType={item.effectType} />
@@ -103,7 +109,7 @@ function BaseEquipmentCard({ item, slot, slotLabel, actions }: {
 
 // ─── Variante robot equipment (card padrão) ───────────────────────────────────
 
-function RobotEquipmentCard({ item, actions }: { item: EquipmentCardData; actions?: React.ReactNode }) {
+function RobotEquipmentCard({ item, actions, visual }: { item: EquipmentCardData; actions?: React.ReactNode; visual?: ItemVisualData | null }) {
   return (
     <div className="border border-gray-700/50 rounded-xl p-3 bg-[#0d0d15]">
       <div className="flex items-start justify-between mb-1.5">
@@ -114,6 +120,10 @@ function RobotEquipmentCard({ item, actions }: { item: EquipmentCardData; action
         </div>
         {actions && <div className="shrink-0 ml-1">{actions}</div>}
       </div>
+      <div className="flex items-center gap-2">
+        <ItemSprite visual={visual} size={36} alt={item.name} className="shrink-0"
+          fallback={<span className="text-lg">⚙️</span>} />
+        <div className="min-w-0 flex-1">
       <p className="text-white text-sm font-medium truncate">{item.name}</p>
       <p className="text-gray-500 text-xs mt-0.5">
         {formatEffect(item.effectType, item.effectValue)}
@@ -122,16 +132,18 @@ function RobotEquipmentCard({ item, actions }: { item: EquipmentCardData; action
           : ''}
         {item.isPermanent === false && <span className="text-gray-700 ml-1">(temporary)</span>}
       </p>
+        </div>
+      </div>
     </div>
   )
 }
 
 // ─── Export principal ─────────────────────────────────────────────────────────
 
-export function EquipmentCard({ item, variant = 'robot', slot, slotLabel, actions }: EquipmentCardProps) {
+export function EquipmentCard({ item, variant = 'robot', slot, slotLabel, actions, visual }: EquipmentCardProps) {
   if (variant === 'mini') return <MiniEquipmentCard item={item} actions={actions} />
-  if (variant === 'base') return <BaseEquipmentCard item={item} slot={slot} slotLabel={slotLabel} actions={actions} />
-  return <RobotEquipmentCard item={item} actions={actions} />
+  if (variant === 'base') return <BaseEquipmentCard item={item} slot={slot} slotLabel={slotLabel} actions={actions} visual={visual} />
+  return <RobotEquipmentCard item={item} actions={actions} visual={visual} />
 }
 
 // ─── Empty slot placeholder ───────────────────────────────────────────────────
