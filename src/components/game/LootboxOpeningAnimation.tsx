@@ -179,8 +179,21 @@ type Phase = 'falling' | 'waiting' | 'opening' | 'bursting' | 'done'
 interface LootboxOpeningAnimationProps {
   drops:     DropResultType[] | null
   onReveal:  (drops: DropResultType[]) => void
-  /** Key from CRATE_TEMPLATES — defaults to 'default' */
+  /** Key from CRATE_TEMPLATES — defaults to 'default' (used when no webpUrl is set) */
   template?: string
+  /**
+   * Admin-uploaded WebP/GIF of the crate falling + opening (LootboxConfig.openingWebpUrl).
+   * When present, the engine plays this clip instead of the built-in SVG crate and
+   * times the rarity glow/burst to it. When absent (null/undefined), the engine
+   * falls back to the universal built-in animation — no asset required.
+   */
+  webpUrl?:   string | null
+  /**
+   * Moment (ms from clip start) at which the crate visually opens in the WebP —
+   * the rarity-colored glow burst is synced to fire at max(revealMs, API response time).
+   * Maps to LootboxConfig.openingRevealMs. Ignored in fallback (SVG) mode.
+   */
+  revealMs?:  number
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -191,29 +204,37 @@ export function LootboxOpeningAnimation({
   drops,
   onReveal,
   template = 'default',
+  webpUrl  = null,
+  revealMs = 900,
 }: LootboxOpeningAnimationProps) {
-  const [phase, setPhase]           = useState<Phase>('falling')
+  const usingWebp = !!webpUrl
+
+  const [phase, setPhase]           = useState<Phase>(usingWebp ? 'waiting' : 'falling')
   const [particles, setParticles]   = useState<Particle[]>([])
   const [glowOpacity, setGlowOpacity] = useState(0)
 
   const onRevealRef    = useRef(onReveal)
   onRevealRef.current  = onReveal
+  const dropsRef       = useRef(drops)
+  dropsRef.current     = drops
   const openingStarted = useRef(false)
   const timeoutsRef    = useRef<ReturnType<typeof setTimeout>[]>([])
 
-  // Resolve template
+  // Resolve template (only relevant for the built-in/fallback engine)
   const tpl = CRATE_TEMPLATES[template] ?? CRATE_TEMPLATES.default
   const { width, height, lidHeight } = tpl
   const bodyHeight = height - lidHeight
 
-  // Phase 1: fall → waiting
+  // ─── SVG fallback engine: phase 1 — fall → waiting ───────────────────────────
   useEffect(() => {
+    if (usingWebp) return
     const t = setTimeout(() => setPhase('waiting'), 700)
     return () => clearTimeout(t)
-  }, [])
+  }, [usingWebp])
 
-  // Phase 2+: trigger opening when drops arrive
+  // ─── SVG fallback engine: phase 2+ — trigger opening when drops arrive ───────
   useEffect(() => {
+    if (usingWebp)              return
     if (drops === null)         return
     if (phase === 'falling')    return
     if (phase !== 'waiting')    return
@@ -238,7 +259,40 @@ export function LootboxOpeningAnimation({
     }, 1300)
 
     timeoutsRef.current.push(t1, t2)
-  }, [drops, phase])
+  }, [usingWebp, drops, phase])
+
+  // ─── WebP engine: glow burst synced to the clip's opening moment ─────────────
+  // Fires at max(revealMs, time the API drops actually arrive) — the clip plays
+  // on its own, we just time the colored overlay/reveal to it.
+  useEffect(() => {
+    if (!usingWebp)             return
+    if (openingStarted.current) return
+    openingStarted.current = true
+
+    const fireBurst = () => {
+      const d = dropsRef.current
+      if (!d) {
+        // API hasn't responded yet — keep waiting briefly without delaying past it
+        const poll = setTimeout(fireBurst, 80)
+        timeoutsRef.current.push(poll)
+        return
+      }
+      const bestRarity = getBestRarity(d)
+      const colors     = RARITY_ANIM_COLORS[bestRarity] ?? RARITY_ANIM_COLORS.COMMON
+      setParticles(generateParticles(colors.particle))
+      setGlowOpacity(1)
+      setPhase('bursting')
+
+      const t2 = setTimeout(() => {
+        setPhase('done')
+        onRevealRef.current(d)
+      }, 650)
+      timeoutsRef.current.push(t2)
+    }
+
+    const t1 = setTimeout(fireBurst, Math.max(0, revealMs))
+    timeoutsRef.current.push(t1)
+  }, [usingWebp, revealMs])
 
   useEffect(() => {
     return () => { timeoutsRef.current.forEach(clearTimeout) }
@@ -248,9 +302,9 @@ export function LootboxOpeningAnimation({
   const bestRarity  = drops ? getBestRarity(drops) : 'COMMON'
   const colors      = RARITY_ANIM_COLORS[bestRarity] ?? RARITY_ANIM_COLORS.COMMON
   const isSpecial   = bestRarity === 'LEGENDARY' || bestRarity === 'EPIC'
-  const lidOpen     = phase === 'opening' || phase === 'bursting' || phase === 'done'
-  const beamVisible = phase === 'opening' || phase === 'bursting'
-  const innerGlowing = phase === 'waiting' || phase === 'opening'
+  const lidOpen     = !usingWebp && (phase === 'opening' || phase === 'bursting' || phase === 'done')
+  const beamVisible = phase === 'bursting' || (!usingWebp && phase === 'opening')
+  const innerGlowing = !usingWebp && (phase === 'waiting' || phase === 'opening')
   const burst        = phase === 'bursting'
 
   const templateProps: CrateTemplateProps = {
@@ -344,8 +398,11 @@ export function LootboxOpeningAnimation({
         {/* ── Crate group ───────────────────────── */}
         <div style={{
           position: 'relative',
-          width, height,
-          animation: phase === 'falling'
+          width:  usingWebp ? 240 : width,
+          height: usingWebp ? 240 : height,
+          animation: usingWebp
+            ? undefined // the clip itself carries the fall/open motion
+            : phase === 'falling'
             ? '_crateFall 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards'
             : phase === 'waiting'
             ? '_floatCrate 2.5s ease-in-out infinite'
@@ -395,49 +452,71 @@ export function LootboxOpeningAnimation({
             </>
           )}
 
-          {/* ── Lid ──────────────────────────────── */}
-          <div style={{
-            position:        'absolute',
-            top: 0, left: 0, right: 0,
-            height:          lidHeight,
-            transformOrigin: 'bottom center',
-            perspective:     500,
-            zIndex:          3,
-            animation: lidOpen
-              ? '_lidFly 0.55s cubic-bezier(0.4, 0, 0.2, 1) forwards'
-              : undefined,
-          }}>
-            {tpl.renderLid(templateProps)}
-          </div>
+          {usingWebp ? (
+            /* ── Admin-uploaded WebP/GIF clip ──────── */
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={webpUrl ?? undefined}
+              alt=""
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                display: 'block',
+                zIndex: 2,
+                filter: burst ? `drop-shadow(0 0 28px ${colors.glow}99)` : undefined,
+                transition: 'filter 0.4s ease-out',
+              }}
+            />
+          ) : (
+            <>
+              {/* ── Lid ──────────────────────────────── */}
+              <div style={{
+                position:        'absolute',
+                top: 0, left: 0, right: 0,
+                height:          lidHeight,
+                transformOrigin: 'bottom center',
+                perspective:     500,
+                zIndex:          3,
+                animation: lidOpen
+                  ? '_lidFly 0.55s cubic-bezier(0.4, 0, 0.2, 1) forwards'
+                  : undefined,
+              }}>
+                {tpl.renderLid(templateProps)}
+              </div>
 
-          {/* ── Body ─────────────────────────────── */}
-          <div style={{
-            position: 'absolute',
-            top:      lidHeight,
-            left: 0, right: 0, bottom: 0,
-            zIndex: 2,
-            animation: phase === 'waiting'
-              ? '_crateShake 0.75s ease-in-out infinite'
-              : undefined,
-          }}>
-            {/* Breathing inner glow at the opening */}
-            {innerGlowing && (
+              {/* ── Body ─────────────────────────────── */}
               <div style={{
                 position: 'absolute',
-                top: -2, left: 0, right: 0,
-                height:   Math.round(bodyHeight * 0.38),
-                background: `radial-gradient(ellipse 90% 60% at 50% 0%,
-                  ${colors.glow}80 0%,
-                  ${colors.glow}30 45%,
-                  transparent 100%)`,
-                animation: '_glowBreathe 1.5s ease-in-out infinite',
-                pointerEvents: 'none',
-                zIndex: 5,
-              }} />
-            )}
+                top:      lidHeight,
+                left: 0, right: 0, bottom: 0,
+                zIndex: 2,
+                animation: phase === 'waiting'
+                  ? '_crateShake 0.75s ease-in-out infinite'
+                  : undefined,
+              }}>
+                {/* Breathing inner glow at the opening */}
+                {innerGlowing && (
+                  <div style={{
+                    position: 'absolute',
+                    top: -2, left: 0, right: 0,
+                    height:   Math.round(bodyHeight * 0.38),
+                    background: `radial-gradient(ellipse 90% 60% at 50% 0%,
+                      ${colors.glow}80 0%,
+                      ${colors.glow}30 45%,
+                      transparent 100%)`,
+                    animation: '_glowBreathe 1.5s ease-in-out infinite',
+                    pointerEvents: 'none',
+                    zIndex: 5,
+                  }} />
+                )}
 
-            {tpl.renderBody(templateProps)}
-          </div>
+                {tpl.renderBody(templateProps)}
+              </div>
+            </>
+          )}
 
           {/* ── Particles ────────────────────────── */}
           {particles.map((p) => (

@@ -17,6 +17,8 @@ interface CrateInfo {
   weeklyLimit: number | null
   owned: number
   dropEntries: { label: string; chance: string }[]
+  openingWebpUrl: string | null
+  openingRevealMs: number
 }
 
 interface LootboxData {
@@ -204,6 +206,8 @@ export function LootboxManager() {
   // Animation state: true = show opening animation, pendingDrops = waiting for API
   const [animating, setAnimating]       = useState(false)
   const [pendingDrops, setPendingDrops] = useState<DropResultType[] | null>(null)
+  // Visuals of the crate currently being opened — drives which clip the engine plays
+  const [openingCrate, setOpeningCrate] = useState<{ webpUrl: string | null; revealMs: number } | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>('standard')
 
   const [buyQtys,  setBuyQtys]  = useState<Record<string, number>>({})
@@ -244,6 +248,14 @@ export function LootboxManager() {
   async function handleOpen(lootboxType: string, quantity: number) {
     setBusy(true); setError(''); setSuccess('')
 
+    // Resolve which clip the engine should play for this crate (admin-uploaded
+    // WebP if configured, otherwise null → universal built-in fallback animation)
+    const crate = data?.crates.find((c) => c.lootboxType === lootboxType)
+    setOpeningCrate({
+      webpUrl:  crate?.openingWebpUrl ?? null,
+      revealMs: crate?.openingRevealMs ?? 900,
+    })
+
     // Show opening animation immediately — API runs in parallel
     setAnimating(true)
     setPendingDrops(null)
@@ -258,6 +270,7 @@ export function LootboxManager() {
     if (!res.ok) {
       setAnimating(false)
       setPendingDrops(null)
+      setOpeningCrate(null)
       setError(json.error ?? 'Failed to open.')
       setBusy(false)
       return
@@ -272,6 +285,7 @@ export function LootboxManager() {
     } else {
       setAnimating(false)
       setPendingDrops(null)
+      setOpeningCrate(null)
       // stoppedEarly=true → inventory blocked the first drop
       // stoppedEarly=false here means something unexpected happened
       const msg = json.stoppedEarly
@@ -317,9 +331,12 @@ export function LootboxManager() {
       {animating && (
         <LootboxOpeningAnimation
           drops={pendingDrops}
+          webpUrl={openingCrate?.webpUrl ?? null}
+          revealMs={openingCrate?.revealMs ?? 900}
           onReveal={(revealedDrops) => {
             setAnimating(false)
             setPendingDrops(null)
+            setOpeningCrate(null)
             setDrops(revealedDrops)
           }}
         />

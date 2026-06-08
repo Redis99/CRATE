@@ -56,6 +56,10 @@ function buildStoragePath(
     case 'lootbox':
       return `sprites/lootboxes/${keySlug}.${ext}`
 
+    case 'lootbox-opening':
+      // Clipe animado (WebP/GIF) da caixa caindo + abrindo, usado no LootboxOpeningAnimation
+      return `animations/lootbox-opening/${keySlug}.${ext}`
+
     default:
       return `sprites/misc/${keySlug}-${field}.${ext}`
   }

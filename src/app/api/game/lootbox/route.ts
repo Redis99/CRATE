@@ -172,6 +172,7 @@ export async function GET(_req: NextRequest) {
     lootboxType: string; name: string; description: string
     price: number; weeklyLimit: number | null; owned: number
     dropEntries: { label: string; chance: string }[]
+    openingWebpUrl: string | null; openingRevealMs: number
   }[]
 
   if (dbConfigs.length > 0) {
@@ -201,6 +202,8 @@ export async function GET(_req: NextRequest) {
         weeklyLimit: cfg.weeklyLimit ?? fallback?.weeklyLimit ?? null,
         owned:       ownedMap[lootboxType] ?? 0,
         dropEntries,
+        openingWebpUrl:  cfg.openingWebpUrl  ?? null,
+        openingRevealMs: cfg.openingRevealMs ?? 900,
       }
     })
   } else {
@@ -215,6 +218,8 @@ export async function GET(_req: NextRequest) {
         weeklyLimit: f.weeklyLimit,
         owned:       ownedMap[lootboxType] ?? 0,
         dropEntries: f.drops,
+        openingWebpUrl:  null,
+        openingRevealMs: 900,
       }))
   }
 

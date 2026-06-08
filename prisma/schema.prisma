@@ -640,6 +640,12 @@ model LootboxConfig {
   seasonal    Boolean     @default(false)
   startsAt    DateTime?   // para eventos sazonais
   endsAt      DateTime?
+
+  // Animação de abertura (opcional) — quando ausente, o engine usa o crate
+  // genérico embutido (fallback universal, sem necessidade de assets externos).
+  openingWebpUrl  String?  // WebP/GIF animado da caixa caindo + abrindo, enviado via admin panel
+  openingRevealMs Int      @default(900) // instante (ms, desde o início da animação) em que a caixa "abre" no WebP — sincroniza o glow de raridade com o vídeo
+
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 

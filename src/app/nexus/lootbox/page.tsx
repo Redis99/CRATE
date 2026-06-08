@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -25,6 +25,8 @@ interface LootboxConfig {
   seasonal: boolean
   startsAt: string | null
   endsAt: string | null
+  openingWebpUrl: string | null
+  openingRevealMs: number
   dropEntries: DropEntry[]
 }
 
@@ -400,6 +402,19 @@ export default function LootboxAdminPage() {
                   </F>
                 </>
               )}
+
+              {/* Opening animation — admin-managed clip + fallback notice */}
+              <div className="col-span-full">
+                <OpeningAnimationEditor
+                  lootboxType={selected.lootboxType}
+                  webpUrl={selected.openingWebpUrl}
+                  revealMs={selected.openingRevealMs}
+                  onChange={(webpUrl, revealMs) =>
+                    setSelected(p => p && ({ ...p, openingWebpUrl: webpUrl, openingRevealMs: revealMs }))
+                  }
+                />
+              </div>
+
               <div className="col-span-full flex justify-end">
                 <Btn onClick={saveConfig}>Save config</Btn>
               </div>
@@ -622,6 +637,162 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
         </div>
         {children}
       </div>
+    </div>
+  )
+}
+
+// ─── Opening Animation Editor ─────────────────────────────────────────────────
+// Lets the admin attach a custom WebP/GIF "crate falling + opening" clip per
+// lootbox, and tune when (in ms) the box visually opens so the rarity-colored
+// glow burst stays in sync with it.
+//
+// IMPORTANT: this is entirely OPTIONAL. When no clip is attached, the game uses
+// a universal built-in animation (no asset required) — so lootboxes look and
+// work fine before any custom visuals exist. This is the system-wide pattern:
+// every place that needs custom media degrades gracefully to a generic,
+// always-available fallback when nothing has been uploaded yet.
+
+interface OpeningAnimationEditorProps {
+  lootboxType: string
+  webpUrl:     string | null
+  revealMs:    number
+  onChange:    (webpUrl: string | null, revealMs: number) => void
+}
+
+function OpeningAnimationEditor({ lootboxType, webpUrl, revealMs, onChange }: OpeningAnimationEditorProps) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    setError('')
+
+    const body = new FormData()
+    body.append('file', file)
+    body.append('category', 'lootbox-opening')
+    body.append('key', lootboxType)
+    body.append('field', 'image')
+
+    const r = await fetch('/api/admin/item-visuals/upload', { method: 'POST', body })
+    const data = await r.json()
+
+    if (!r.ok) {
+      setError(data.error ?? 'Upload failed.')
+    } else {
+      onChange(data.url, revealMs)
+    }
+    setUploading(false)
+    if (inputRef.current) inputRef.current.value = ''
+  }
+
+  return (
+    <div className="rounded-lg border border-gray-800 bg-gray-900/30 p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">
+          Opening Animation
+        </span>
+        <span
+          className={`text-[10px] px-2 py-0.5 rounded-full border ${
+            webpUrl
+              ? 'text-emerald-400 border-emerald-700/50 bg-emerald-900/20'
+              : 'text-gray-500 border-gray-700 bg-gray-800/40'
+          }`}
+        >
+          {webpUrl ? 'Custom clip active' : 'Using built-in fallback'}
+        </span>
+      </div>
+
+      {/* Instructions — always visible so admins know exactly what to send */}
+      <div className="text-[11px] text-gray-500 leading-relaxed space-y-1 bg-black/20 rounded-md p-2.5 border border-gray-800/60">
+        <p className="text-gray-400 font-medium">What to upload:</p>
+        <ul className="list-disc list-inside space-y-0.5">
+          <li>Animated <span className="text-gray-300">WebP</span> or <span className="text-gray-300">GIF</span>, square-ish, recommended ~512×512px</li>
+          <li>Should show the crate <span className="text-gray-300">falling in and opening</span> — the engine overlays the rarity glow/particles/label on top, you don&apos;t need to bake those in</li>
+          <li>Keep it short (~1–2s) and loop-free — it plays once per opening</li>
+          <li>Max 5MB. Transparent background recommended (WebP) for best blending</li>
+        </ul>
+        <p className="text-gray-400 font-medium pt-1">Glow timing:</p>
+        <p>
+          Set <span className="text-gray-300">&quot;Glow at&quot;</span> to the moment (in ms from the start of the
+          clip) where the lid visually opens — that&apos;s when the rarity-colored burst fires, synced to your clip.
+          The reveal waits for whichever comes later: this timing or the server response, so it never feels rushed.
+        </p>
+        <p className="pt-1 text-gray-600 italic">
+          Leave this empty and the game automatically uses the built-in generic crate animation —
+          fully functional, no asset needed. You can add a custom clip any time without code changes.
+        </p>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        {/* URL + upload */}
+        <div className="flex-1 space-y-1.5">
+          <label className="block text-[11px] text-gray-500">Clip URL (WebP/GIF)</label>
+          <div className="flex gap-2">
+            <input
+              value={webpUrl ?? ''}
+              onChange={(e) => onChange(e.target.value || null, revealMs)}
+              placeholder="https://… or upload →"
+              className="flex-1 bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-3 py-2 placeholder-gray-600"
+            />
+            <input ref={inputRef} type="file" accept="image/webp,image/gif" className="hidden" onChange={handleFile} />
+            <button
+              type="button"
+              disabled={uploading}
+              onClick={() => inputRef.current?.click()}
+              className="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-40 text-gray-200 rounded-lg transition-colors whitespace-nowrap"
+            >
+              {uploading ? 'Uploading…' : 'Upload'}
+            </button>
+            {webpUrl && (
+              <button
+                type="button"
+                onClick={() => onChange(null, revealMs)}
+                className="px-2.5 py-1.5 text-xs border border-red-900/50 text-red-400 hover:bg-red-950/30 rounded-lg transition-colors"
+                title="Remove clip — falls back to the built-in animation"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          {error && <p className="text-red-400 text-xs">{error}</p>}
+        </div>
+
+        {/* Reveal timing */}
+        <div className="sm:w-44 space-y-1.5">
+          <label className="block text-[11px] text-gray-500">
+            Glow at <span className="text-gray-300 font-mono">{revealMs}ms</span>
+          </label>
+          <input
+            type="range" min={200} max={3000} step={50}
+            value={revealMs}
+            disabled={!webpUrl}
+            onChange={(e) => onChange(webpUrl, parseInt(e.target.value))}
+            className="w-full accent-purple-500 disabled:opacity-30"
+          />
+          <input
+            type="number" min={0} step={50}
+            value={revealMs}
+            disabled={!webpUrl}
+            onChange={(e) => onChange(webpUrl, parseInt(e.target.value) || 0)}
+            className="w-full ia text-xs disabled:opacity-30"
+          />
+        </div>
+      </div>
+
+      {/* Preview thumbnail */}
+      {webpUrl && (
+        <div className="flex items-center gap-3 pt-1">
+          <div className="w-16 h-16 rounded-md overflow-hidden border border-gray-700 bg-black/30 flex items-center justify-center shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={webpUrl} alt="" className="w-full h-full object-contain" />
+          </div>
+          <p className="text-[11px] text-gray-600 break-all">{webpUrl}</p>
+        </div>
+      )}
     </div>
   )
 }

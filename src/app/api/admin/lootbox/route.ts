@@ -73,7 +73,10 @@ export async function POST(req: NextRequest) {
   // ── Atualizar config da lootbox ─────────────────────────────────────────
   // Apenas campos editáveis — lootboxType e id nunca podem ser alterados.
   if (action === 'update-config') {
-    const { id, priceCrate, weeklyLimit, sortOrder, active, name, description, seasonal } = body.config
+    const {
+      id, priceCrate, weeklyLimit, sortOrder, active, name, description, seasonal,
+      openingWebpUrl, openingRevealMs,
+    } = body.config
     if (!id) return NextResponse.json({ error: 'Missing config id' }, { status: 400 })
 
     const updateData: Record<string, unknown> = {}
@@ -83,6 +86,9 @@ export async function POST(req: NextRequest) {
     if (name         !== undefined) updateData.name         = name
     if (description  !== undefined) updateData.description  = description
     if (seasonal     !== undefined) updateData.seasonal     = seasonal
+    // Animação de abertura — string vazia/null = volta a usar o crate genérico embutido
+    if (openingWebpUrl  !== undefined) updateData.openingWebpUrl  = openingWebpUrl || null
+    if (openingRevealMs !== undefined) updateData.openingRevealMs = openingRevealMs
     // sortOrder: usa SQL raw até o client ser regenerado
     if (sortOrder !== undefined) {
       await prisma.$executeRawUnsafe(
