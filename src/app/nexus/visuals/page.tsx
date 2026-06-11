@@ -4,6 +4,11 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import {
   VISUAL_KEYS_BY_CATEGORY,
+  ROBOT_COLLECTION_KEYS,
+  EQUIPMENT_EFFECT_KEYS,
+  PART_CATEGORY_KEYS,
+  CONSUMABLE_KEYS,
+  LOOTBOX_KEYS,
   type VisualCategory,
   type ItemVisualData,
 } from '@/lib/item-visual-keys'
@@ -221,6 +226,15 @@ export default function VisualsAdminPage() {
     setMsg('')
   }
 
+  // Cria visual pré-preenchido a partir de uma chave faltante no checklist
+  function openCreateWith(category: VisualCategory, key: string) {
+    setEditingId(null)
+    setForm({ ...EMPTY_FORM, category, key })
+    setShowForm(true)
+    setMsg('')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   async function handleSave() {
     setSaving(true)
     setMsg('')
@@ -274,6 +288,9 @@ export default function VisualsAdminPage() {
           + New Visual
         </button>
       </div>
+
+      {/* Checklist de cobertura — o que falta de asset */}
+      {!loading && <CoveragePanel visuals={visuals} onCreate={openCreateWith} />}
 
       {/* Filtro por categoria */}
       <div className="flex gap-2 flex-wrap mb-5">
@@ -438,11 +455,186 @@ export default function VisualsAdminPage() {
         <div className="text-center py-16 text-gray-600">
           <p className="text-5xl mb-3">🖼️</p>
           <p className="text-sm font-medium text-gray-500">Nenhum visual configurado ainda.</p>
-          <p className="text-xs mt-1">Clique em "New Visual" para adicionar o primeiro sprite ou ícone.</p>
+          <p className="text-xs mt-1">Clique em &quot;New Visual&quot; para adicionar o primeiro sprite ou ícone.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {filtered.map((v) => <VisualCard key={v.id} visual={v} onEdit={openEdit} onDelete={handleDelete} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Coverage Panel ───────────────────────────────────────────────────────────
+// Cruza as chaves esperadas (item-visual-keys) com os visuais cadastrados e os
+// clipes de abertura das lootboxes, mostrando exatamente o que falta produzir.
+// Clicar numa chave faltante abre o form de criação pré-preenchido.
+
+interface LootboxCfgLite {
+  lootboxType:    string
+  name:           string
+  active:         boolean
+  openingWebpUrl: string | null
+}
+
+interface CoverageRow {
+  category: VisualCategory
+  label:    string
+  /** Chaves mínimas necessárias (parts usa só as 6 categorias — nomes individuais são overrides opcionais) */
+  expected: readonly string[]
+  hint?:    string
+}
+
+const COVERAGE_ROWS: CoverageRow[] = [
+  { category: 'robot',       label: '🤖 Robots (coleções)', expected: ROBOT_COLLECTION_KEYS,
+    hint: 'Ícone estático no mínimo; sprite sheets idle/active/low são opcionais mas recomendados.' },
+  { category: 'equipment',   label: '🔧 Equipment',          expected: EQUIPMENT_EFFECT_KEYS },
+  { category: 'baseUpgrade', label: '🏗️ Base Upgrades',      expected: EQUIPMENT_EFFECT_KEYS },
+  { category: 'part',        label: '🔩 Parts (categorias)', expected: PART_CATEGORY_KEYS,
+    hint: 'Uma imagem por categoria cobre todas as peças; nomes individuais podem sobrepor depois.' },
+  { category: 'consumable',  label: '🔋 Consumables',        expected: CONSUMABLE_KEYS },
+  { category: 'lootbox',     label: '📦 Lootboxes (ícones)', expected: LOOTBOX_KEYS },
+]
+
+function CoveragePanel({
+  visuals,
+  onCreate,
+}: {
+  visuals:  ItemVisualData[]
+  onCreate: (category: VisualCategory, key: string) => void
+}) {
+  const [open, setOpen] = useState(true)
+  const [lootboxCfgs, setLootboxCfgs] = useState<LootboxCfgLite[] | null>(null)
+
+  // Clipes de abertura vêm da config de lootbox, não de ItemVisual
+  useEffect(() => {
+    fetch('/api/admin/lootbox')
+      .then((r) => r.json())
+      .then((d) => setLootboxCfgs(Array.isArray(d) ? d : []))
+      .catch(() => setLootboxCfgs([]))
+  }, [])
+
+  const hasArt = (cat: VisualCategory, key: string) =>
+    visuals.some((v) => v.category === cat && v.key === key && (v.imageUrl || v.spriteIdleUrl))
+
+  const rows = COVERAGE_ROWS.map((row) => {
+    const missing = row.expected.filter((k) => !hasArt(row.category, k))
+    return { ...row, missing, done: row.expected.length - missing.length }
+  })
+
+  // Sprites animados de robô — métrica secundária
+  const robotsWithSprite = ROBOT_COLLECTION_KEYS.filter((k) =>
+    visuals.some((v) => v.category === 'robot' && v.key === k && v.spriteIdleUrl),
+  ).length
+
+  // Clipes de abertura (apenas crates ativas contam como pendência)
+  const activeCrates  = (lootboxCfgs ?? []).filter((c) => c.active)
+  const missingClips  = activeCrates.filter((c) => !c.openingWebpUrl)
+
+  const totalExpected = rows.reduce((s, r) => s + r.expected.length, 0) + activeCrates.length
+  const totalDone     = rows.reduce((s, r) => s + r.done, 0) + (activeCrates.length - missingClips.length)
+  const allDone       = totalExpected > 0 && totalDone === totalExpected
+
+  return (
+    <div className="mb-5 bg-[#0d0d1a] border border-gray-800 rounded-xl overflow-hidden">
+      {/* Header — sempre visível, com resumo */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800/30 transition-colors"
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="text-sm">📋</span>
+          <span className="text-sm font-semibold text-white">Asset Coverage</span>
+          <span className={`text-xs px-2 py-0.5 rounded-full border ${
+            allDone
+              ? 'text-emerald-400 border-emerald-700/50 bg-emerald-900/20'
+              : 'text-amber-400 border-amber-700/50 bg-amber-900/20'
+          }`}>
+            {totalDone}/{totalExpected}
+          </span>
+        </div>
+        <span className="text-gray-500 text-xs">{open ? '▲ recolher' : '▼ expandir'}</span>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-3 border-t border-gray-800/60 pt-3">
+          <p className="text-xs text-gray-600">
+            Lista de produção: tudo que o jogo cobre com placeholder genérico até você subir a arte.
+            Clique numa chave para criar o visual já pré-preenchido.
+          </p>
+
+          {rows.map((row) => (
+            <div key={row.category + row.label}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-medium text-gray-300">{row.label}</span>
+                <span className={`text-xs font-mono ${row.missing.length === 0 ? 'text-emerald-400' : 'text-gray-500'}`}>
+                  {row.done}/{row.expected.length}
+                  {row.category === 'robot' && ` · ${robotsWithSprite} c/ sprite animado`}
+                </span>
+              </div>
+              {/* Barra de progresso */}
+              <div className="h-1 rounded-full bg-gray-800 mb-1.5">
+                <div
+                  className={`h-1 rounded-full transition-all ${row.missing.length === 0 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                  style={{ width: `${row.expected.length ? (row.done / row.expected.length) * 100 : 0}%` }}
+                />
+              </div>
+              {/* Chaves faltantes — clicáveis */}
+              {row.missing.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {row.missing.map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => onCreate(row.category, k)}
+                      title={`Criar visual para ${k}`}
+                      className="text-[10px] px-1.5 py-0.5 rounded border border-gray-700 text-gray-400 hover:border-indigo-500/60 hover:text-indigo-300 transition-colors font-mono"
+                    >
+                      + {k}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {row.hint && row.missing.length > 0 && (
+                <p className="text-[10px] text-gray-600 mt-1 italic">{row.hint}</p>
+              )}
+            </div>
+          ))}
+
+          {/* Clipes de abertura — gerenciados em /nexus/lootbox */}
+          <div className="pt-2 border-t border-gray-800/60">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-medium text-gray-300">🎬 Opening clips (crates ativas)</span>
+              <span className={`text-xs font-mono ${missingClips.length === 0 && lootboxCfgs !== null ? 'text-emerald-400' : 'text-gray-500'}`}>
+                {lootboxCfgs === null ? '…' : `${activeCrates.length - missingClips.length}/${activeCrates.length}`}
+              </span>
+            </div>
+            <div className="h-1 rounded-full bg-gray-800 mb-1.5">
+              <div
+                className={`h-1 rounded-full transition-all ${missingClips.length === 0 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                style={{ width: `${activeCrates.length ? ((activeCrates.length - missingClips.length) / activeCrates.length) * 100 : 0}%` }}
+              />
+            </div>
+            {missingClips.length > 0 && (
+              <div className="flex flex-wrap gap-1 items-center">
+                {missingClips.map((c) => (
+                  <a
+                    key={c.lootboxType}
+                    href="/nexus/lootbox"
+                    title={`Configurar clipe de abertura para ${c.name}`}
+                    className="text-[10px] px-1.5 py-0.5 rounded border border-gray-700 text-gray-400 hover:border-purple-500/60 hover:text-purple-300 transition-colors font-mono"
+                  >
+                    🎬 {c.lootboxType}
+                  </a>
+                ))}
+              </div>
+            )}
+            <p className="text-[10px] text-gray-600 mt-1 italic">
+              WebP/GIF da caixa abrindo — configurado por crate em <a href="/nexus/lootbox" className="text-purple-400 hover:underline">Lootboxes</a>. Sem clipe, o jogo usa a animação genérica embutida.
+            </p>
+          </div>
         </div>
       )}
     </div>
