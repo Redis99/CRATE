@@ -132,7 +132,7 @@ export function OutpostManager() {
                 variant="base"
                 slot={slot}
                 slotLabel={BASE_SLOT_LABELS[slot]}
-                visual={getVisual('baseUpgrade', upgrade.effectType, upgrade.rarity as string)}
+                visual={getVisual('baseUpgrade', upgrade.name, upgrade.rarity as string) ?? getVisual('baseUpgrade', upgrade.effectType, upgrade.rarity as string)}
               />
             ) : (
               <EmptyEquipmentSlot
@@ -172,7 +172,7 @@ export function OutpostManager() {
                   <RobotCard
                     robot={robot}
                     variant="outpost"
-                    visual={getVisual('robot', robotKey(robot.collection), robot.rarity)}
+                    visual={getVisual('robot', robot.name, robot.rarity) ?? getVisual('robot', robotKey(robot.collection), robot.rarity)}
                     slotNumber={slot}
                     actions={
                       <ActionButton
@@ -239,7 +239,7 @@ export function OutpostManager() {
                     : isEmpty    ? 'border-red-900/40 bg-red-900/5 opacity-60'
                     : `${RARITY_CARD_COLOR[robot.rarity]} border`
                   }`}>
-                  <RobotCard robot={robot} variant="mini" visual={getVisual('robot', robotKey(robot.collection), robot.rarity)} />
+                  <RobotCard robot={robot} variant="mini" visual={getVisual('robot', robot.name, robot.rarity) ?? getVisual('robot', robotKey(robot.collection), robot.rarity)} />
 
                   {/* Botões de ação */}
                   <div className="mt-2 flex gap-1.5">

@@ -474,7 +474,7 @@ function RobotsTab({ robots, onDestroy, onUnequip, getVisual, selectMode, select
           <RobotCard
             robot={r}
             variant="full"
-            visual={getVisual('robot', robotKey(r.collection), r.rarity)}
+            visual={getVisual('robot', r.name, r.rarity) ?? getVisual('robot', robotKey(r.collection), r.rarity)}
             selectMode={selectMode}
             selected={selected?.has(r.id)}
             onToggleSelect={onToggleSelect}
@@ -523,7 +523,7 @@ function EquipmentsTab({ items, onDestroy, onEquip, getVisual, selectMode, selec
               )}
             </div>
             <div className="flex items-center gap-2 mt-1">
-              <ItemSprite visual={getVisual('equipment', e.effectType, e.rarity)} size={36} alt={e.name}
+              <ItemSprite visual={getVisual('equipment', e.name, e.rarity) ?? getVisual('equipment', e.effectType, e.rarity)} size={36} alt={e.name}
                 className="shrink-0" fallback={<span className="text-lg">⚙️</span>} />
               <p className="text-white text-sm font-semibold truncate flex-1">{e.name}</p>
             </div>
@@ -602,7 +602,7 @@ function BaseUpgradesTab({ items, onDestroy, onApply, onRemove, getVisual, selec
                 <CategoryTag effectType={b.effectType} />
               </div>
               <div className="flex items-center gap-2">
-                <ItemSprite visual={getVisual('baseUpgrade', b.effectType, b.rarity)} size={36} alt={b.name}
+                <ItemSprite visual={getVisual('baseUpgrade', b.name, b.rarity) ?? getVisual('baseUpgrade', b.effectType, b.rarity)} size={36} alt={b.name}
                   className="shrink-0" fallback={<span className="text-lg">🏗️</span>} />
                 <p className="text-white text-sm font-semibold truncate flex-1">{b.name}</p>
               </div>

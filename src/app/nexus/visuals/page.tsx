@@ -4,14 +4,30 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import {
   VISUAL_KEYS_BY_CATEGORY,
-  ROBOT_COLLECTION_KEYS,
-  EQUIPMENT_EFFECT_KEYS,
-  PART_CATEGORY_KEYS,
-  CONSUMABLE_KEYS,
-  LOOTBOX_KEYS,
   type VisualCategory,
   type ItemVisualData,
 } from '@/lib/item-visual-keys'
+
+// ─── Chaves vindas do banco (itens reais) ─────────────────────────────────────
+// O endpoint /api/admin/item-visuals/keys agrega templates da loja, catálogos
+// e instâncias existentes — qualquer item novo criado no admin aparece aqui
+// automaticamente, sem depender de constantes hardcoded.
+
+interface VisualKeyEntry {
+  key:      string
+  label?:   string
+  fallback: string | null
+}
+
+interface DbKeys {
+  robot:       VisualKeyEntry[]
+  equipment:   VisualKeyEntry[]
+  baseUpgrade: VisualKeyEntry[]
+  part:        VisualKeyEntry[]
+  consumable:  VisualKeyEntry[]
+  lootbox:     VisualKeyEntry[]
+  fallbacks:   Record<VisualCategory, string[]>
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -180,6 +196,7 @@ function UrlField({ label, field, value, category, keyValue, onChange }: UrlFiel
 
 export default function VisualsAdminPage() {
   const [visuals, setVisuals]       = useState<ItemVisualData[]>([])
+  const [dbKeys, setDbKeys]         = useState<DbKeys | null>(null)
   const [loading, setLoading]       = useState(true)
   const [filterCat, setFilterCat]   = useState<VisualCategory | ''>('')
   const [editingId, setEditingId]   = useState<string | null>(null)
@@ -196,6 +213,14 @@ export default function VisualsAdminPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Chaves dos itens reais do banco — carrega uma vez
+  useEffect(() => {
+    fetch('/api/admin/item-visuals/keys')
+      .then((r) => r.json())
+      .then((d) => { if (!d.error) setDbKeys(d) })
+      .catch(() => {})
+  }, [])
 
   const filtered = filterCat ? visuals.filter((v) => v.category === filterCat) : visuals
 
@@ -271,7 +296,13 @@ export default function VisualsAdminPage() {
     load()
   }
 
-  const availableKeys = VISUAL_KEYS_BY_CATEGORY[form.category] ?? []
+  // Itens reais do banco para a categoria selecionada; fallbacks de grupo
+  // (coleção/effectType/categoria) ficam numa segunda seção do dropdown.
+  // Enquanto o endpoint carrega, usa as constantes como reserva.
+  const itemKeys  = dbKeys?.[form.category] ?? []
+  const groupKeys = dbKeys
+    ? (dbKeys.fallbacks[form.category] ?? [])
+    : (VISUAL_KEYS_BY_CATEGORY[form.category] ?? [])
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -290,7 +321,7 @@ export default function VisualsAdminPage() {
       </div>
 
       {/* Checklist de cobertura — o que falta de asset */}
-      {!loading && <CoveragePanel visuals={visuals} onCreate={openCreateWith} />}
+      {!loading && <CoveragePanel visuals={visuals} dbKeys={dbKeys} onCreate={openCreateWith} />}
 
       {/* Filtro por categoria */}
       <div className="flex gap-2 flex-wrap mb-5">
@@ -342,14 +373,33 @@ export default function VisualsAdminPage() {
                 className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-2"
               >
                 <option value="">— select —</option>
-                {availableKeys.map((k) => <option key={k} value={k}>{k}</option>)}
+                {itemKeys.length > 0 && (
+                  <optgroup label="Itens (banco de dados)">
+                    {itemKeys.map((e) => (
+                      <option key={e.key} value={e.key}>{e.label ?? e.key}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {groupKeys.length > 0 && (
+                  <optgroup label="Fallback de grupo (série / categoria / efeito)">
+                    {groupKeys.map((k) => <option key={k} value={k}>{k}</option>)}
+                  </optgroup>
+                )}
+                {/* Mantém a key atual selecionável mesmo se não estiver nas listas */}
+                {form.key && !itemKeys.some((e) => e.key === form.key) && !groupKeys.includes(form.key) && (
+                  <option value={form.key}>{form.key}</option>
+                )}
               </select>
               <input
                 value={form.key}
                 onChange={(e) => setForm({ ...form, key: e.target.value })}
-                placeholder="Ou digite (ex: templateId)"
+                placeholder="Ou digite manualmente"
                 className="mt-1 w-full bg-gray-800 border border-gray-600 text-white text-xs rounded-lg px-3 py-1.5 placeholder-gray-600"
               />
+              <p className="mt-1 text-[10px] text-gray-600 leading-snug">
+                Item individual = ícone só daquele item. Fallback de grupo = vale para todos os itens
+                do grupo que não tiverem visual próprio.
+              </p>
             </div>
 
             <div>
@@ -467,8 +517,10 @@ export default function VisualsAdminPage() {
 }
 
 // ─── Coverage Panel ───────────────────────────────────────────────────────────
-// Cruza as chaves esperadas (item-visual-keys) com os visuais cadastrados e os
-// clipes de abertura das lootboxes, mostrando exatamente o que falta produzir.
+// Cruza os ITENS REAIS do banco com os visuais cadastrados e os clipes de
+// abertura das lootboxes, mostrando exatamente o que falta produzir.
+// Um item conta como coberto se tem visual próprio OU se o fallback de grupo
+// dele (coleção/effectType/categoria) tem visual.
 // Clicar numa chave faltante abre o form de criação pré-preenchido.
 
 interface LootboxCfgLite {
@@ -478,30 +530,26 @@ interface LootboxCfgLite {
   openingWebpUrl: string | null
 }
 
-interface CoverageRow {
-  category: VisualCategory
-  label:    string
-  /** Chaves mínimas necessárias (parts usa só as 6 categorias — nomes individuais são overrides opcionais) */
-  expected: readonly string[]
-  hint?:    string
-}
-
-const COVERAGE_ROWS: CoverageRow[] = [
-  { category: 'robot',       label: '🤖 Robots (coleções)', expected: ROBOT_COLLECTION_KEYS,
-    hint: 'Ícone estático no mínimo; sprite sheets idle/active/low são opcionais mas recomendados.' },
-  { category: 'equipment',   label: '🔧 Equipment',          expected: EQUIPMENT_EFFECT_KEYS },
-  { category: 'baseUpgrade', label: '🏗️ Base Upgrades',      expected: EQUIPMENT_EFFECT_KEYS },
-  { category: 'part',        label: '🔩 Parts (categorias)', expected: PART_CATEGORY_KEYS,
-    hint: 'Uma imagem por categoria cobre todas as peças; nomes individuais podem sobrepor depois.' },
-  { category: 'consumable',  label: '🔋 Consumables',        expected: CONSUMABLE_KEYS },
-  { category: 'lootbox',     label: '📦 Lootboxes (ícones)', expected: LOOTBOX_KEYS },
+const COVERAGE_META: { category: VisualCategory; label: string; hint?: string }[] = [
+  { category: 'robot',       label: '🤖 Robots',
+    hint: 'Ícone por robô individual; um visual com a key da coleção cobre todos os robôs dela de uma vez.' },
+  { category: 'equipment',   label: '🔧 Equipment',
+    hint: 'Ícone por equipamento; um visual com a key do effectType cobre o grupo.' },
+  { category: 'baseUpgrade', label: '🏗️ Base Upgrades',
+    hint: 'Ícone por upgrade; um visual com a key do effectType cobre o grupo.' },
+  { category: 'part',        label: '🔩 Parts',
+    hint: 'Ícone por peça; um visual com a key da categoria (ENERGY, MINING…) cobre o grupo.' },
+  { category: 'consumable',  label: '🔋 Consumables' },
+  { category: 'lootbox',     label: '📦 Lootboxes (ícones)' },
 ]
 
 function CoveragePanel({
   visuals,
+  dbKeys,
   onCreate,
 }: {
   visuals:  ItemVisualData[]
+  dbKeys:   DbKeys | null
   onCreate: (category: VisualCategory, key: string) => void
 }) {
   const [open, setOpen] = useState(true)
@@ -518,23 +566,23 @@ function CoveragePanel({
   const hasArt = (cat: VisualCategory, key: string) =>
     visuals.some((v) => v.category === cat && v.key === key && (v.imageUrl || v.spriteIdleUrl))
 
-  const rows = COVERAGE_ROWS.map((row) => {
-    const missing = row.expected.filter((k) => !hasArt(row.category, k))
-    return { ...row, missing, done: row.expected.length - missing.length }
+  const rows = COVERAGE_META.map((meta) => {
+    const items   = dbKeys?.[meta.category] ?? []
+    const missing = items.filter(
+      (e) => !hasArt(meta.category, e.key) && !(e.fallback && hasArt(meta.category, e.fallback)),
+    )
+    return { ...meta, total: items.length, missing, done: items.length - missing.length }
   })
-
-  // Sprites animados de robô — métrica secundária
-  const robotsWithSprite = ROBOT_COLLECTION_KEYS.filter((k) =>
-    visuals.some((v) => v.category === 'robot' && v.key === k && v.spriteIdleUrl),
-  ).length
 
   // Clipes de abertura (apenas crates ativas contam como pendência)
   const activeCrates  = (lootboxCfgs ?? []).filter((c) => c.active)
   const missingClips  = activeCrates.filter((c) => !c.openingWebpUrl)
 
-  const totalExpected = rows.reduce((s, r) => s + r.expected.length, 0) + activeCrates.length
+  const totalExpected = rows.reduce((s, r) => s + r.total, 0) + activeCrates.length
   const totalDone     = rows.reduce((s, r) => s + r.done, 0) + (activeCrates.length - missingClips.length)
   const allDone       = totalExpected > 0 && totalDone === totalExpected
+
+  if (dbKeys === null) return null  // aguardando o endpoint de keys
 
   return (
     <div className="mb-5 bg-[#0d0d1a] border border-gray-800 rounded-xl overflow-hidden">
@@ -561,44 +609,46 @@ function CoveragePanel({
       {open && (
         <div className="px-4 pb-4 space-y-3 border-t border-gray-800/60 pt-3">
           <p className="text-xs text-gray-600">
-            Lista de produção: tudo que o jogo cobre com placeholder genérico até você subir a arte.
-            Clique numa chave para criar o visual já pré-preenchido.
+            Itens reais do banco sem arte (própria nem de grupo) — tudo roda com placeholder
+            genérico até você subir a imagem. Clique num item para criar o visual já pré-preenchido.
           </p>
 
           {rows.map((row) => (
-            <div key={row.category + row.label}>
+            <div key={row.category}>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-medium text-gray-300">{row.label}</span>
                 <span className={`text-xs font-mono ${row.missing.length === 0 ? 'text-emerald-400' : 'text-gray-500'}`}>
-                  {row.done}/{row.expected.length}
-                  {row.category === 'robot' && ` · ${robotsWithSprite} c/ sprite animado`}
+                  {row.done}/{row.total}
                 </span>
               </div>
               {/* Barra de progresso */}
               <div className="h-1 rounded-full bg-gray-800 mb-1.5">
                 <div
                   className={`h-1 rounded-full transition-all ${row.missing.length === 0 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
-                  style={{ width: `${row.expected.length ? (row.done / row.expected.length) * 100 : 0}%` }}
+                  style={{ width: `${row.total ? (row.done / row.total) * 100 : 0}%` }}
                 />
               </div>
-              {/* Chaves faltantes — clicáveis */}
+              {/* Itens faltantes — clicáveis */}
               {row.missing.length > 0 && (
                 <div className="flex flex-wrap gap-1">
-                  {row.missing.map((k) => (
+                  {row.missing.map((e) => (
                     <button
-                      key={k}
+                      key={e.key}
                       type="button"
-                      onClick={() => onCreate(row.category, k)}
-                      title={`Criar visual para ${k}`}
+                      onClick={() => onCreate(row.category, e.key)}
+                      title={`Criar visual para ${e.key}`}
                       className="text-[10px] px-1.5 py-0.5 rounded border border-gray-700 text-gray-400 hover:border-indigo-500/60 hover:text-indigo-300 transition-colors font-mono"
                     >
-                      + {k}
+                      + {e.label ?? e.key}
                     </button>
                   ))}
                 </div>
               )}
               {row.hint && row.missing.length > 0 && (
                 <p className="text-[10px] text-gray-600 mt-1 italic">{row.hint}</p>
+              )}
+              {row.total === 0 && (
+                <p className="text-[10px] text-gray-700 italic">Nenhum item cadastrado no banco ainda.</p>
               )}
             </div>
           ))}
