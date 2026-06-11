@@ -6,7 +6,8 @@ import {
   generateRobotDrop, generateEquipmentDrop, generateBaseUpgradeDrop,
   rollPartsCrate, rollSupplyCrateAsync,
   saveDropToInventory, checkInventorySpace,
-  type DropResultType,
+  loadPartsCatalog, pickPartFromCatalog,
+  type DropResultType, type CatalogPart,
 } from '@/lib/lootbox'
 import { incrementMission } from '@/lib/mission-progress'
 
@@ -62,6 +63,7 @@ type LoadedConfig = NonNullable<Awaited<ReturnType<typeof prisma.lootboxConfig.f
 function rollFromConfigSync(
   config: LoadedConfig,
   robotTemplates: { id: string; name: string; rarity: string | null; metadata: unknown }[],
+  partsCatalog: CatalogPart[],
 ): DropResultType | null {
   if (!config.dropEntries.length) return null
 
@@ -80,25 +82,9 @@ function rollFromConfigSync(
 
   switch (chosen.dropType) {
     case 'PART': {
-      const NAMES: Record<string, string[]> = {
-        COMMON:    ['Energy Core', 'Servo Pack', 'Circuit Board', 'Power Relay', 'Signal Node'],
-        UNCOMMON:  ['Mining Core', 'AI Chip', 'Charge Crystal', 'Thruster Pack', 'Sensor Array'],
-        RARE:      ['Void Crystal', 'Logic Core', 'Genesis Fragment', 'Terrain Scanner', 'Quantum Cell'],
-        EPIC:      ['Nexus Shard', 'Plasma Core', 'Singularity Chip', 'Warp Conduit'],
-        LEGENDARY: ['Omega Crystal', 'Stellar Core'],
-      }
-      type PartCat = 'ENERGY' | 'MINING' | 'MAINTENANCE' | 'TERRAIN' | 'AI_SOFTWARE' | 'SPECIAL'
-      const CAT: Record<string, PartCat> = {
-        COMMON: 'ENERGY', UNCOMMON: 'MINING', RARE: 'SPECIAL', EPIC: 'SPECIAL', LEGENDARY: 'SPECIAL',
-      }
-      const names = NAMES[rarity] ?? NAMES.COMMON
-      return {
-        kind: 'part',
-        partType: names[Math.floor(Math.random() * names.length)],
-        category: CAT[rarity] ?? 'ENERGY',
-        rarity,
-        quantity: qty,
-      }
+      // Sorteia do catálogo do banco (fallback hardcoded se vazio)
+      const { partType, category } = pickPartFromCatalog(rarity, partsCatalog)
+      return { kind: 'part', partType, category, rarity, quantity: qty }
     }
 
     case 'CONSUMABLE': {
@@ -166,26 +152,27 @@ export async function POST(req: NextRequest) {
   } else {
     // ── Parts Crate / Supply Crate: usa config do banco ou fallback ──────────
 
-    // Pré-carrega config e templates de robô UMA vez antes do loop
-    const [dbConfig, robotTemplates] = await Promise.all([
+    // Pré-carrega config, templates de robô e catálogo de peças UMA vez antes do loop
+    const [dbConfig, robotTemplates, partsCatalog] = await Promise.all([
       prisma.lootboxConfig.findFirst({
         where:   { lootboxType, active: true },
         include: { dropEntries: true },
       }),
       prisma.shopItem.findMany({ where: { category: 'robot-specific', active: true } }),
+      loadPartsCatalog(),
     ])
 
     for (let i = 0; i < toOpen && !stopped; i++) {
       let drop: DropResultType | null = null
 
       if (dbConfig && dbConfig.dropEntries.length > 0) {
-        drop = rollFromConfigSync(dbConfig, robotTemplates)
+        drop = rollFromConfigSync(dbConfig, robotTemplates, partsCatalog)
       }
 
       // Fallback hardcoded quando config do banco não cobriu o tipo
       if (!drop) {
         drop = lootboxType === 'PARTS_CRATE'
-          ? rollPartsCrate()
+          ? rollPartsCrate(partsCatalog)
           : await rollSupplyCrateAsync()
       }
 

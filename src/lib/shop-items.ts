@@ -39,32 +39,8 @@ export interface ShopItem {
   inventoryBasePrice?: number  // preço base antes de aplicar +20%/compra
 }
 
-// ─── Robôs ────────────────────────────────────────────────────────────────────
-
-export const SHOP_ROBOTS: ShopItem[] = [
-  { id: 'robot-common',   category: 'robots', name: 'Common Robot',   rarity: 'COMMON',   price: 5,   description: 'Standard unit. Reliable and energy efficient.',               generateType: 'robot' },
-  { id: 'robot-uncommon', category: 'robots', name: 'Uncommon Robot', rarity: 'UNCOMMON', price: 15,  description: 'Improved extraction capabilities.',                           generateType: 'robot' },
-  { id: 'robot-rare',     category: 'robots', name: 'Rare Robot',     rarity: 'RARE',     price: 50,  description: 'High-performance unit with significant ER output.',            generateType: 'robot' },
-  { id: 'robot-epic',     category: 'robots', name: 'Epic Robot',     rarity: 'EPIC',     price: 150, description: 'Top-tier unit. Maximum ER, higher power draw.',               generateType: 'robot' },
-]
-
-// ─── Equipamentos ─────────────────────────────────────────────────────────────
-
-export const SHOP_EQUIPMENT: ShopItem[] = [
-  { id: 'equip-common',   category: 'equipment', name: 'Common Equipment',   rarity: 'COMMON',   price: 3,  description: 'Basic module. Minor ER or PD improvement.',               generateType: 'equipment' },
-  { id: 'equip-uncommon', category: 'equipment', name: 'Uncommon Equipment', rarity: 'UNCOMMON', price: 10, description: 'Improved module with noticeable stat gains.',              generateType: 'equipment' },
-  { id: 'equip-rare',     category: 'equipment', name: 'Rare Equipment',     rarity: 'RARE',     price: 30, description: 'High-quality module. Significant ER or PD boost.',         generateType: 'equipment' },
-  { id: 'equip-epic',     category: 'equipment', name: 'Epic Equipment',     rarity: 'EPIC',     price: 90, description: 'Elite module. May carry dual ER + PD benefits.',           generateType: 'equipment' },
-]
-
-// ─── Melhorias de Base ────────────────────────────────────────────────────────
-
-export const SHOP_BASE_UPGRADES: ShopItem[] = [
-  { id: 'base-common',   category: 'baseUpgrades', name: 'Common Base Upgrade',   rarity: 'COMMON',   price: 3,  description: 'Basic fleet-wide efficiency improvement.',            generateType: 'baseUpgrade' },
-  { id: 'base-uncommon', category: 'baseUpgrades', name: 'Uncommon Base Upgrade', rarity: 'UNCOMMON', price: 10, description: 'Moderate global bonus for all deployed robots.',       generateType: 'baseUpgrade' },
-  { id: 'base-rare',     category: 'baseUpgrades', name: 'Rare Base Upgrade',     rarity: 'RARE',     price: 30, description: 'Strong fleet enhancement. Noticeably boosts output.',  generateType: 'baseUpgrade' },
-  { id: 'base-epic',     category: 'baseUpgrades', name: 'Epic Base Upgrade',     rarity: 'EPIC',     price: 90, description: 'Top-tier fleet upgrade. Maximum global benefit.',       generateType: 'baseUpgrade' },
-]
+// Nota: robôs, equipamentos e melhorias de base saíram do catálogo da loja —
+// agora são vendidos como crates específicas na área de Lootboxes.
 
 // ─── Baterias ─────────────────────────────────────────────────────────────────
 
@@ -98,17 +74,10 @@ export const SHOP_INVENTORY: ShopItem[] = [
 // ─── Catálogo completo ────────────────────────────────────────────────────────
 
 export const ALL_SHOP_ITEMS: ShopItem[] = [
-  // SHOP_ROBOTS removido — robots agora são Robot Crates na área de Lootboxes
-  // SHOP_EQUIPMENT removido — equipamentos agora são Equipment Crates na área de Lootboxes
-  // SHOP_BASE_UPGRADES removido — melhorias agora são Base Upgrade Crates na área de Lootboxes
   ...SHOP_BATTERIES,
   ...SHOP_OUTPOST_SLOTS,
   ...SHOP_INVENTORY,
 ]
-
-export function getShopItem(id: string): ShopItem | undefined {
-  return ALL_SHOP_ITEMS.find((i) => i.id === id)
-}
 
 // Limites máximos de inventário
 export const INVENTORY_MAX: Record<string, number> = {

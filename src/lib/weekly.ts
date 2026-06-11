@@ -1,5 +1,6 @@
 import 'server-only'
 import { prisma } from '@/lib/prisma'
+import { loadPartsCatalog, pickPartFromCatalog, type CatalogPart } from '@/lib/lootbox'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -54,19 +55,14 @@ function dropLabel(drop: DropResult): string {
 
 // ─── Deliver weekly drop reward ───────────────────────────────────────────────
 
-async function deliverDrop(userId: string, drop: DropResult): Promise<void> {
+async function deliverDrop(userId: string, drop: DropResult, catalog: CatalogPart[]): Promise<void> {
   switch (drop.type) {
     case 'PARTS': {
-      // Map rarity to a generic part name for the weekly drop
-      const partName = drop.rarity === 'COMMON'   ? 'Scrap Metal'
-                     : drop.rarity === 'UNCOMMON' ? 'Alloy Fragment'
-                     :                              'Reinforced Core'
-      const category = drop.rarity === 'COMMON'   ? 'MAINTENANCE'
-                     : drop.rarity === 'UNCOMMON' ? 'MINING'
-                     :                              'SPECIAL'
+      // Sorteia peça do catálogo do banco (fallback hardcoded se vazio)
+      const { partType, category } = pickPartFromCatalog(drop.rarity, catalog)
       await prisma.inventoryPart.upsert({
-        where:  { userId_partType: { userId, partType: partName } },
-        create: { userId, partType: partName, category: category as never, rarity: drop.rarity, quantity: drop.quantity },
+        where:  { userId_partType: { userId, partType } },
+        create: { userId, partType, category: category as never, rarity: drop.rarity, quantity: drop.quantity },
         update: { quantity: { increment: drop.quantity } },
       })
       break
@@ -280,11 +276,12 @@ export async function processWeeklyReset(): Promise<WeeklyResetResult> {
   const pendingUserIds = [...activeUserIds].filter((id) => !alreadyDropped.has(id))
 
   let dropsDelivered = 0
+  const partsCatalog = await loadPartsCatalog()  // carregado uma vez para todos os drops
   await Promise.all(
     pendingUserIds.map(async (userId) => {
       const drop = rollWeeklyDrop()
       await Promise.all([
-        deliverDrop(userId, drop),
+        deliverDrop(userId, drop, partsCatalog),
         prisma.weeklyDrop.create({
           data: { userId, weekStart, dropped: true, droppedAt: new Date(), reward: drop as never },
         }),

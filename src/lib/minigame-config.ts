@@ -295,14 +295,6 @@ export function getGameConfig(gameType: GameType): GameConfig {
   return GAME_CONFIGS[gameType]
 }
 
-// Nomes das partes a sortear (partType genérico por raridade)
-export const PART_NAMES: Record<PartRarity, string[]> = {
-  COMMON:   ['Energy Core', 'Servo Pack', 'Circuit Board', 'Power Relay', 'Signal Node'],
-  UNCOMMON: ['Mining Core', 'AI Chip', 'Charge Crystal', 'Thruster Pack', 'Sensor Array'],
-  RARE:     ['Void Crystal', 'Logic Core', 'Genesis Fragment', 'Terrain Scanner', 'Quantum Cell'],
-  EPIC:     ['Nexus Shard', 'Plasma Core', 'Singularity Chip', 'Warp Conduit'],
-}
-
 // Kit label para exibição
 export const KIT_LABELS: Record<number, string> = {
   5:   'Basic Repair Kit',

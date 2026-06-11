@@ -5,9 +5,10 @@ import { incrementMission } from '@/lib/mission-progress'
 import {
   GAME_CONFIGS, getCooldownMs, getDifficultyLevel, getWinTarget,
   getEffectiveDailyWins, getEffectiveGlobalGames, shouldResetGlobal,
-  ER_BOOST_BASE, DIFFICULTY_BOOST_MULT, PART_NAMES, KIT_LABELS,
+  ER_BOOST_BASE, DIFFICULTY_BOOST_MULT, KIT_LABELS,
 } from '@/lib/minigame-config'
 import type { GameType, DropEntry } from '@/lib/minigame-config'
+import { loadPartsCatalog, pickPartFromCatalog } from '@/lib/lootbox'
 
 const VALID_GAMES: GameType[] = ['SPACE_DRIFT', 'BLOCK_FALL', 'SERPENTINE', 'ORBITAL_JUMP', 'SPACE_FROG']
 const MIN_GAME_SECONDS = 5   // tempo mínimo aceitável para completar um jogo (anti-cheat básico)
@@ -25,18 +26,6 @@ function rollDrop(pool: DropEntry[]): DropEntry {
     if (rand <= 0) return entry
   }
   return pool[pool.length - 1]
-}
-
-// Sorteia um partType aleatório para a raridade
-function rollPartName(rarity: string): string {
-  const PART_NAMES_MAP: Record<string, string[]> = {
-    COMMON:   ['Energy Core', 'Servo Pack', 'Circuit Board', 'Power Relay', 'Signal Node'],
-    UNCOMMON: ['Mining Core', 'AI Chip', 'Charge Crystal', 'Thruster Pack', 'Sensor Array'],
-    RARE:     ['Void Crystal', 'Logic Core', 'Genesis Fragment', 'Terrain Scanner', 'Quantum Cell'],
-    EPIC:     ['Nexus Shard', 'Plasma Core', 'Singularity Chip', 'Warp Conduit'],
-  }
-  const names = PART_NAMES_MAP[rarity] ?? PART_NAMES_MAP.COMMON
-  return names[Math.floor(Math.random() * names.length)]
 }
 
 export async function POST(req: NextRequest) {
@@ -125,10 +114,14 @@ export async function POST(req: NextRequest) {
     if (Math.random() < cfg.dropChance) {
       const entry = rollDrop(cfg.dropPool)
       if (entry.dropType === 'part' && entry.rarity) {
+        // Sorteia peça do catálogo do banco (fallback hardcoded se vazio)
+        const catalog = await loadPartsCatalog()
+        const { partType, category } = pickPartFromCatalog(entry.rarity, catalog)
         pendingDrop = {
           dropType: 'part',
           rarity:   entry.rarity,
-          partType: rollPartName(entry.rarity),
+          partType,
+          category,
         }
       } else if (entry.dropType === 'consumable' && entry.kitValue != null) {
         pendingDrop = {

@@ -206,28 +206,57 @@ export function generateBaseUpgradeDrop(rarity: Rarity): DropResultType {
   }
 }
 
-export function generatePartDrop(rarity: Rarity, quantity: number): DropResultType {
-  const category = pick(Object.keys(PARTS_BY_CATEGORY) as PartCategory[])
-  return {
-    kind: 'part',
-    partType: pick(PARTS_BY_CATEGORY[category]),
-    category,
-    rarity,
-    quantity,
+// ─── Catálogo de peças (tabela parts_catalog) ────────────────────────────────
+// Fonte primária para sorteio de peças em drops. Fallback: PARTS_BY_CATEGORY.
+
+export type CatalogPart = { partType: string; category: PartCategory; rarities: unknown }
+
+export async function loadPartsCatalog(): Promise<CatalogPart[]> {
+  return prisma.part.findMany({
+    where:  { active: true },
+    select: { partType: true, category: true, rarities: true },
+  }) as Promise<CatalogPart[]>
+}
+
+/**
+ * Sorteia uma peça do catálogo respeitando as raridades configuradas
+ * (rarities vazio = peça disponível em todas as raridades).
+ * Fallback hardcoded apenas se o catálogo estiver vazio.
+ */
+export function pickPartFromCatalog(
+  rarity: Rarity,
+  catalog?: CatalogPart[],
+): { partType: string; category: PartCategory } {
+  if (catalog && catalog.length > 0) {
+    const eligible = catalog.filter((p) => {
+      const r = Array.isArray(p.rarities) ? (p.rarities as string[]) : []
+      return r.length === 0 || r.includes(rarity)
+    })
+    if (eligible.length > 0) {
+      const p = pick(eligible)
+      return { partType: p.partType, category: p.category }
+    }
   }
+  const category = pick(Object.keys(PARTS_BY_CATEGORY) as PartCategory[])
+  return { partType: pick(PARTS_BY_CATEGORY[category]), category }
+}
+
+export function generatePartDrop(rarity: Rarity, quantity: number, catalog?: CatalogPart[]): DropResultType {
+  const { partType, category } = pickPartFromCatalog(rarity, catalog)
+  return { kind: 'part', partType, category, rarity, quantity }
 }
 
 // ─── Tabelas de drop ──────────────────────────────────────────────────────────
 
-export function rollPartsCrate(): DropResultType {
+export function rollPartsCrate(catalog?: CatalogPart[]): DropResultType {
   return roll([
-    { weight: 35, result: () => generatePartDrop('COMMON',   4) },
-    { weight: 25, result: () => generatePartDrop('COMMON',   8) },
-    { weight: 18, result: () => generatePartDrop('UNCOMMON', 2) },
-    { weight: 12, result: () => generatePartDrop('UNCOMMON', 4) },
-    { weight:  5, result: () => generatePartDrop('RARE',     1) },
-    { weight:  3, result: () => generatePartDrop('RARE',     2) },
-    { weight:  2, result: () => generatePartDrop('EPIC',     1) },
+    { weight: 35, result: () => generatePartDrop('COMMON',   4, catalog) },
+    { weight: 25, result: () => generatePartDrop('COMMON',   8, catalog) },
+    { weight: 18, result: () => generatePartDrop('UNCOMMON', 2, catalog) },
+    { weight: 12, result: () => generatePartDrop('UNCOMMON', 4, catalog) },
+    { weight:  5, result: () => generatePartDrop('RARE',     1, catalog) },
+    { weight:  3, result: () => generatePartDrop('RARE',     2, catalog) },
+    { weight:  2, result: () => generatePartDrop('EPIC',     1, catalog) },
   ])
 }
 

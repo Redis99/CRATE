@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
       dropType:  'part' | 'consumable'
       rarity?:   string
       partType?: string
+      category?: string
       kitValue?: number
     } | null
 
@@ -91,7 +92,8 @@ export async function POST(req: NextRequest) {
           ])
           if (partCount < (userSlots?.slotsParts ?? 50)) {
             await tx.inventoryPart.create({
-              data: { userId: user.id, partType: drop.partType, category: 'SPECIAL', rarity: drop.rarity as never, quantity: 1 },
+              // category vem do catálogo via /complete; SPECIAL para sessões antigas sem o campo
+              data: { userId: user.id, partType: drop.partType, category: (drop.category ?? 'SPECIAL') as never, rarity: drop.rarity as never, quantity: 1 },
             })
           }
           // Inventário cheio: drop descartado silenciosamente (recompensa não crítica)

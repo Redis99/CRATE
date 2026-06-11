@@ -87,6 +87,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'file, category and key are required.' }, { status: 400 })
   }
 
+  // Valida field contra allowlist — entra direto no path do storage, sem slugify
+  const allowedFields = ['image', 'idle', 'active', 'low']
+  if (!allowedFields.includes(field)) {
+    return NextResponse.json({ error: `Invalid field: ${field}.` }, { status: 400 })
+  }
+
   // Valida tipo MIME
   const allowedMimes = ['image/png', 'image/webp', 'image/gif', 'image/jpeg']
   if (!allowedMimes.includes(file.type)) {
